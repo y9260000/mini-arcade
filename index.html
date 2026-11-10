@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>미니 아케이드</title>
+<script src="common.js?v=10"></script>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:linear-gradient(170deg,#ff8fb1 0%,#ffb88c 45%,#ffe3a3 100%);color:var(--ink);display:flex;justify-content:center}
+  main{width:100%;max-width:520px;padding:max(40px,6vh) 16px 120px}
+  .logo{text-align:center;margin-bottom:26px}
+  .logo .t-title{margin:6px 0 4px}
+  .logo p{margin:0;color:#fff;font-weight:700;opacity:.92;text-shadow:0 1px 4px rgba(0,0,0,.15)}
+  .card{display:flex;gap:14px;align-items:center;background:#fff;border-radius:22px;padding:14px;margin-bottom:12px;
+    text-decoration:none;color:inherit;box-shadow:0 6px 0 rgba(43,36,56,.08),0 10px 24px rgba(43,36,56,.12);transition:transform .12s}
+  .card:active{transform:scale(.98)}
+  @media(hover:hover){.card:hover{transform:translateY(-3px)}}
+  .tile{font-size:38px;width:68px;height:68px;display:flex;align-items:center;justify-content:center;border-radius:18px;flex:none}
+  .card h2{font-family:"Jua",sans-serif;font-weight:400;font-size:22px;margin:0 0 3px}
+  .card p{margin:0;font-size:13.5px;line-height:1.45;color:var(--ink-soft)}
+  .card .best{display:inline-block;margin-top:6px;background:#fff3bf;color:#8a6200;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700}
+  .card .go{margin-left:auto;font-family:"Jua",sans-serif;font-size:24px;color:#d0c7d8;flex:none}
+  .run{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(488px,calc(100% - 32px));
+    border:0;border-radius:20px;padding:18px;font-family:"Jua",sans-serif;font-size:24px;background:var(--ink);color:#fff;cursor:pointer;
+    box-shadow:0 6px 0 #120e18,0 14px 30px rgba(0,0,0,.25)}
+  .run:active{transform:translateX(-50%) translateY(4px);box-shadow:0 2px 0 #120e18}
+  .result{margin-bottom:20px}
+  .result .r-sheet{margin:0 auto;max-width:none}
+</style>
+</head>
+<body data-hub>
+<main>
+  <div class="logo"><div class="t-emoji">🕹️</div><div class="t-title">미니 아케이드</div><p>3D 미니게임 모음 · 하나씩 or 연속으로!</p></div>
+  <div class="result" id="result"></div>
+  <div id="list"></div>
+</main>
+<button class="run" id="run">▶ 연속 플레이 (전부 한 판씩)</button>
+<script>
+  const { GAMES } = Arcade;
+  const TILE = { softserve: '#ffe3ec', skydive: '#d0ebff', stock: '#1b2240', moktak: '#f3d9c4' };
+  const best = k => { try { return +localStorage.getItem(k) || 0; } catch { return 0; } };
+  document.getElementById('list').innerHTML = GAMES.map(g => `
+    <a class="card" href="${g.file}">
+      <div class="tile" style="background:${TILE[g.id] || '#f1f3f5'}">${g.emoji}</div>
+      <div><h2>${g.name}</h2><p>${g.desc}</p>
+      ${best(g.bestKey) ? `<span class="best">🏆 ${best(g.bestKey)}${g.unit}</span>` : ''}</div>
+      <div class="go">›</div>
+    </a>`).join('');
+  document.getElementById('run').onclick = () => { location.href = `${GAMES[0].file}?run=0&s=`; };
+
+  const done = new URLSearchParams(location.search).get('done');
+  if (done !== null) {
+    const scores = done.split(',').map(Number);
+    document.getElementById('result').innerHTML = `<div class="r-sheet">
+      <div class="r-emoji">🏆</div><div class="r-label">연속 플레이 결과</div>
+      <div class="rows">${GAMES.map((g, i) => `<div class="row"><span>${g.emoji} ${g.name}</span><b>${scores[i] ?? 0}${g.unit}</b></div>`).join('')}</div>
+    </div>`;
+  }
+</script>
+</body>
+</html>

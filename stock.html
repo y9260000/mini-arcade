@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>고점 매도 챌린지</title>
+<script src="common.js?v=10"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#141a2e;
+    user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  .hud{gap:4px}
+  #ticker{font-weight:700;font-size:15px;color:rgba(255,255,255,.7)}
+  #big{font-family:"Jua",sans-serif;font-size:min(20vw,96px);line-height:1;color:#fff;font-variant-numeric:tabular-nums;
+    text-shadow:0 4px 0 rgba(0,0,0,.35),0 0 30px rgba(0,0,0,.4);transition:color .2s}
+  #bigsub{font-weight:700;font-size:17px;color:rgba(255,255,255,.85);font-variant-numeric:tabular-nums}
+  .up{color:#ff6b6b !important} .down{color:#5cb3ff !important}
+  #btns{position:fixed;left:16px;right:16px;bottom:max(64px,9vh);display:flex;gap:12px;z-index:4;max-width:520px;margin:0 auto}
+  #btns button{flex:1;border:0;border-radius:20px;padding:20px 0;font-family:"Jua",sans-serif;font-size:28px;color:#fff;cursor:pointer;transition:opacity .2s}
+  #buy{background:#f03e3e;box-shadow:0 6px 0 #a61e1e}
+  #sell{background:#1c7ed6;box-shadow:0 6px 0 #0b4f8a}
+  #btns button:active{transform:translateY(4px);box-shadow:none}
+  #btns button:disabled{opacity:.25;cursor:default;transform:none}
+  #ff{position:fixed;left:0;right:0;top:44%;text-align:center;font-family:"Jua",sans-serif;font-size:40px;color:#ffe066;pointer-events:none;opacity:0;
+    text-shadow:0 4px 0 #e8590c}
+  #ff.on{opacity:1;animation:blink .45s infinite alternate}
+  @keyframes blink{to{opacity:.4}}
+  .tag{position:fixed;left:0;top:0;pointer-events:none;z-index:2;font:700 13px "Noto Sans KR",sans-serif;color:#fff;padding:4px 9px;border-radius:8px;
+    white-space:nowrap;transform:translate(-50%,-100%);box-shadow:0 4px 10px rgba(0,0,0,.3);display:none}
+  .tag::after{content:"";position:absolute;left:50%;bottom:-5px;margin-left:-5px;border:5px solid transparent;border-bottom:0;border-top-color:inherit}
+  #tbuy{background:#f03e3e;border-color:#f03e3e} #tsell{background:#1c7ed6;border-color:#1c7ed6} #tpeak{background:#f59f00;border-color:#f59f00}
+  #chat{position:fixed;left:16px;bottom:calc(max(64px,9vh) + 112px);width:min(270px,62vw);z-index:3;pointer-events:none;
+    background:rgba(10,14,28,.62);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:8px 10px 6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  #chat .head{font:700 12px "Noto Sans KR",sans-serif;color:rgba(255,255,255,.6);display:flex;justify-content:space-between;margin-bottom:4px}
+  #chat .head b{color:#ff6b6b}
+  #msgs{display:flex;flex-direction:column;gap:3px;height:96px;overflow:hidden;justify-content:flex-end}
+  .msg{font:500 13px/1.35 "Noto Sans KR",sans-serif;color:#e9ecf5;animation:msgIn .25s ease-out;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .msg b{font-weight:700;margin-right:5px}
+  @keyframes msgIn{from{opacity:0;transform:translateY(8px)}}
+  #timer{position:fixed;left:16px;right:16px;bottom:calc(max(64px,9vh) + 92px);max-width:520px;margin:0 auto;height:6px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;z-index:4}
+  #timer i{display:block;height:100%;width:100%;background:#ffd43b;border-radius:3px}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="ticker">MOON 코인</div>
+  <div id="big">-</div>
+  <div id="bigsub"></div>
+  <div class="hud-row" style="margin-top:6px"><span class="pill dark" id="round"></span></div>
+</div>
+<div id="ff">⏩ 빨리감기</div>
+<div class="tag" id="tbuy"></div><div class="tag" id="tsell"></div><div class="tag" id="tpeak"></div>
+<div id="chat"><div class="head"><span>💬 주식 갤러리</span><span><b>●</b> <span id="online">1,284</span>명</span></div><div id="msgs"></div></div>
+<div id="timer"><i></i></div>
+<div id="btns"><button id="buy">매수</button><button id="sell" disabled>매도</button></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const ROUNDS = 3, LIVE_TPS = 14, FF_TPS = 150, FF_TICKS = 220, BUY_LIMIT = 14, HOLD_LIMIT = 16, TPC = 5, CHART_H = 12;
+const NAMES = ['MOON 코인', '도지바나나', '얼마전자', '삼성치킨', '테슬라면', '엔비디아이스', '카카오톡톡', '로켓배송주'];
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .55, flatShading: true, ...extra });
+
+// ---------- three ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x141a2e);
+scene.fog = new THREE.Fog(0x141a2e, 40, 120);
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, .1, 500);
+scene.add(new THREE.HemisphereLight(0xc8d4ff, 0x1a1f33, 1.4));
+const key = new THREE.DirectionalLight(0xffffff, 2); key.position.set(10, 20, 15); scene.add(key, key.target);
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(2000, 60), flat(0x1b2240));
+floor.rotation.x = -Math.PI / 2; floor.position.y = -1.2; scene.add(floor);
+const grid = new THREE.GridHelper(2000, 1000, 0x2c3660, 0x232b4d); grid.position.y = -1.19; grid.scale.z = .03; scene.add(grid);
+// back wall with horizontal guide lines
+const guides = [];
+for (let i = 0; i <= 4; i++) {
+  const l = new THREE.Mesh(new THREE.BoxGeometry(2000, .04, .04), new THREE.MeshBasicMaterial({ color: 0x2c3660 }));
+  l.position.set(0, i / 4 * CHART_H, -1.2); scene.add(l); guides.push(l);
+}
+
+const unitBox = new THREE.BoxGeometry(1, 1, 1);
+const MAT_UP = flat(0xff4d4d, { emissive: 0x3a0000 }), MAT_DN = flat(0x3d8bfd, { emissive: 0x001a3a });
+const MAT_WICK_UP = flat(0xff8080), MAT_WICK_DN = flat(0x7ab2ff);
+let candles = []; // {body, wick}
+function candleMesh(k) {
+  if (!candles[k]) {
+    const body = new THREE.Mesh(unitBox, MAT_UP), wick = new THREE.Mesh(unitBox, MAT_WICK_UP);
+    body.scale.set(.72, 1, .72); wick.scale.set(.1, 1, .1);
+    scene.add(body, wick); candles[k] = { body, wick };
+  }
+  return candles[k];
+}
+function clearCandles() { candles.forEach(c => { if (c) scene.remove(c.body, c.wick); }); candles = []; }
+
+// markers
+function marker(color) {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.BoxGeometry(.06, 1, .06), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .5 }));
+  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.42, 0), flat(color, { emissive: color, emissiveIntensity: .35 }));
+  g.add(pole, gem); g.userData = { pole, gem }; g.visible = false; scene.add(g); return g;
+}
+const mBuy = marker(0xf03e3e), mSell = marker(0x1c7ed6), mPeak = marker(0xf59f00);
+const buyLine = new THREE.Mesh(new THREE.BoxGeometry(1, .05, .05), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .35 }));
+buyLine.visible = false; scene.add(buyLine);
+const nowDot = new THREE.Mesh(new THREE.IcosahedronGeometry(.28, 0), new THREE.MeshBasicMaterial({ color: 0xffffff })); scene.add(nowDot);
+
+// ---------- market ----------
+let prices = [], drift = 0, vol = .01, regime = 0;
+let state = 'ready', round = 0, results = [];
+let buyIdx = -1, sellIdx = -1, ffEnd = 0, acc = 0, roundT = 0, startIdx = 0;
+let best = 0; try { best = +localStorage.getItem('stock-best') || 0; } catch {}
+const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+function nextPrice() {
+  if (--regime <= 0) { drift = (Math.random() - .42) * .014; vol = .006 + Math.random() * .014; regime = 15 + (Math.random() * 55 | 0); }
+  let r = drift + vol * gauss();
+  if (Math.random() < .012) r += (Math.random() - .45) * .14;
+  prices.push(Math.max(.05, prices[prices.length - 1] * Math.exp(r)));
+}
+const won = p => Math.round(p * 100).toLocaleString('ko-KR') + '원';
+const pct = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
+const candleOf = i => Math.floor(i / TPC);
+function ohlc(k) {
+  const a = k * TPC, b = Math.min(prices.length - 1, a + TPC);
+  let hi = -Infinity, lo = Infinity;
+  for (let i = a; i <= b; i++) { hi = Math.max(hi, prices[i]); lo = Math.min(lo, prices[i]); }
+  return { o: prices[a], c: prices[b], hi, lo };
+}
+
+// ---------- DOM ----------
+const $ = id => document.getElementById(id);
+const $big = $('big'), $bigsub = $('bigsub'), $round = $('round'), $ff = $('ff'), $center = $('center'), $buy = $('buy'), $sell = $('sell'), $timer = $('timer').firstElementChild;
+const tags = { buy: $('tbuy'), sell: $('tsell'), peak: $('tpeak') };
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+const hideScreen = () => { $center.style.display = 'none'; };
+
+function newChart() {
+  clearCandles();
+  $('ticker').textContent = NAMES[(Math.random() * NAMES.length) | 0];
+  prices = [100]; regime = 0;
+  for (let i = 0; i < 160; i++) nextPrice();
+  startIdx = prices.length - 1;
+  buyIdx = sellIdx = -1; acc = 0; roundT = 0;
+}
+function startRound() {
+  round++; newChart(); hideScreen();
+  state = 'count'; $buy.disabled = $sell.disabled = true;
+  Arcade.countdown({ from: 3, final: `ROUND ${round}`, onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(),
+    onDone: () => { state = 'live'; $buy.disabled = false; post('open'); chatT = 1; } });
+}
+function buy() {
+  if (state !== 'live' || buyIdx >= 0) return;
+  buyIdx = prices.length - 1; roundT = 0;
+  $buy.disabled = true; $sell.disabled = false; Arcade.sfx.coin(); Arcade.sfx.kaching(); Arcade.shake(.4);
+  const r = $buy.getBoundingClientRect();
+  Arcade.confetti({ x: r.left + r.width / 2, y: r.top, count: 60, colors: ['#ff6b6b', '#ffd43b', '#ffffff', '#ff8787'], emoji: ['💸', '🚀', '🔥'], spread: 1.4 });
+  Arcade.vibrate([40, 30, 60]); setTimeout(() => post('buy'), 250); setTimeout(() => post('buy'), 700);
+}
+function sell() {
+  if (state !== 'live' || buyIdx < 0 || sellIdx >= 0) return;
+  sellIdx = prices.length - 1; ffEnd = sellIdx + FF_TICKS;
+  state = 'ff'; $sell.disabled = true; $ff.classList.add('on'); Arcade.sfx.kaching(); Arcade.sfx.whoosh(true); Arcade.shake(.5);
+  const r = $sell.getBoundingClientRect(), profit = prices[sellIdx] >= prices[buyIdx];
+  Arcade.confetti({ x: r.left + r.width / 2, y: r.top, count: profit ? 90 : 40, colors: profit ? ['#ffd43b', '#4dabf7', '#ffffff', '#69db7c'] : ['#adb5bd', '#4dabf7'], emoji: profit ? ['💰', '💵', '🤑'] : ['😭', '💧'], spread: 1.6, power: profit ? 1.2 : .8 });
+  Arcade.vibrate(profit ? [50, 30, 50, 30, 120] : 200); post(profit ? 'sell' : 'sellLoss');
+}
+function peakIndex() { let pk = buyIdx; for (let i = buyIdx; i < prices.length; i++) if (prices[i] > prices[pk]) pk = i; return pk; }
+
+function finishRound() {
+  state = 'result'; $ff.classList.remove('on');
+  const bp = prices[buyIdx], sp = prices[sellIdx], pk = peakIndex();
+  const ret = sp / bp - 1, peakRet = prices[pk] / bp - 1, after = prices[prices.length - 1] / sp - 1;
+  results.push(Math.round(ret * 100));
+  let verdict, emoji;
+  if (pk <= sellIdx + 1 || prices[pk] <= sp * 1.005) { verdict = '정확히 고점에서 팔았어요! 전설의 단타왕'; emoji = '🎯'; }
+  else if (pk > sellIdx) { verdict = `팔고 나서 <b class="up">${pct(prices[pk] / sp - 1)}</b> 더 올랐어요…`; emoji = '😭'; }
+  else { verdict = `고점 놓치고 <b class="down">${pct(sp / prices[pk] - 1)}</b> 빠진 뒤 팔았어요`; emoji = '📉'; }
+  const eff = peakRet > 0 ? Math.max(0, Math.round(ret / peakRet * 100)) : 0;
+  if (ret < -.1) { Arcade.shake(1.2); Arcade.vibrate(300); }
+  if (ret > 0) setTimeout(() => Arcade.confetti({ x: innerWidth / 2, y: innerHeight * .35, count: Math.min(220, 60 + ret * 300), emoji: ['💰', '🚀', '📈', '🤑'], power: 1.3 }), 500);
+  post(pk > sellIdx + 1 && prices[pk] > sp * 1.03 ? 'regret' : 'genius');
+  setTimeout(() => {
+    if (state !== 'result') return;
+    showScreen(Arcade.resultScreen({ emoji, label: `ROUND ${round} / ${ROUNDS} 수익률`, score: (ret >= 0 ? '+' : '') + (ret * 100).toFixed(1), unit: '%',
+      tone: ret >= 0 ? 'up' : 'down', msg: verdict, best, rows: [
+        ['👑 최대 가능 수익', pct(peakRet)], ['🍰 고점 대비 먹은 비율', `${eff}%`], ['⏩ 매도 후 결국', pct(after)],
+      ], cta: round >= ROUNDS ? '최종 결과 보기' : '다음 라운드' }).replace(/<div class="r-best[^>]*>.*?<\/div>/, ''));
+  }, 900);
+  setTimeout(() => (ret >= 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail()), 300);
+}
+function gameOver() {
+  state = 'over'; $msgs.innerHTML = '';
+  const total = results.reduce((a, b) => a + b, 0), isBest = total > best;
+  if (total > 0) Arcade.confetti({ x: innerWidth / 2, y: innerHeight * .3, count: 200, emoji: ['💰', '🏆', '🐋'], power: 1.4 });
+  if (isBest) { best = total; try { localStorage.setItem('stock-best', best); } catch {} }
+  showScreen(Arcade.resultScreen({ emoji: total >= 60 ? '🐋' : total >= 20 ? '😎' : total >= 0 ? '🙂' : '🫠', label: '최종 수익률 (3라운드 합계)',
+    score: (total >= 0 ? '+' : '') + total, unit: '%', tone: total >= 0 ? 'up' : 'down', isBest: isBest && total > 0, best,
+    msg: total >= 60 ? '워렌 버핏도 울고 갈 실력' : total >= 20 ? '꽤 하시네요' : total >= 0 ? '본전은 했다' : '한강 물 온도 체크…',
+    rows: results.map((r, i) => [`ROUND ${i + 1}`, `<span class="${r >= 0 ? 'up' : 'down'}">${r >= 0 ? '+' : ''}${r}%</span>`]) }));
+  Arcade.gameOver(total);
+}
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '📈', title: '고점 매도 챌린지', how: [
+  ['🕯️', '캔들 차트가 실시간으로 움직여요'],
+  ['🔴', '쌀 때 <b style="color:#e03131">매수</b>, 고점이다 싶으면 <b style="color:#1971c2">매도</b>'],
+  ['⏩', '팔고 나면 빨리감기로 그 뒤 진짜 고점을 보여줘요'],
+  ['🏁', '3라운드 수익률 합계로 승부 · B/S 키도 가능'],
+] }));
+
+function advance() {
+  if (state === 'ready') { results = []; round = 0; startRound(); }
+  else if (state === 'result') { if (round >= ROUNDS) gameOver(); else startRound(); }
+  else if (state === 'over' && !Arcade.inRun()) { results = []; round = 0; startRound(); }
+}
+const stop = e => e.stopPropagation();
+$buy.addEventListener('pointerdown', e => { stop(e); buy(); });
+$sell.addEventListener('pointerdown', e => { stop(e); sell(); });
+addEventListener('pointerdown', advance);
+addEventListener('keydown', e => {
+  if (e.repeat) return;
+  if (e.code === 'KeyB') buy();
+  else if (e.code === 'KeyS') sell();
+  else if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); if (state === 'live') { buyIdx < 0 ? buy() : sell(); } else advance(); }
+});
+let ac;
+function beep(f, d, type = 'sine') {
+  try { ac ||= new AudioContext(); const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(.12, ac.currentTime); g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + d);
+    o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + d); } catch {}
+}
+
+// ---------- community chat that reacts to the market ----------
+const NICKS = [['개미123', '#ffa94d'], ['존버왕', '#69db7c'], ['떡상기원', '#ff8787'], ['한강뷰', '#74c0fc'], ['단타의신', '#ffd43b'], ['주린이', '#b197fc'],
+  ['풀매수박음', '#ff6b6b'], ['익절요정', '#63e6be'], ['물타기장인', '#a5d8ff'], ['세력아님', '#e599f7'], ['차트도사', '#ffc078'], ['월급루팡', '#c0eb75'],
+  ['평단구조대', '#ffa8a8'], ['야수의심장', '#ff922b'], ['흑우1호', '#ced4da'], ['상폐요정', '#91a7ff'], ['코인갈까', '#ffe066'], ['ㅇㅇ', '#adb5bd']];
+const LINES = {
+  open: ['장 열렸다 ㄱㄱㄱ', '오늘은 느낌 온다', '어제 물린 사람 손 ✋', '커피값만 벌고 튄다', '오늘 상한가 각 보인다', '형들 오늘 뭐 탐?', '국장 하는 사람 아직 있냐 ㅋㅋ'],
+  up: ['가즈아!!!!!!!', '애가뤼 쩌억 ㅋㅋㅋㅋ', '🚀🚀🚀 떡상 ㄱㄴ?', '이거 ㄹㅇ 간다', '빨간불 보니까 행복하다', '세력 형님들 사랑합니다', '와 미쳤다 ㄷㄷ', '숏충이들 울고있냐 ㅋㅋ', '야수의 심장 풀매수 간다', '엄마 나 부자된다', '이게 주식이냐 코인이지'],
+  down: ['물렸다…', '한강 물 따뜻하냐', '개미 털기 ㅋㅋ 안 털림', '파란불 무서워 ㅠㅠ', '평단 구조대 언제 오냐', '계좌 녹는 중', '강제 장기투자 확정', '설거지 당했네', '이거 작전주 아님?', '본전만 오면 판다 진짜', '아오 ㅋㅋㅋ 롤러코스터'],
+  spike: ['호재 떴냐??', '찌라시 돈다', '뭐야 갑자기 왜 이럼', 'ㄷㄷㄷㄷㄷ', '이게 맞냐고', '애가뤼 쩌억 ㄷㄷ', '차트 실화냐', '방금 뭐였음'],
+  flat: ['횡보 개지겹다', '거래량 실화냐', '잠이나 자자', '이거 죽은 종목임?', '심전도 차트 ㅋㅋ', '움직여라 좀'],
+  buy: ['형님 탑승 ㅊㅋㅊㅋ', '탑승 완료 🚌 같이 가요', '평단 얼마임?', '용감하다 ㄷㄷ', '고점에 물린 거 아님? ㅋㅋ', '야수의 심장 인정', '구조대 1호 출발'],
+  holdUp: ['익절은 항상 옳다', '욕심부리면 흑우된다', '더 간다 존버해', '수익 인증 ㄱㄱ', '팔지 마!!!!!', '여기서 파는 놈이 흑우', '불타기 ㄱ?'],
+  holdDown: ['존버는 승리한다', '물타기 ㄱ?', '안 팔면 손실 아님 ㅋㅋ', '버티면 오른다 (아마)', '기도매매 시작', '형 괜찮아…?'],
+  sell: ['익절 ㅊㅋㅊㅋ', '탈출은 지능순', '현금이 왕이다', '타이밍 미쳤네', '익절은 항상 옳다 ㅇㅈ'],
+  sellLoss: ['손절도 실력이다', '잘 탈출했다 ㅇㅇ', '다음에 복구하자 화이팅', '수업료 냈다 생각해'],
+  regret: ['아 ㅋㅋㅋㅋ 팔자마자 떡상', '역시 내가 팔면 오름', '배 아파 죽겠다 ㅠㅠ', '그걸 왜 팔아…', '흑우 ㅋㅋㅋㅋ', '애가뤼 쩌억 (팔고 나서)', '내 돈 아니니까 괜찮아… 괜찮아…'],
+  genius: ['고점 매도 ㄷㄷ 신이냐', '탈출 성공 ㅋㅋㅋ', '이분 차트 보이는 듯', '킹갓 단타의 신', '형님 리딩방 차려주세요', '와 이걸 피하네'],
+};
+const $msgs = document.getElementById('msgs'); let chatT = 0;
+function post(kind) {
+  const arr = LINES[kind]; if (!arr) return;
+  const [nick, col] = NICKS[(Math.random() * NICKS.length) | 0];
+  const d = document.createElement('div'); d.className = 'msg'; d.innerHTML = `<b style="color:${col}">${nick}</b>${arr[(Math.random() * arr.length) | 0]}`;
+  $msgs.appendChild(d); while ($msgs.children.length > 5) $msgs.firstChild.remove();
+  document.getElementById('online').textContent = (1200 + Math.floor(Math.random() * 400)).toLocaleString();
+}
+function chatTick(dt) {
+  chatT -= dt * (state === 'ff' ? 3 : 1);
+  if (chatT > 0 || (state !== 'live' && state !== 'ff')) return;
+  chatT = .9 + Math.random() * 1.6;
+  const n = prices.length - 1, ch = prices[n] / prices[Math.max(0, n - 12)] - 1;
+  let kind = Math.abs(ch) > .1 ? 'spike' : ch > .035 ? 'up' : ch < -.035 ? 'down' : 'flat';
+  if (state === 'live' && buyIdx >= 0 && Math.random() < .5) kind = prices[n] >= prices[buyIdx] ? 'holdUp' : 'holdDown';
+  if (state === 'ff' && Math.random() < .5) kind = prices[n] > prices[sellIdx] * 1.03 ? 'regret' : prices[n] < prices[sellIdx] * .97 ? 'genius' : kind;
+  post(kind);
+}
+
+// ---------- layout / render ----------
+let lo = 90, hi = 110, k0 = 0, k1 = 40; // smoothed price range + visible candle range
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(); let first = true;
+const Y = p => (p - lo) / (hi - lo) * CHART_H;
+const v3 = new THREE.Vector3();
+function placeTag(el, x, y, text) {
+  v3.set(x, y, 0).project(camera);
+  if (v3.z > 1) { el.style.display = 'none'; return; }
+  el.style.display = 'block'; el.textContent = text;
+  el.style.left = `${(v3.x + 1) / 2 * innerWidth}px`; el.style.top = `${(1 - v3.y) / 2 * innerHeight - 22}px`;
+}
+function placeMarker(m, i, tagEl, text) {
+  if (i < 0) { m.visible = false; tagEl.style.display = 'none'; return; }
+  const x = candleOf(i), y = Y(prices[i]);
+  m.visible = true; m.position.set(x, 0, .6);
+  m.userData.gem.position.y = y; m.userData.gem.rotation.y += .03;
+  m.userData.pole.scale.y = Math.max(.01, y + 1.2); m.userData.pole.position.y = (y - 1.2) / 2;
+  placeTag(tagEl, x, y + .7, text);
+}
+
+let lastT = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - lastT) / 1000); lastT = now;
+  if (state === 'live' || state === 'ff') {
+    acc += dt * (state === 'ff' ? FF_TPS : LIVE_TPS);
+    while (acc >= 1) { acc--; nextPrice(); if (state === 'ff' && prices.length - 1 >= ffEnd) { finishRound(); break; } }
+    if (state === 'live') {
+      roundT += dt;
+      if (buyIdx < 0 && roundT > BUY_LIMIT) buy();
+      else if (buyIdx >= 0 && roundT > HOLD_LIMIT) sell();
+    }
+  }
+  const n = prices.length - 1, kn = candleOf(n);
+
+  // visible range
+  let t0, t1;
+  if (sellIdx >= 0) { t0 = candleOf(buyIdx) - 6; t1 = Math.max(kn, candleOf(ffEnd)) + 2; }
+  else { t1 = kn + 4; t0 = Math.min(t1 - 34, buyIdx >= 0 ? candleOf(buyIdx) - 6 : Infinity); }
+  const kk = Math.min(1, dt * 4); k0 += (t0 - k0) * kk; k1 += (t1 - k1) * kk;
+  let vlo = Infinity, vhi = -Infinity;
+  for (let i = Math.max(0, Math.floor(k0) * TPC); i <= n; i++) { vlo = Math.min(vlo, prices[i]); vhi = Math.max(vhi, prices[i]); }
+  const pad = (vhi - vlo) * .12 || 1;
+  lo += (vlo - pad - lo) * Math.min(1, dt * 5); hi += (vhi + pad - hi) * Math.min(1, dt * 5);
+
+  // candles
+  for (let k = 0; k <= kn; k++) {
+    const c = candleMesh(k), { o, c: cl, hi: h, lo: l } = ohlc(k), up = cl >= o;
+    const y0 = Y(Math.min(o, cl)), y1 = Y(Math.max(o, cl)), bh = Math.max(.06, y1 - y0);
+    c.body.material = up ? MAT_UP : MAT_DN; c.wick.material = up ? MAT_WICK_UP : MAT_WICK_DN;
+    c.body.scale.y = bh; c.body.position.set(k, y0 + bh / 2, 0);
+    const wh = Math.max(.06, Y(h) - Y(l)); c.wick.scale.y = wh; c.wick.position.set(k, Y(l) + wh / 2, 0);
+    const vis = k >= k0 - 2; c.body.visible = c.wick.visible = vis;
+  }
+  nowDot.position.set(kn + .6, Y(prices[n]), 0); nowDot.visible = state === 'live';
+  nowDot.scale.setScalar(1 + Math.sin(now / 150) * .25);
+
+  // markers + tags
+  placeMarker(mBuy, buyIdx, tags.buy, buyIdx >= 0 ? `매수 ${won(prices[buyIdx])}` : '');
+  placeMarker(mSell, sellIdx, tags.sell, sellIdx >= 0 ? `매도 ${pct(prices[sellIdx] / prices[buyIdx] - 1)}` : '');
+  const pk = sellIdx >= 0 ? peakIndex() : -1;
+  placeMarker(mPeak, pk >= 0 && pk !== sellIdx ? pk : -1, tags.peak, pk >= 0 ? `👑 고점 ${pct(prices[pk] / prices[buyIdx] - 1)}` : '');
+  if (buyIdx >= 0) { buyLine.visible = true; const a = candleOf(buyIdx), b = kn + 2; buyLine.scale.x = b - a; buyLine.position.set((a + b) / 2, Y(prices[buyIdx]), .3); }
+  else buyLine.visible = false;
+  if (state === 'ready' || state === 'over') Object.values(tags).forEach(t => t.style.display = 'none');
+
+  chatTick(dt);
+  // camera: angled 3D view framing the visible range
+  const w = k1 - k0, cx = (k0 + k1) / 2, dist = Math.max(16, w * 1.05 / camera.aspect + 10, w * .55 + 8);
+  const tp = new THREE.Vector3(cx + w * .12, CHART_H * .5 + dist * .22, dist), tl = new THREE.Vector3(cx, CHART_H * .42, 0);
+  if (state === 'ready') { tp.x += Math.sin(now / 3000) * 4; }
+  if (first) { camPos.copy(tp); camLook.copy(tl); first = false; }
+  camPos.lerp(tp, Math.min(1, dt * 3)); camLook.lerp(tl, Math.min(1, dt * 3));
+  camera.position.copy(camPos); Arcade.applyShake(camera, dt); camera.lookAt(camLook);
+  key.position.set(camLook.x + 10, 20, 15); key.target.position.copy(camLook);
+  guides.forEach(g => g.position.x = camLook.x);
+
+  // HUD: big number in the center-top
+  const p = prices[n];
+  if (buyIdx >= 0) {
+    const r = (sellIdx >= 0 ? prices[sellIdx] : p) / prices[buyIdx] - 1;
+    $big.textContent = pct(r); $big.className = r >= 0 ? 'up' : 'down';
+    $bigsub.textContent = sellIdx >= 0 ? '매도 완료 · 그 뒤엔…' : `현재가 ${won(p)}`;
+  } else {
+    const ch = p / (prices[startIdx] || p) - 1;
+    $big.textContent = won(p); $big.className = '';
+    $bigsub.innerHTML = `<span class="${ch >= 0 ? 'up' : 'down'}">${pct(ch)}</span> · 매수 대기`;
+  }
+  $round.textContent = `ROUND ${Math.max(round, 1)} / ${ROUNDS}`;
+  const lim = buyIdx < 0 ? BUY_LIMIT : HOLD_LIMIT;
+  $timer.style.width = state === 'live' ? `${Math.max(0, 1 - roundT / lim) * 100}%` : '0%';
+  $timer.style.background = buyIdx < 0 ? '#ffd43b' : '#ff6b6b';
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+newChart(); showIntro(); $buy.disabled = $sell.disabled = true;
+window.__stock = { get state() { return state; }, buy, sell, advance };
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

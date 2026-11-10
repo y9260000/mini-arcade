@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>소프트콘 쌓기</title>
+<script src="common.js?v=10"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#ffe3ec;
+    user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  #wobwrap{width:72px;height:8px;border-radius:4px;background:#eee;overflow:hidden}
+  #wob{display:block;height:100%;width:0;border-radius:4px;background:#51cf66;transition:background .2s}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>층</small></div>
+  <div class="hud-row">
+    <span class="pill" id="lives"></span>
+    <span class="pill">흔들림 <span id="wobwrap"><i id="wob"></i></span></span>
+  </div>
+</div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+
+// ---------- tuning (easier) ----------
+const H = 0.34, TUBE = 0.25, R0 = 1.15, MIN_R = 0.1, PERFECT = 0.18;
+const K = 620, C = 12;            // joint spring stiffness / relative damping
+const HAND_FOLLOW = 7.5;          // lower = smoother hand
+const RANGE = 2.2, GROUND = -9, LIVES = 5;
+const FLAVORS = [0xfff1d0, 0xffa9c0, 0x8d5a3b, 0xa9d47f, 0x9fb6ff, 0xffd166, 0xd9b3ff];
+const SPRINKLES = [0xff4d6d, 0x4dabf7, 0xffd43b, 0x69db7c, 0xffffff, 0xb197fc];
+const colorFor = i => FLAVORS[Math.floor(i / 6) % FLAVORS.length];
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .75, flatShading: true, ...extra });
+
+// ---------- three ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffe3ec);
+scene.fog = new THREE.Fog(0xffe3ec, 18, 60);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 1000);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xf0c8b8, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 40 });
+scene.add(sun, sun.target);
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+// kitchen floor (checker tiles)
+{
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = '#fff7f0'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#f6c9d4'; g.fillRect(0, 0, 32, 32); g.fillRect(32, 32, 32, 32);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(40, 40); t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.MeshStandardMaterial({ map: t, roughness: .9 }));
+  floor.rotation.x = -Math.PI / 2; floor.position.y = GROUND; floor.receiveShadow = true; scene.add(floor);
+}
+
+// ---------- cannon ----------
+const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -22, 0) });
+world.broadphase = new CANNON.SAPBroadphase(world);
+world.allowSleep = true;
+world.defaultContactMaterial.friction = 0.5;
+world.defaultContactMaterial.restitution = 0.2;
+const groundBody = new CANNON.Body({ type: CANNON.Body.STATIC, shape: new CANNON.Plane() });
+groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0); groundBody.position.y = GROUND; world.addBody(groundBody);
+
+// ---------- low-poly cone + hand ----------
+const CONE_H = 3.4, CONE_R = R0 + 0.3;
+const holder = new THREE.Group(); scene.add(holder);
+{
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = '#e8a95f'; g.fillRect(0, 0, 128, 128); g.strokeStyle = '#c07f3d'; g.lineWidth = 6;
+  for (let i = -128; i < 256; i += 32) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 128, 128); g.stroke(); g.beginPath(); g.moveTo(i, 128); g.lineTo(i + 128, 0); g.stroke(); }
+  const tex = new THREE.CanvasTexture(c); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(3, 2); tex.colorSpace = THREE.SRGBColorSpace;
+  const cone = new THREE.Mesh(new THREE.CylinderGeometry(CONE_R, 0.12, CONE_H, 10, 1, true), flat(0xffffff, { map: tex, side: THREE.DoubleSide }));
+  cone.position.y = 0.1 - CONE_H / 2; cone.castShadow = true;
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(CONE_R, 0.14, 4, 10), flat(0xd38b45));
+  rim.rotation.x = Math.PI / 2; rim.position.y = 0.1;
+  const cap = new THREE.Mesh(new THREE.CircleGeometry(CONE_R, 10), flat(FLAVORS[0]));
+  cap.rotation.x = -Math.PI / 2; cap.position.y = 0.06;
+  // fist: chunky low-poly hand gripping the tip
+  const skin = flat(0xffc79e);
+  const fist = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6, 0), skin); fist.scale.set(1.15, 1, 1); fist.position.set(0, -2.75, 0);
+  holder.add(cone, rim, cap, fist);
+  for (let i = 0; i < 4; i++) {
+    const f = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.26, 0.34), skin);
+    f.position.set(-0.45 + i * 0.3, -2.45 - Math.abs(i - 1.5) * 0.05, 0.42); f.rotation.x = -0.25; holder.add(f);
+  }
+  const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.5, 0.26), skin); thumb.position.set(0.62, -2.35, 0.1); thumb.rotation.z = -0.5; holder.add(thumb);
+  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.65, 5, 7), flat(0x5c7cfa)); sleeve.position.set(0, -5.6, 0); holder.add(sleeve);
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.3, 7), flat(0xffffff)); cuff.position.set(0, -3.2, 0); holder.add(cuff);
+}
+const coneBody = new CANNON.Body({ type: CANNON.Body.KINEMATIC });
+coneBody.addShape(new CANNON.Cylinder(CONE_R, 0.1, CONE_H, 10), new CANNON.Vec3(0, 0.1 - CONE_H / 2, 0));
+world.addBody(coneBody);
+
+// ---------- low-poly soft-serve machine ----------
+const machine = new THREE.Group(); scene.add(machine);
+{
+  const steel = flat(0xe9edf2, { metalness: .3, roughness: .5 });
+  const pink = flat(0xff7aa2);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1, 1.6), steel); head.position.y = 1.1;
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.64, 0.25, 1.64), pink); stripe.position.y = 1.1;
+  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 6, 6), steel); pipe.position.y = 4.5;
+  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.2, 0.6, 6), steel); nozzle.position.y = 0.35;
+  const lever = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.8, 0.14), pink); lever.position.set(0.6, 1.9, 0.6);
+  const knob = new THREE.Mesh(new THREE.IcosahedronGeometry(0.18, 0), pink); knob.position.set(0.6, 2.35, 0.6);
+  machine.add(head, stripe, pipe, nozzle, lever, knob);
+}
+const marker = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.46, 24), new THREE.MeshBasicMaterial({ color: 0xff3d7f, transparent: true, opacity: .85, depthWrite: false, depthTest: false }));
+marker.rotation.x = -Math.PI / 2; marker.renderOrder = 10; scene.add(marker);
+const markerDot = new THREE.Mesh(new THREE.CircleGeometry(0.1, 12), marker.material);
+markerDot.rotation.x = -Math.PI / 2; markerDot.renderOrder = 10; scene.add(markerDot);
+
+// ---------- layers ----------
+const sprinkleGeo = new THREE.BoxGeometry(0.05, 0.05, 0.16);
+const sprinkleMats = SPRINKLES.map(c => flat(c));
+function makeLayerMesh(R, color) {
+  const mat = flat(color, { roughness: .6 });
+  const g = new THREE.Group(), r = Math.max(R, .02), pts = [];
+  for (let i = 0; i <= 24; i++) { const t = i / 24, a = t * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * r, TUBE + t * H, Math.sin(a) * r)); }
+  const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 28, TUBE, 7, false), mat);
+  const fill = new THREE.Mesh(new THREE.CylinderGeometry(r, r, H + TUBE, 10), mat); fill.position.y = TUBE + H / 2;
+  const capGeo = new THREE.IcosahedronGeometry(TUBE, 0);
+  const c1 = new THREE.Mesh(capGeo, mat); c1.position.copy(pts[0]);
+  const c2 = new THREE.Mesh(capGeo, mat); c2.position.copy(pts[pts.length - 1]);
+  g.add(tube, fill, c1, c2);
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  scene.add(g); return g;
+}
+function addSprinkles(group, R, n) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, rr = R + (Math.random() - .5) * TUBE;
+    const s = new THREE.Mesh(sprinkleGeo, sprinkleMats[(Math.random() * sprinkleMats.length) | 0]);
+    s.position.set(Math.cos(a) * rr, TUBE * 2 + H * (a / (Math.PI * 2)) - .02, Math.sin(a) * rr);
+    s.rotation.set(0, Math.random() * Math.PI, 0); group.add(s);
+  }
+}
+function makeLayerBody(R, dynamic) {
+  const b = new CANNON.Body(dynamic ? { mass: 1 } : { type: CANNON.Body.KINEMATIC });
+  const rr = R + TUBE * .8;
+  b.addShape(new CANNON.Cylinder(rr, rr, H, 10), new CANNON.Vec3(0, TUBE + H / 2, 0));
+  b.linearDamping = .05; b.angularDamping = .1;
+  world.addBody(b); return b;
+}
+function disposeMesh(g) {
+  g.traverse(o => { if (o.isMesh) { if (o.geometry !== sprinkleGeo) o.geometry.dispose(); if (!sprinkleMats.includes(o.material)) o.material.dispose(); } });
+  scene.remove(g);
+}
+
+// ---------- state ----------
+let state = 'ready';
+let stack = [], debris = [], blobs = [];
+let lives = LIVES, combo = 0, maxH = 0, overAt = 0, dropTimer = 0, wobble = 0;
+let best = 0; try { best = +localStorage.getItem('softserve-best') || 0; } catch {}
+const hand = { x: 0, z: 0 }, target = { x: 0, z: 0 }, handV = { x: 0, z: 0 };
+const nozzle = { x: 0, z: 0, tx: 0, tz: 0 };
+const fx = new Float64Array(1024), fz = new Float64Array(1024);
+
+const $ = id => document.getElementById(id);
+const $score = $('score'), $lives = $('lives'), $wob = $('wob'), $center = $('center');
+const height = () => stack.length - 1;
+function updateHud() {
+  $score.innerHTML = `${height()}<small>층</small>`;
+  $lives.textContent = '❤️'.repeat(lives) + '🤍'.repeat(LIVES - lives);
+}
+function showScreen(html) { $center.innerHTML = html; $center.style.display = ''; }
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🍦', title: '소프트콘 쌓기', how: [
+  ['👆', '마우스·드래그로 <b>콘을 움직여요</b>'],
+  ['🎯', '<b style="color:#e64980">분홍 동그라미</b> 자리로 크림이 떨어져요'],
+  ['🌪️', '너무 <b>휙휙</b> 움직이면 탑이 날아가요'],
+  ['✨', 'PERFECT 5연속이면 ❤️ +1'],
+] }));
+
+function reset() {
+  stack.forEach(l => { disposeMesh(l.mesh); world.removeBody(l.body); });
+  debris.forEach(d => { disposeMesh(d.mesh); world.removeBody(d.body); });
+  blobs.forEach(b => disposeMesh(b.mesh));
+  stack = []; debris = []; blobs = [];
+  lives = LIVES; combo = 0; maxH = 0; dropTimer = 1.4; wobble = 0;
+  hand.x = hand.z = target.x = target.z = 0;
+  nozzle.x = nozzle.tx = 0; nozzle.z = nozzle.tz = 0;
+  stack.push({ mesh: makeLayerMesh(R0, colorFor(0)), body: makeLayerBody(R0, false), R: R0, p: { x: 0, z: 0 }, v: { x: 0, z: 0 }, r: { x: 0, z: 0 } });
+  updateHud(); updateSky();
+}
+
+// ---------- chain physics (spring-damper tower) ----------
+function stepChain(h) {
+  const n = stack.length;
+  for (let i = 1; i < n; i++) {
+    const a = stack[i - 1], b = stack[i];
+    fx[i] = K * (a.p.x + b.r.x - b.p.x) + C * (a.v.x - b.v.x);
+    fz[i] = K * (a.p.z + b.r.z - b.p.z) + C * (a.v.z - b.v.z);
+  }
+  fx[n] = fz[n] = 0;
+  for (let i = 1; i < n; i++) { const b = stack[i]; b.v.x += (fx[i] - fx[i + 1]) * h; b.v.z += (fz[i] - fz[i + 1]) * h; }
+  for (let i = 1; i < n; i++) { const b = stack[i]; b.p.x += b.v.x * h; b.p.z += b.v.z * h; }
+}
+function checkBreak() {
+  let worst = 0;
+  for (let i = 1; i < stack.length; i++) {
+    const a = stack[i - 1], b = stack[i];
+    const s = Math.hypot(a.p.x + b.r.x - b.p.x, a.p.z + b.r.z - b.p.z);
+    const ratio = s / (0.3 + 0.5 * Math.min(a.R, b.R));
+    if (ratio > 1) { topple(i); return; }
+    worst = Math.max(worst, ratio);
+  }
+  wobble += (worst - wobble) * 0.3;
+}
+function topple(i) {
+  const flying = stack.splice(i);
+  for (const L of flying) {
+    const b = L.body;
+    b.type = CANNON.Body.DYNAMIC; b.mass = 1; b.updateMassProperties();
+    b.velocity.set(L.v.x * 1.5, 2 + Math.random() * 2, L.v.z * 1.5);
+    b.angularVelocity.set(L.v.z * 2 + (Math.random() - .5) * 3, (Math.random() - .5) * 4, -L.v.x * 2 + (Math.random() - .5) * 3);
+    b.wakeUp();
+    debris.push({ mesh: L.mesh, body: b, t: 0 });
+  }
+  combo = 0;
+  Arcade.toast(`으앗! ${flying.length}층 날아감`, '#e8590c');
+  Arcade.shake(.5 + Math.min(flying.length, 10) * .06);
+  Arcade.sfx.crash(); Arcade.sfx.whoosh();
+  updateHud(); loseLife();
+}
+function loseLife() { lives--; updateHud(); if (lives <= 0) gameOver(); }
+
+// ---------- cream dropping ----------
+function dropCream() {
+  const top = stack[stack.length - 1];
+  const idx = stack.length;
+  const mesh = makeLayerMesh(top.R, colorFor(idx));
+  const y = topY() + 4.4;
+  blobs.push({ mesh, R: top.R, x: nozzle.x, z: nozzle.z, y, vy: 0, idx });
+  mesh.position.set(nozzle.x, y, nozzle.z);
+  const a = Math.random() * Math.PI * 2, r = 0.4 + Math.random() * (RANGE - 0.4);
+  nozzle.tx = Math.cos(a) * r; nozzle.tz = Math.sin(a) * r * 0.75;
+}
+function resolveBlob(bl) {
+  const top = stack[stack.length - 1];
+  const dx = bl.x - top.p.x, dz = bl.z - top.p.z, d = Math.hypot(dx, dz);
+  let R = top.R, rx, rz, nR;
+  if (d < PERFECT) {
+    combo++; rx = 0; rz = 0; nR = Math.min(R0, R + (combo >= 2 ? .08 : .04));
+    Arcade.toast(combo > 1 ? `PERFECT ×${combo}` : 'PERFECT!', '#ff5d8f');
+    if (combo % 5 === 0 && lives < LIVES) { lives++; Arcade.toast(`PERFECT ×${combo} · ❤️ +1`, '#ff5d8f'); }
+    Arcade.sfx.pop(1 + height() * .012); Arcade.sfx.perfect(combo); Arcade.shake(.28);
+  } else {
+    nR = R - d / 2;
+    if (nR < MIN_R) {
+      const body = makeLayerBody(bl.R, true);
+      body.position.set(bl.x, bl.y, bl.z); body.velocity.set(0, bl.vy, 0);
+      body.angularVelocity.set(Math.random() * 4 - 2, 0, Math.random() * 4 - 2);
+      debris.push({ mesh: bl.mesh, body, t: 0 });
+      combo = 0; Arcade.toast('놓쳤다!', '#495057'); Arcade.shake(.3); Arcade.sfx.miss(); setTimeout(() => Arcade.sfx.splat(), 350);
+      loseLife(); return;
+    }
+    combo = 0; rx = dx / 2; rz = dz / 2;
+    Arcade.sfx.pop(1 + height() * .012); Arcade.shake(.18);
+    const s = THREE.MathUtils.clamp(d * .45, .14, .5);
+    const g = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), flat(colorFor(bl.idx)));
+    m.scale.set(s * 1.3, s * .8, s); g.add(m); scene.add(g);
+    const ux = dx / d, uz = dz / d;
+    const cb = new CANNON.Body({ mass: .3, shape: new CANNON.Sphere(s) });
+    cb.position.set(top.p.x + ux * (R + d / 2), bl.y + TUBE, top.p.z + uz * (R + d / 2));
+    cb.velocity.set(ux * 2 + top.v.x, 1, uz * 2 + top.v.z); world.addBody(cb);
+    debris.push({ mesh: g, body: cb, t: 0 });
+  }
+  disposeMesh(bl.mesh);
+  const mesh = makeLayerMesh(nR, colorFor(stack.length));
+  if (combo > 0) addSprinkles(mesh, nR, 6 + combo * 2);
+  stack.push({ mesh, body: makeLayerBody(nR, false), R: nR,
+    p: { x: top.p.x + rx, z: top.p.z + rz }, v: { x: top.v.x, z: top.v.z }, r: { x: rx, z: rz }, squash: 0 });
+  maxH = Math.max(maxH, height());
+  updateHud(); updateSky();
+}
+const topY = () => stack.length * H;
+
+function gameOver() {
+  state = 'over'; overAt = performance.now();
+  blobs.forEach(b => disposeMesh(b.mesh)); blobs = [];
+  const isBest = maxH > best;
+  if (isBest) { best = maxH; try { localStorage.setItem('softserve-best', best); } catch {} }
+  updateHud();
+  showScreen(Arcade.resultScreen({ emoji: '🍦', label: '이번 판 최고 높이', score: maxH, unit: '층', isBest: isBest && maxH > 0, best,
+    msg: maxH >= 30 ? '아이스크림 장인 🍦👑' : maxH >= 15 ? '꽤 높이 쌓았어요!' : '조금만 더 살살 움직여 봐요' }));
+  setTimeout(() => (isBest && maxH > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail()), 500);
+  Arcade.gameOver(maxH);
+}
+
+// ---------- input ----------
+const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2(), hit = new THREE.Vector3(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+let pointer = null;
+function sumR() { let x = 0, z = 0; for (const L of stack) { x += L.r.x; z += L.r.z; } return { x, z }; }
+function aimFromPointer() {
+  if (!pointer) return;
+  ndc.set(pointer.x / innerWidth * 2 - 1, -(pointer.y / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  plane.constant = -topY();
+  if (raycaster.ray.intersectPlane(plane, hit)) {
+    const o = sumR(); // aim so the tower TOP sits under the cursor
+    target.x = THREE.MathUtils.clamp(hit.x - o.x, -RANGE - .6, RANGE + .6);
+    target.z = THREE.MathUtils.clamp(hit.z - o.z, -RANGE - .6, RANGE + .6);
+  }
+}
+function start() { state = 'playing'; $center.style.display = 'none'; Arcade.sfx.go(); }
+function tapAction() {
+  if (state === 'ready') start();
+  else if (state === 'over' && performance.now() - overAt > 800 && !Arcade.inRun()) { reset(); start(); }
+}
+addEventListener('pointermove', e => { pointer = { x: e.clientX, y: e.clientY }; });
+addEventListener('pointerdown', e => { pointer = { x: e.clientX, y: e.clientY }; tapAction(); });
+const keys = {};
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if ((e.code === 'Space' || e.code === 'Enter') && !e.repeat) { e.preventDefault(); tapAction(); }
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ---------- fx ----------
+let ac;
+function beep(freq, dur, type = 'sine') {
+  try { ac ||= new AudioContext(); const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(.15, ac.currentTime); g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + dur);
+    o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + dur); } catch {}
+}
+const SKY = [[0, 0xffe3ec], [20, 0xc5e8ff], [40, 0xffc9a0], [60, 0x6b5bb5], [90, 0x1a1640]];
+const skyColor = new THREE.Color(0xffe3ec), skyTarget = new THREE.Color();
+function updateSky() {
+  const s = height(); let i = 0; while (i < SKY.length - 2 && s >= SKY[i + 1][0]) i++;
+  const t = THREE.MathUtils.clamp((s - SKY[i][0]) / (SKY[i + 1][0] - SKY[i][0]), 0, 1);
+  skyTarget.set(SKY[i][1]).lerp(new THREE.Color(SKY[i + 1][1]), t);
+}
+
+// ---------- loop ----------
+const camPos = new THREE.Vector3(0, 9, 8), camLook = new THREE.Vector3();
+let last = performance.now();
+reset();
+showIntro();
+window.__soft = { get stack() { return stack; }, get state() { return state; }, get lives() { return lives; }, target, hand, nozzle };
+
+function frame(now) {
+  const dt = Math.min(1 / 30, (now - last) / 1000); last = now;
+
+  if (state !== 'over') {
+    const kx = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
+    const kz = (keys.ArrowDown || keys.KeyS ? 1 : 0) - (keys.ArrowUp || keys.KeyW ? 1 : 0);
+    if (kx || kz) {
+      target.x = THREE.MathUtils.clamp(target.x + kx * 3 * dt, -RANGE - .6, RANGE + .6);
+      target.z = THREE.MathUtils.clamp(target.z + kz * 3 * dt, -RANGE - .6, RANGE + .6);
+      pointer = null;
+    } else aimFromPointer();
+  }
+
+  const px = hand.x, pz = hand.z, f = Math.min(1, dt * HAND_FOLLOW);
+  hand.x += (target.x - hand.x) * f; hand.z += (target.z - hand.z) * f;
+  handV.x = (hand.x - px) / dt; handV.z = (hand.z - pz) / dt;
+  const SUB = 10, h = dt / SUB;
+  for (let s = 1; s <= SUB; s++) {
+    const base = stack[0];
+    base.p.x = px + (hand.x - px) * s / SUB; base.p.z = pz + (hand.z - pz) * s / SUB;
+    base.v.x = handV.x; base.v.z = handV.z;
+    stepChain(h);
+  }
+  if (state === 'playing') checkBreak(); else wobble *= .9;
+  $wob.style.width = `${Math.min(100, wobble * 100)}%`;
+  $wob.style.background = wobble > .75 ? '#fa5252' : wobble > .45 ? '#fcc419' : '#51cf66';
+
+  holder.position.set(hand.x, 0, hand.z);
+  holder.rotation.set(handV.z * .012, 0, -handV.x * .012);
+  coneBody.position.set(hand.x, 0, hand.z); coneBody.velocity.set(handV.x, 0, handV.z);
+  for (let i = 0; i < stack.length; i++) {
+    const L = stack[i], below = stack[i - 1];
+    const lx = below ? L.p.x - below.p.x - L.r.x : 0, lz = below ? L.p.z - below.p.z - L.r.z : 0;
+    L.mesh.position.set(L.p.x, i * H, L.p.z);
+    L.mesh.rotation.set(-lz * .9, 0, lx * .9);
+    if (L.squash !== undefined && L.squash < 6) {
+      L.squash += dt * 6; const k = Math.exp(-L.squash * .9) * Math.cos(L.squash * 2.2);
+      L.mesh.scale.set(1 + .12 * k, 1 - .25 * k, 1 + .12 * k);
+    }
+    L.body.position.set(L.p.x, i * H, L.p.z);
+    L.body.velocity.set(L.v.x, 0, L.v.z);
+    L.body.quaternion.setFromEuler(-lz * .9, 0, lx * .9);
+  }
+
+  if (state === 'playing') {
+    nozzle.x += (nozzle.tx - nozzle.x) * Math.min(1, dt * 1.4);
+    nozzle.z += (nozzle.tz - nozzle.z) * Math.min(1, dt * 1.4);
+    dropTimer -= dt;
+    if (dropTimer <= 0 && blobs.length === 0) { dropCream(); dropTimer = Math.max(1.4, 2.5 - height() * .025); }
+    for (let i = blobs.length - 1; i >= 0; i--) {
+      const b = blobs[i];
+      b.vy -= 13 * dt; b.y += b.vy * dt;
+      b.mesh.position.set(b.x, b.y, b.z);
+      if (b.y <= topY()) { blobs.splice(i, 1); resolveBlob(b); if (state !== 'playing') break; }
+    }
+  }
+  machine.position.set(nozzle.x, topY() + 4.9, nozzle.z);
+  machine.visible = state !== 'over';
+  const my = topY() + TUBE * 2 + H + .03;
+  marker.position.set(nozzle.x, my, nozzle.z); markerDot.position.set(nozzle.x, my, nozzle.z);
+  marker.visible = markerDot.visible = state === 'playing';
+  const pulse = 1 + Math.sin(now / 160) * .12; marker.scale.set(pulse, pulse, 1);
+
+  world.step(1 / 60, dt, 4);
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const d = debris[i]; d.t += dt;
+    d.mesh.position.copy(d.body.position); d.mesh.quaternion.copy(d.body.quaternion);
+    if (d.t > 9 || debris.length > 90) { disposeMesh(d.mesh); world.removeBody(d.body); debris.splice(i, 1); }
+  }
+
+  // sky
+  skyColor.lerp(skyTarget, Math.min(1, dt * 1.5));
+  scene.background.copy(skyColor); scene.fog.color.copy(skyColor);
+
+  // camera: high, looking down onto the tower top
+  const ty = topY();
+  const look = new THREE.Vector3(0, ty - .3, 0), cp = new THREE.Vector3(0, ty + 8.5, 7.5);
+  if (state === 'ready') { const a = now / 5000; cp.set(Math.sin(a) * 3, ty + 8.5, 7.5); }
+  if (state === 'over') { const span = ty + 6; look.set(0, ty / 2 - 2, 0); cp.set(0, ty / 2 + span * .45, Math.max(13, span * 1.3)); }
+  const k = Math.min(1, dt * 3);
+  camPos.lerp(cp, k); camLook.lerp(look, k);
+  camera.position.copy(camPos); Arcade.applyShake(camera, dt); camera.lookAt(camLook);
+  sun.position.set(camLook.x + 4, camLook.y + 12, camLook.z + 5); sun.target.position.copy(camLook);
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

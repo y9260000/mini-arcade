@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>목탁 합주</title>
+<script src="common.js?v=10"></script>
+<script src="sounds/moktak-sample.js?v=1"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#2a1712;
+    user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  #lane{position:fixed;left:0;right:0;bottom:max(60px,8vh);height:110px;z-index:3;pointer-events:none}
+  #judge{position:fixed;left:0;right:0;bottom:calc(max(60px,8vh) + 168px);text-align:center;font-family:"Jua",sans-serif;font-size:34px;
+    pointer-events:none;opacity:0;z-index:4;text-shadow:0 3px 0 rgba(0,0,0,.35)}
+  #judge.show{animation:judge .5s ease-out}
+  @keyframes judge{0%{opacity:0;transform:scale(1.5)}20%{opacity:1;transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:translateY(-12px)}}
+  #bonnoe{width:96px;height:8px;border-radius:4px;background:#eee;overflow:hidden}
+  #bonnoe i{display:block;height:100%;width:0;background:#ff6b6b;border-radius:4px;transition:width .2s}
+  #feverfx{position:fixed;inset:0;pointer-events:none;z-index:1;opacity:0;transition:opacity .4s;
+    background:radial-gradient(ellipse at center,rgba(255,200,60,0) 45%,rgba(255,170,30,.38) 80%,rgba(255,120,0,.6) 100%)}
+  body.fever #feverfx{opacity:1;animation:feverPulse .6s ease-in-out infinite alternate}
+  @keyframes feverPulse{to{filter:brightness(1.35)}}
+  body.fever .hud-score{color:#ffe066;text-shadow:0 4px 0 #e8590c,0 0 30px rgba(255,180,0,.8)}
+  #feverTag{display:none;font-family:"Jua",sans-serif;font-size:22px;color:#fff;background:linear-gradient(90deg,#ff6b00,#ffb300);
+    padding:5px 16px;border-radius:999px;box-shadow:0 4px 14px rgba(255,120,0,.5);animation:feverPulse .3s infinite alternate}
+  body.fever #feverTag{display:inline-block}
+  #sutra{position:fixed;left:0;right:0;top:34vh;transform:translateY(-50%);text-align:center;pointer-events:none;z-index:3;padding:12px 16px;
+    font-family:"Jua",sans-serif;font-size:clamp(26px,7.2vw,44px);line-height:1.25;color:rgba(255,255,255,.42);
+    text-shadow:0 3px 10px rgba(0,0,0,.75);white-space:nowrap;overflow:hidden;
+    background:linear-gradient(90deg,transparent,rgba(30,12,4,.5) 18%,rgba(30,12,4,.5) 82%,transparent)}
+  #sutra:empty{display:none}
+  #sutra span{transition:color .15s,transform .15s;display:inline-block;margin:0 .18em}
+  #sutra span.done{color:#fff}
+  #sutra span.now{color:#ffe066;transform:scale(1.3);text-shadow:0 0 18px rgba(255,200,40,.95),0 3px 6px rgba(0,0,0,.7)}
+  body:has(.screen:not([style*="none"])) #sutra{visibility:hidden}
+  .word{position:fixed;left:0;top:0;pointer-events:none;z-index:4;font-family:"Jua",sans-serif;font-size:26px;color:#ffe066;white-space:nowrap;
+    text-shadow:0 0 12px rgba(255,190,40,.9),0 3px 0 rgba(90,40,0,.6);animation:word 1.1s ease-out forwards}
+  .word.roll{font-size:20px;color:#fff;animation-duration:.6s}
+  @keyframes word{0%{opacity:0;transform:translate(-50%,0) scale(.6)}15%{opacity:1;transform:translate(-50%,-14px) scale(1.15)}100%{opacity:0;transform:translate(-50%,-90px) scale(1)}}
+  #heavenflash{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:0;background:radial-gradient(circle at 50% 30%,#fffef5 0%,rgba(255,244,200,.85) 45%,rgba(255,230,150,.4) 100%);transition:opacity 1.2s}
+  #heavenflash.on{opacity:1}
+  .glare{position:fixed;left:0;top:0;font-size:34px;transform:translate(-50%,-100%);pointer-events:none;z-index:2;opacity:0;transition:opacity .15s}
+</style>
+</head>
+<body>
+<div id="feverfx"></div>
+<div class="hud">
+  <div id="combo" class="hud-score">0<small>콤보</small></div>
+  <div id="feverTag">🔥 FEVER 🔥</div>
+  <div class="hud-row"><span class="pill">번뇌 <span id="bonnoe"><i></i></span> <span id="bnum">0</span>/108</span><span class="pill" id="acc">정확도 -</span><span class="pill" id="asc">☁️ 승천 0%</span></div>
+</div>
+<canvas id="lane"></canvas>
+<div id="heavenflash"></div>
+<div id="sutra"></div>
+<div id="judge"></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+const ROLL_STEP = .075, FEVER_AT = 16;
+const PERFECT = .045, GOOD = .1, MISS_AFTER = .12, BONNOE_MAX = 108;
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, flatShading: true, ...extra });
+
+// ---------- three ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x2a1712);
+scene.fog = new THREE.Fog(0x2a1712, 18, 40);
+const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, .1, 200);
+scene.add(new THREE.HemisphereLight(0xffe2b8, 0x3b2014, 1.3));
+const lamp = new THREE.PointLight(0xffb347, 60, 30); lamp.position.set(0, 7, 2); lamp.castShadow = true; scene.add(lamp);
+const fill = new THREE.DirectionalLight(0xfff0d0, .9); fill.position.set(-4, 8, 8); scene.add(fill);
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); sizeLane(); });
+
+// ---------- temple ----------
+{
+  const c = document.createElement('canvas'); c.width = 64; c.height = 256; const g = c.getContext('2d');
+  for (let i = 0; i < 8; i++) { g.fillStyle = ['#8a5a3b', '#7d5034', '#94623f', '#83553a'][i % 4]; g.fillRect(0, i * 32, 64, 31); g.fillStyle = '#5c3a26'; g.fillRect(0, i * 32 + 31, 64, 1); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(10, 4); t.colorSpace = THREE.SRGBColorSpace;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 40), new THREE.MeshStandardMaterial({ map: t, roughness: .9 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+  const red = flat(0xa61e1e), gold = flat(0xf2b134, { metalness: .5, roughness: .35, emissive: 0x3a2400 });
+  for (const x of [-9, -5, 5, 9]) for (const z of [-8, 2]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(.45, .5, 10, 8), red); p.position.set(x, 5, z); p.castShadow = true; scene.add(p); }
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(40, 14, .5), flat(0x5a2a1d)); wall.position.set(0, 7, -14); scene.add(wall);
+  // golden statue (low-poly, seated silhouette)
+  const s = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 3, 1.2, 8), flat(0x8c2f1c)); base.position.y = .6;
+  const lotus = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.2, .7, 10), gold); lotus.position.y = 1.55;
+  const body = new THREE.Mesh(new THREE.ConeGeometry(2.3, 3.8, 8), gold); body.position.y = 3.6;
+  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(.9, 1), gold); head.position.y = 5.9;
+  const top = new THREE.Mesh(new THREE.IcosahedronGeometry(.4, 0), gold); top.position.y = 6.85;
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(2.1, .12, 4, 24), gold); halo.position.set(0, 5.6, -.6);
+  s.add(base, lotus, body, head, top, halo); s.position.set(0, 0, -11); s.scale.setScalar(1.25); scene.add(s);
+  // lanterns
+  for (const x of [-7, 7]) {
+    const l = new THREE.Mesh(new THREE.CylinderGeometry(.6, .6, 1.3, 8), new THREE.MeshStandardMaterial({ color: 0xff6b3d, emissive: 0xff5a1f, emissiveIntensity: .8, flatShading: true }));
+    l.position.set(x, 7.5, -4); scene.add(l);
+    const pl = new THREE.PointLight(0xff8a3d, 15, 12); pl.position.copy(l.position); scene.add(pl);
+  }
+  // incense smoke columns
+  for (const x of [-2.6, 2.6]) {
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(.35, .28, .5, 8), gold); pot.position.set(x, .25, -7.5); scene.add(pot);
+  }
+}
+
+// ---------- monks ----------
+const skin = flat(0xf1c9a0), wood = flat(0x9c4f1d), woodDark = flat(0x5c2d10);
+function makeMonk({ robe = 0x868e96, sash = 0xd9480f, size = 1 } = {}) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.ConeGeometry(1.15, 2.3, 7), flat(robe)); body.position.y = 1.15; body.castShadow = true;
+  const sashM = new THREE.Mesh(new THREE.BoxGeometry(.32, 2.1, .2), flat(sash)); sashM.position.set(.1, 1.4, .5); sashM.rotation.set(.38, 0, .55);
+  const lap = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.35, .4, 7), flat(robe)); lap.position.y = .2;
+  const head = new THREE.Group(); head.position.y = 2.65;
+  const skull = new THREE.Mesh(new THREE.IcosahedronGeometry(.56, 1), skin); skull.castShadow = true;
+  const eyeL = new THREE.Mesh(new THREE.BoxGeometry(.17, .035, .05), flat(0x222222)); eyeL.position.set(-.19, .02, .52);
+  const eyeR = eyeL.clone(); eyeR.position.x = .19;
+  const earL = new THREE.Mesh(new THREE.IcosahedronGeometry(.14, 0), skin); earL.position.set(-.56, 0, 0); const earR = earL.clone(); earR.position.x = .56;
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(.6, .04, .05), flat(0x222222)); brow.position.set(0, .2, .52); brow.visible = false;
+  head.add(skull, eyeL, eyeR, earL, earR, brow);
+  // stick arm (pivot at the right shoulder)
+  const arm = new THREE.Group(); arm.position.set(.55, 1.95, .25);
+  const sleeve = new THREE.Mesh(new THREE.BoxGeometry(.32, .32, 1), flat(robe)); sleeve.position.z = .45;
+  const hand = new THREE.Mesh(new THREE.IcosahedronGeometry(.17, 0), skin); hand.position.z = .98;
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .9, 5), woodDark); stick.rotation.x = Math.PI / 2; stick.position.set(0, -.05, 1.4);
+  const knob = new THREE.Mesh(new THREE.IcosahedronGeometry(.11, 0), woodDark); knob.position.set(0, -.05, 1.85);
+  arm.add(sleeve, hand, stick, knob); arm.rotation.set(-.2, -.3, 0);
+  // moktak (wooden fish) on the floor in front
+  const mok = new THREE.Group(); mok.position.set(.45, .38, 1.55);
+  const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(.42, 1), wood); shell.scale.set(1.25, .85, 1); shell.castShadow = true;
+  const slit = new THREE.Mesh(new THREE.BoxGeometry(.6, .05, .1), woodDark); slit.position.set(0, -.05, .4);
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(.14, .05, 4, 8), wood); handle.position.set(-.5, .1, 0); handle.rotation.y = Math.PI / 2;
+  mok.add(shell, slit, handle);
+  const cushion = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, .15, 8), flat(0x7b1e3a)); cushion.position.y = .02;
+  g.add(cushion, lap, body, sashM, head, arm, mok);
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(.5, .06, 4, 16), new THREE.MeshBasicMaterial({ color: 0xffd43b }));
+  halo.rotation.x = Math.PI / 2; halo.position.y = 3.45; halo.visible = false; g.add(halo);
+  g.scale.setScalar(size);
+  return { group: g, arm, mok, head, halo, brow, eyes: [eyeL, eyeR], hitT: 9, glareT: 0, phase: Math.random() * 6 };
+}
+const monks = [];
+const ring = [[-6, -2.6], [-3.2, -4.4], [3.2, -4.4], [6, -2.6]];
+for (const [x, z] of ring) {
+  const m = makeMonk(); m.group.position.set(x, 0, z);
+  m.group.rotation.y = Math.atan2(0 - x, 4 - z); scene.add(m.group); monks.push(m);
+}
+const abbot = makeMonk({ robe: 0x7a5c3e, sash: 0xc92a2a, size: 1.25 }); // 주지스님
+abbot.group.position.set(0, 0, -5.4); scene.add(abbot.group); monks.push(abbot);
+const me = makeMonk({ robe: 0x9aa3ad, sash: 0xf08c00 }); me.group.position.set(0, 0, 3.2); me.group.rotation.y = Math.PI; scene.add(me.group);
+const BASE_BG = new THREE.Color(0x2a1712), FEVER_BG = new THREE.Color(0x5a2a0a);
+const petals = new THREE.Group(); petals.visible = false; petals.userData.fade = 0; scene.add(petals);
+{
+  const geo = new THREE.CircleGeometry(.18, 5), mats = [0xffa8c5, 0xffd43b, 0xffffff].map(c => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }));
+  for (let i = 0; i < 70; i++) { const m = new THREE.Mesh(geo, mats[i % 3]); m.position.set((Math.random() - .5) * 18, Math.random() * 10, -8 + Math.random() * 13); m.userData = { v: .6 + Math.random() * 1.2, ph: Math.random() * 6 }; petals.add(m); }
+}
+// ---------- 번뇌 = hair: misses grow an afro on my bald head, perfects shave it ----------
+const hair = new THREE.Group(); me.head.add(hair);
+{
+  const hm = flat(0x2b1d14), blob = new THREE.IcosahedronGeometry(.2, 0);
+  for (let i = 0; i < 26; i++) { // blobs on the upper hemisphere, just inside the skull → they push out as the group scales
+    const u = Math.random(), v = Math.random() * .55, th = u * Math.PI * 2, ph = Math.acos(1 - v * 1.2);
+    const b = new THREE.Mesh(blob, hm); b.position.set(Math.sin(ph) * Math.cos(th) * .5, Math.cos(ph) * .5 + .02, Math.sin(ph) * Math.sin(th) * .5 - .04);
+    b.scale.setScalar(.8 + Math.random() * .6); hair.add(b);
+  }
+  for (let i = 0; i < 5; i++) { // a few silly strands
+    const st = new THREE.Mesh(new THREE.BoxGeometry(.04, .5, .04), hm); st.position.set((Math.random() - .5) * .4, .62, (Math.random() - .5) * .3 - .05);
+    st.rotation.set((Math.random() - .5) * .8, 0, (Math.random() - .5) * .8); hair.add(st);
+  }
+}
+let hairS = 0, hairStage = 0;
+const HAIR_LINES = [[24, '😳 머리카락이 자라기 시작했다…'], [54, '주지스님: "머리 좀 깎고 와라"'], [84, '🦁 거의 속세 사람 됨']];
+function updateHair(dt) {
+  const k = bonnoe / BONNOE_MAX, target = k <= 0 ? 0 : 1.02 + k * 1.15;
+  hairS += (target - hairS) * Math.min(1, dt * 5);
+  hair.visible = hairS > .9; hair.scale.set(hairS, hairS * (1 + k * .25), hairS);
+  const stage = HAIR_LINES.filter(([b]) => bonnoe >= b).length;
+  if (stage > hairStage && state === 'play') { Arcade.toast(HAIR_LINES[stage - 1][1], '#5c3a26'); Arcade.sfx.boing(); }
+  hairStage = stage;
+}
+
+const glares = monks.map(() => { const d = document.createElement('div'); d.className = 'glare'; d.textContent = '😒'; document.body.appendChild(d); return d; });
+
+// ---------- audio: pre-rendered wood/bell samples + temple-hall reverb ----------
+let ac, t0 = 0, master, wet, ambience;
+let SR = 44100; const bank = {};
+// damped-sine "modal" synthesis: hollow wood has a few inharmonic resonances + a short noise click
+function renderWood(f0, { body = 1, dull = 0 } = {}) {
+  const len = Math.floor(SR * .45), b = ac.createBuffer(1, len, SR), d = b.getChannelData(0);
+  const modes = dull
+    ? [[1, 1, .045], [2.3, .25, .02]]
+    : [[1, 1, .085], [1.52, .28, .05], [2.68, .42, .032], [4.13, .16, .016], [6.2, .06, .009]];
+  let lp = 0;
+  for (let n = 0; n < len; n++) {
+    const t = n / SR, bend = 1 + .06 * Math.exp(-t / .006); // tiny pitch drop at the strike
+    let v = 0;
+    for (const [r, a, tau] of modes) v += a * Math.sin(2 * Math.PI * f0 * r * bend * t + r) * Math.exp(-t / tau);
+    v += body * .35 * Math.sin(2 * Math.PI * f0 * .42 * t) * Math.exp(-t / .03);     // cavity "thock"
+    const noise = (Math.random() * 2 - 1) * Math.exp(-t / .0018); lp += (noise - lp) * .35; v += lp * .9; // stick click
+    d[n] = v * Math.min(1, t / .0006) * .5;
+  }
+  return b;
+}
+function renderBell(f0, dur, partials) {
+  const len = Math.floor(SR * dur), b = ac.createBuffer(1, len, SR), d = b.getChannelData(0);
+  for (let n = 0; n < len; n++) {
+    const t = n / SR; let v = 0;
+    for (const [r, a, tau, beat] of partials) v += a * Math.sin(2 * Math.PI * f0 * r * t) * (1 - .25 * Math.cos(2 * Math.PI * beat * t)) * Math.exp(-t / tau);
+    d[n] = v * Math.min(1, t / .004) * .35;
+  }
+  return b;
+}
+function hallImpulse(sec = 2.6) {
+  const len = Math.floor(SR * sec), b = ac.createBuffer(2, len, SR);
+  for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let n = 0; n < len; n++) { const t = n / len; d[n] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3.2) * (n < SR * .012 ? .3 : 1); } }
+  return b;
+}
+function ensureAudio() {
+  try {
+    if (!ac) {
+      ac = new (window.AudioContext || window.webkitAudioContext)(); SR = ac.sampleRate;
+      if (window.MOKTAK_WAV_B64) { // real recorded moktak strike (sounds/moktak.wav), embedded so it also works from file://
+        const bin = atob(window.MOKTAK_WAV_B64), u8 = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+        ac.decodeAudioData(u8.buffer).then(b => { bank.sample = b; }).catch(e => console.warn('moktak sample decode failed', e));
+      }
+      master = ac.createGain(); master.gain.value = .9; master.connect(ac.destination);
+      const verb = ac.createConvolver(); verb.buffer = hallImpulse();
+      wet = ac.createGain(); wet.gain.value = .32; wet.connect(verb).connect(master);
+      // per-monk wood voices (slightly different sizes) + the player's own moktak
+      bank.monks = [470, 505, 540, 580, 430].map(f => renderWood(f));
+      bank.me = renderWood(615, { body: 1.2 });
+      bank.thud = renderWood(240, { dull: 1, body: .6 });
+      bank.bowl = renderBell(392, 4, [[1, 1, 2.6, 1.3], [2.71, .45, 1.6, 2.1], [5.15, .2, .9, 0], [8.4, .08, .5, 0]]);
+      bank.bell = renderBell(98, 7, [[1, 1, 5, .7], [2.0, .6, 3.5, .9], [2.92, .35, 2.4, 0], [4.2, .2, 1.4, 0], [5.4, .1, 1, 0]]);
+      // faint room tone so silence feels like a hall, not a void
+      const nb = ac.createBuffer(1, SR * 3, SR), nd = nb.getChannelData(0); let br = 0;
+      for (let n = 0; n < nd.length; n++) { br = (br + (Math.random() * 2 - 1) * .02) * .995; nd[n] = br; }
+      ambience = ac.createBufferSource(); ambience.buffer = nb; ambience.loop = true;
+      const ag = ac.createGain(); ag.gain.value = .25; ambience.connect(ag).connect(master); ambience.start();
+    }
+    if (ac.state === 'suspended') ac.resume();
+  } catch (e) { console.warn('audio init failed', e); }
+}
+function play(buf, when, vol = 1, rate = 1, wetAmt = 1, dur = 0) {
+  if (!ac || !buf) return;
+  const src = ac.createBufferSource(), g = ac.createGain(), t = Math.max(when, ac.currentTime);
+  src.buffer = buf; src.playbackRate.value = rate; g.gain.value = vol;
+  src.connect(g); g.connect(master);
+  const w = ac.createGain(); w.gain.value = wetAmt; g.connect(w).connect(wet);
+  src.start(t);
+  if (dur) { g.gain.setValueAtTime(vol, t + dur * .5); g.gain.linearRampToValueAtTime(0, t + dur); src.stop(t + dur + .02); } // short strikes for rolls
+}
+const MONK_RATES = [.92, .96, 1.0, 1.04, .86]; // index 4 = 주지스님 (bigger, lower moktak)
+// the ensemble: every monk strikes, slightly humanised in time / loudness / pitch
+function ensembleTok(when) {
+  if (bank.sample) return MONK_RATES.forEach((r, i) => play(bank.sample, when + (Math.random() - .5) * .012 + (i === 4 ? 0 : .004), (i === 4 ? .42 : .22) * (.85 + Math.random() * .3), r * (.99 + Math.random() * .02), .8));
+  bank.monks.forEach((b, i) => play(b, when + (Math.random() - .5) * .012 + (i === 4 ? 0 : .004), (i === 4 ? .5 : .3) * (.85 + Math.random() * .3), .98 + Math.random() * .04, .9));
+}
+const myTok = (short) => bank.sample
+  ? play(bank.sample, ac ? ac.currentTime : 0, short ? .7 : .95, 1.07 + Math.random() * .03, .45, short ? .12 : 0)
+  : play(bank.me, ac ? ac.currentTime : 0, .85, .97 + Math.random() * .06, .7);
+const bowl = (rate = 1, vol = .5) => play(bank.bowl, ac ? ac.currentTime : 0, vol, rate, 1.2);
+const bigBell = () => play(bank.bell, ac ? ac.currentTime : 0, .8, 1, 1.4);
+function rollTok(when) { if (bank.sample) { play(bank.sample, when + (Math.random() - .5) * .006, .34, .86, .7, .11); play(bank.sample, when + .003, .18, .97 + Math.random() * .06, .7, .1); return; } play(bank.monks[4], when + (Math.random() - .5) * .006, .38, 1, .8); play(bank.monks[(Math.random() * 4) | 0], when + .003, .2, 1.02, .8); }
+const thud = () => play(bank.thud, ac ? ac.currentTime : 0, .6, .9 + Math.random() * .1, .4);
+const now = () => ac ? ac.currentTime - t0 : 0;
+
+// ---------- chart ----------
+const PATTERNS = [
+  [[0, 1, 2, 3]],                                     // easy
+  [[0, 2], [0, 1, 2], [0, 1, 2, 3], [0, 1, 3]],       // mid
+  [[0, 1, 2, 3, 3.5], [0, .5, 1, 2, 3], [0, 1, 1.5, 2, 3], [0, 2, 2.5, 3], [0, .5, 1, 1.5, 2, 3],
+   [0, .5, 1, 1.5, 2, 2.5, 3], [0, .25, .5, 1, 2, 3], [0, .75, 1.5, 2, 3, 3.5], [0, 1, 1.25, 1.5, 3], [.5, 1, 2, 2.5, 3.5]], // hard
+];
+let notes = []; // {t, hit:false, judged:false}
+// tempo swings up and down; every measure also gets its own scroll speed (notes can rush in or crawl)
+const BPMS   = [84, 84, 96, 96, 104, 72, 120, 124, 128, 90, 136, 140, 144, 100, 150, 154, 158, 166];
+const SPEEDS = [1, 1, 1, 1.3, 1, .7, 1.4, 1, 1.8, .75, 1.3, 1.8, .7, 1, 1.5, 2, .8, 1.6];
+const ROLLS  = { 4: [[0, 1], 2, 3.5], 8: [[0, .5, 1], 2, 3.5], 12: [[0], 1, 3], 15: [[0, .5, 1, 1.5], 2, 3.5], 17: [[0, .5], 1, 3.75] };
+let speedMarks = [];
+function buildChart() {
+  notes = []; speedMarks = [];
+  let t = 2.4; // start after 2.4s (count-in visible on lane)
+  for (let m = 0; m < BPMS.length; m++) {
+    const beat = 60 / BPMS[m], sp = SPEEDS[m];
+    if (m && sp !== SPEEDS[m - 1]) speedMarks.push({ t, sp, faster: sp > SPEEDS[m - 1], done: false });
+    if (m && Math.abs(BPMS[m] - BPMS[m - 1]) >= 20) speedMarks.push({ t, bpm: BPMS[m], faster: BPMS[m] > BPMS[m - 1], done: false });
+    const tier = m < 2 ? 0 : m < 5 ? 1 : 2;
+    const R = ROLLS[m];
+    if (R) {
+      for (const b of R[0]) notes.push({ t: t + b * beat, sp, judged: false });
+      notes.push({ t: t + R[1] * beat, end: t + R[2] * beat, roll: true, sp, judged: false });
+    } else {
+      const set = PATTERNS[tier];
+      const pat = m === 9 ? [0, 2] : set[(Math.random() * set.length) | 0];
+      for (const b of pat) notes.push({ t: t + b * beat, sp, judged: false });
+    }
+    t += 4 * beat;
+  }
+  notes.sort((a, b) => a.t - b.t);
+  return t;
+}
+
+// ---------- state ----------
+let held = false, activeRoll = null, rollAcc = 0, fever = false, feverTime = 0, rollHits = 0, chant = null;
+let state = 'ready', songEnd = 0, combo = 0, maxCombo = 0, bonnoe = 0, perfects = 0, goods = 0, misses = 0, overAt = 0, npcCursor = 0;
+let best = 0; try { best = +localStorage.getItem('moktak-best') || 0; } catch {}
+const $ = id => document.getElementById(id);
+const $combo = $('combo'), $bon = $('bonnoe').firstElementChild, $bnum = $('bnum'), $acc = $('acc'), $judge = $('judge'), $center = $('center');
+// ---------- 승천: heavenly light from above + levitation ----------
+const ME_POS = new THREE.Vector3(0, 0, 3.2);
+const beamMat = new THREE.MeshBasicMaterial({ color: 0xfff1c4, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+const heavenBeam = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 2.7, 34, 18, 1, true), beamMat); heavenBeam.position.set(ME_POS.x, 17, ME_POS.z); scene.add(heavenBeam);
+const coreMat = beamMat.clone(); const beamCore = new THREE.Mesh(new THREE.CylinderGeometry(.45, 1.1, 34, 12, 1, true), coreMat); beamCore.position.copy(heavenBeam.position); scene.add(beamCore);
+const floorGlow = new THREE.Mesh(new THREE.CircleGeometry(2.8, 32), new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+floorGlow.rotation.x = -Math.PI / 2; floorGlow.position.set(ME_POS.x, .05, ME_POS.z); scene.add(floorGlow);
+const heavenSpot = new THREE.SpotLight(0xfff1c0, 0, 45, .32, .55, 1.2); heavenSpot.position.set(ME_POS.x, 24, ME_POS.z); scene.add(heavenSpot, heavenSpot.target); heavenSpot.target.position.copy(ME_POS);
+const DUST = 140, dustGeo = new THREE.BufferGeometry(), dustArr = new Float32Array(DUST * 3);
+for (let i = 0; i < DUST; i++) { const a = Math.random() * 6.28, r = Math.random() * 2; dustArr[i * 3] = ME_POS.x + Math.cos(a) * r; dustArr[i * 3 + 1] = Math.random() * 22; dustArr[i * 3 + 2] = ME_POS.z + Math.sin(a) * r; }
+dustGeo.setAttribute('position', new THREE.BufferAttribute(dustArr, 3));
+const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ color: 0xfff3bf, size: .12, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+scene.add(dust);
+let lift = 0, ascend = 0, finalAscend = false, lastMilestone = 0;
+const ASC_MILESTONES = [[.25, '몸이 가벼워진다…'], [.5, '✨ 공중부양 중'], [.75, '☁️ 하늘 문이 열린다'], [1, '🙏 승천 직전!!']];
+function updateAscension(dt, tt) {
+  const target = finalAscend ? 1 : state === 'play' ? Math.min(1, combo / 40) : 0;
+  ascend += (target - ascend) * Math.min(1, dt * (target > ascend ? 1.5 : 6));
+  const liftTarget = finalAscend ? 22 : ascend * 3.4 + (fever ? .5 : 0);
+  const prev = lift;
+  lift += (liftTarget - lift) * Math.min(1, dt * (finalAscend ? .9 : liftTarget > lift ? 2 : 9));
+  if (prev > .6 && lift < .15 && !finalAscend) { thud(); Arcade.shake(.8); Arcade.vibrate(80); Arcade.toast('쿵! 다시 속세로…', '#495057'); }
+  me.lift = lift;
+  me.group.rotation.z = Math.sin(tt * 1.3) * .04 * ascend; me.group.rotation.x = Math.sin(tt * .9) * .03 * ascend;
+  me.halo.visible = ascend > .2 || combo >= 10; me.halo.scale.setScalar(1 + ascend * .8 + (finalAscend ? .5 : 0));
+  const glow = finalAscend ? 1 : ascend, flick = 1 + Math.sin(tt * 3) * .08;
+  beamMat.opacity = glow * .1 * flick; coreMat.opacity = glow * .16 * flick; floorGlow.material.opacity = glow * .35;
+  heavenSpot.intensity = glow * (finalAscend ? 160 : 70); dust.material.opacity = glow * .9;
+  heavenBeam.rotation.y += dt * .2;
+  const a = dustGeo.attributes.position.array;
+  for (let i = 0; i < DUST; i++) { a[i * 3 + 1] += dt * (.6 + glow * 1.6); if (a[i * 3 + 1] > 22) a[i * 3 + 1] = 0; }
+  dustGeo.attributes.position.needsUpdate = true;
+  if (state === 'play') {
+    const ms = ASC_MILESTONES.filter(([v]) => ascend >= v - .01).length;
+    if (ms > lastMilestone) { Arcade.toast(ASC_MILESTONES[ms - 1][1], '#c08a00'); Arcade.vibrate(30); }
+    lastMilestone = Math.min(ms, lastMilestone > ms ? ms : ms);
+    if (ascend < .2) lastMilestone = 0;
+  }
+  document.getElementById('asc').textContent = `☁️ 승천 ${Math.round(ascend * 100)}%`;
+}
+
+// ---------- 반야심경: one word per strike ----------
+const SUTRA = [
+  ['마하', '반야', '바라밀다', '심경'],
+  ['관자재', '보살', '행심', '반야', '바라밀다시'],
+  ['조견', '오온', '개공', '도', '일체', '고액'],
+  ['사리자', '색불이공', '공불이색'],
+  ['색즉시공', '공즉시색', '수상행식', '역부여시'],
+  ['사리자', '시제법', '공상', '불생불멸'],
+  ['불구부정', '부증불감', '시고', '공중무색'],
+  ['무수상행식', '무안이비', '설신의'],
+  ['무색성향', '미촉법', '무안계', '내지', '무의식계'],
+  ['무무명', '역무', '무명진', '내지', '무노사'],
+  ['무고집멸도', '무지', '역무득', '이무소득고'],
+  ['보리살타', '의반야', '바라밀다고', '심무가애'],
+  ['무가애고', '무유공포', '원리전도', '몽상', '구경열반'],
+  ['아제', '아제', '바라아제', '바라승아제', '모지', '사바하'],
+];
+const ROLL_WORDS = ['나', '무', '아', '미', '타', '불'];
+let sLine = 0, sWord = 0, rollWord = 0;
+const $sutra = document.getElementById('sutra');
+function renderSutra() { $sutra.innerHTML = SUTRA[sLine].map((w, i) => `<span class="${i < sWord ? 'done' : i === sWord ? 'now' : ''}">${w}</span>`).join(''); }
+const headV = new THREE.Vector3();
+function floatWord(text, cls = '') {
+  me.head.getWorldPosition(headV); headV.y += 1.1; headV.project(camera);
+  const d = document.createElement('div'); d.className = 'word ' + cls; d.textContent = text;
+  d.style.left = `${(headV.x + 1) / 2 * innerWidth + (Math.random() - .5) * 60}px`; d.style.top = `${(1 - headV.y) / 2 * innerHeight}px`;
+  document.body.appendChild(d); setTimeout(() => d.remove(), 1200);
+}
+function chantNext() {
+  floatWord(SUTRA[sLine][sWord]);
+  sWord++; if (sWord >= SUTRA[sLine].length) { sWord = 0; sLine = (sLine + 1) % SUTRA.length; }
+  renderSutra();
+}
+function chantRoll() { floatWord(ROLL_WORDS[rollWord++ % ROLL_WORDS.length], 'roll'); }
+// golden shockwave rings rising off my moktak
+const ringGeo = new THREE.RingGeometry(.32, .42, 28), mokV = new THREE.Vector3(); let hitRings = [];
+const hitLight = new THREE.PointLight(0xffd34d, 0, 8); scene.add(hitLight);
+function strikeFx(color, big) {
+  me.mok.getWorldPosition(mokV);
+  const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2; m.position.copy(mokV); m.position.y += .45; scene.add(m);
+  hitRings.push({ m, t: 0, big });
+  hitLight.position.copy(mokV).y += 1; hitLight.color.setHex(color); hitLight.intensity = big ? 30 : 14;
+}
+function updateHitFx(dt) {
+  hitLight.intensity *= Math.exp(-dt * 10);
+  hitRings = hitRings.filter(r => { r.t += dt; const k = r.t / .5, s = 1 + k * (r.big ? 9 : 5); r.m.scale.set(s, s, s); r.m.position.y += dt * 1.2; r.m.material.opacity = 1 - k; if (k >= 1) { scene.remove(r.m); r.m.material.dispose(); } return k < 1; });
+}
+// lane bursts at the hit circle
+let laneFx = [];
+const laneBurst = (color, big, miss) => laneFx.push({ t: 0, color, big, miss });
+
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+const accuracy = () => { const n = perfects + goods + misses; return n ? Math.round((perfects + goods * .5) / n * 100) : 0; };
+function hud() {
+  $combo.innerHTML = `${combo}<small>콤보</small>`;
+  $bon.style.width = `${bonnoe / BONNOE_MAX * 100}%`; $bnum.textContent = bonnoe;
+  $acc.textContent = `정확도 ${perfects + goods + misses ? accuracy() + '%' : '-'}`;
+}
+function judge(text, color) { $judge.textContent = text; $judge.style.color = color; $judge.classList.remove('show'); void $judge.offsetWidth; $judge.classList.add('show'); }
+
+function start() {
+  ensureAudio();
+  $center.style.display = 'none';
+  state = 'count';
+  combo = maxCombo = bonnoe = perfects = goods = misses = 0; npcCursor = 0; feverTime = 0; rollHits = 0; activeRoll = null; sLine = sWord = rollWord = 0; renderSutra(); finalAscend = false; lastMilestone = 0; document.getElementById('heavenflash').classList.remove('on'); endFever(true); hud();
+  monks.concat(me).forEach(m => m.halo.visible = false);
+  Arcade.countdown({ from: 3, final: '나무아미타불', onTick: n => { n ? bowl(1, .45) : bigBell(); },
+    onDone: () => {
+      const end = buildChart();
+      t0 = ac ? ac.currentTime : performance.now() / 1000;
+      notes.forEach(n => {                            // the other monks play the chart
+        if (!n.roll) return ensembleTok(t0 + n.t);
+        for (let x = n.t; x < n.end; x += ROLL_STEP) rollTok(t0 + x);
+      });
+      songEnd = end; state = 'play';
+    } });
+}
+
+function onHit() {
+  if (state === 'ready') return start();
+  if (state === 'over') { if (performance.now() - overAt > 800 && !Arcade.inRun()) start(); return; }
+  if (state !== 'play') return;
+  const t = now();
+  myTok();
+  me.hitT = 0;
+  // pressing during a roll's window starts the hold
+  const roll = notes.find(n => n.roll && !n.judged && !n.holding && t >= n.t - GOOD && t <= n.end - .05);
+  if (roll) {
+    roll.holding = true; roll.startPerfect = Math.abs(t - roll.t) <= PERFECT || t > roll.t ? Math.abs(t - roll.t) <= PERFECT : false;
+    activeRoll = roll; rollAcc = 0;
+    judge('꾹~ 다다다닥!', '#ffd43b'); hapticHit(1.2); strikeFx(0xffd43b, true); laneBurst('#ffe066', true); chantRoll(); hud(); return;
+  }
+  // nearest unjudged tap note
+  let bestN = null, bestD = 1e9;
+  for (const n of notes) { if (n.judged || n.roll) continue; const d = Math.abs(n.t - t); if (d < bestD) { bestD = d; bestN = n; } if (n.t > t + GOOD) break; }
+  if (bestN && bestD <= GOOD) {
+    bestN.judged = true;
+    good(bestD <= PERFECT);
+  } else offBeat('엇박!');
+  hud();
+}
+function good(perfect, label) {
+  chantNext(); strikeFx(perfect ? 0xffd43b : 0x8ce99a, perfect); laneBurst(perfect ? '#ffe066' : '#8ce99a', perfect);
+  if (perfect) { perfects++; bonnoe = Math.max(0, bonnoe - (fever ? 4 : 2)); judge(label || 'PERFECT', '#ffe066'); }
+  else { goods++; judge(label || 'GOOD', '#8ce99a'); }
+  combo++; maxCombo = Math.max(maxCombo, combo);
+  if (combo === 10) Arcade.toast('🙏 마음이 맑아집니다', '#f08c00');
+  if (combo === FEVER_AT) startFever();
+  monks.forEach(m => m.halo.visible = fever);
+  hapticHit(1);
+}
+// shake + vibration grow with the combo (and a bit more in fever)
+function hapticHit(mult) {
+  const f = fever ? 1.5 : 1;
+  Arcade.shake(Math.min(.04 + combo * .007, .4) * f * mult);
+  Arcade.vibrate(Math.min(12 + combo * 1.4, 80) * f * mult);
+}
+function onRelease() {
+  held = false;
+  const r = activeRoll; if (!r || r.judged) return;
+  const t = now();
+  activeRoll = null; r.holding = false;
+  if (t >= r.end - .12) completeRoll(r);
+  else if ((t - r.t) / (r.end - r.t) >= .6) { r.judged = true; good(false, '조금 일찍 뗐어요'); hud(); }
+  else { r.judged = true; offBeat('너무 일찍 뗐어요'); hud(); }
+}
+function completeRoll(r) {
+  r.judged = true; r.holding = false; if (activeRoll === r) activeRoll = null;
+  good(r.startPerfect !== false, '다다다닥! PERFECT'); hapticHit(2); hud();
+}
+// ---------- fever ----------
+function startFever() {
+  if (fever) return;
+  fever = true; document.body.classList.add('fever');
+  Arcade.toast('🔥 FEVER!! 🔥', '#ff6b00'); Arcade.shake(1.2); Arcade.vibrate([60, 40, 120]);
+  bigBell(); monks.forEach(m => m.halo.visible = true);
+  if (ac) { // monks start chanting "옴~": soft low drone through the hall
+    const g = ac.createGain(); g.gain.value = 0; g.gain.linearRampToValueAtTime(.09, ac.currentTime + 1.2);
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700;
+    const lfo = ac.createOscillator(), lg = ac.createGain(); lfo.frequency.value = 4.6; lg.gain.value = 2.2; lfo.connect(lg);
+    const oscs = [110, 110.6, 164.8, 220.4].map((f, i) => { const o = ac.createOscillator(); o.type = i % 2 ? 'triangle' : 'sawtooth'; o.frequency.value = f; lg.connect(o.frequency); o.connect(lp); o.start(); return o; });
+    lfo.start(); lp.connect(g); g.connect(master); const w = ac.createGain(); w.gain.value = .8; g.connect(w).connect(wet);
+    chant = { g, oscs, lfo };
+  }
+}
+function endFever(silent) {
+  if (!fever) return;
+  fever = false; document.body.classList.remove('fever');
+  if (!silent) Arcade.toast('피버 끝… 😮‍💨', '#495057');
+  if (chant && ac) { const c = chant; c.g.gain.cancelScheduledValues(ac.currentTime); c.g.gain.setTargetAtTime(0, ac.currentTime, .25); setTimeout(() => { c.oscs.forEach(o => o.stop()); c.lfo.stop(); }, 1500); }
+  chant = null;
+}
+const SCOLD = ['주지스님: "집중!"', '😒 …', '옆 스님: "쯧쯧"', '주지스님: "번뇌가 많구나"', '🔔 땡중 경보'];
+function offBeat(label) {
+  laneBurst('#ff6b6b', false, true);
+  misses++; combo = 0; bonnoe = Math.min(BONNOE_MAX, bonnoe + 20); endFever();
+  judge(label, '#ff8787');
+  if (Math.random() < .6) Arcade.toast(SCOLD[(Math.random() * SCOLD.length) | 0], '#495057');
+  monks.forEach(m => m.glareT = 1.1);
+  me.halo.visible = false; monks.forEach(m => m.halo.visible = false);
+  Arcade.shake(.35); Arcade.vibrate([30, 30, 30]);
+  thud();
+  if (bonnoe >= BONNOE_MAX) end(false);
+}
+
+function end(clear) {
+  if (clear) { finalAscend = true; Arcade.toast('🙏 해탈!! 승천합니다', '#c08a00'); bigBell(); Arcade.vibrate([60, 40, 60, 40, 200]); setTimeout(() => document.getElementById('heavenflash').classList.add('on'), 1500); setTimeout(() => document.getElementById('heavenflash').classList.remove('on'), 3200); }
+  state = 'over'; overAt = performance.now(); activeRoll = null; endFever(true);
+  const acc = clear ? accuracy() : 0;
+  const isBest = acc > best;
+  if (isBest) { best = acc; try { localStorage.setItem('moktak-best', best); } catch {} }
+  if (!clear) Arcade.shake(1.2);
+  setTimeout(() => {
+    showScreen(Arcade.resultScreen({ emoji: clear ? (acc >= 90 ? '🪷' : '🙏') : '🫨', label: clear ? '해탈! 합주 정확도' : '번뇌 108 돌파… 파문!', score: acc, unit: '%',
+      isBest: isBest && acc > 0, best,
+      msg: !clear ? '주지스님이 절 밖으로 내보냈어요' : acc >= 90 ? '득도하셨습니다' : acc >= 70 ? '꽤 수행이 깊으시군요' : '108배 하고 다시 오세요',
+      rows: [['✨ PERFECT', perfects], ['👍 GOOD', goods], ['😒 엇박·놓침', misses], ['🔥 최대 콤보', maxCombo], ['🪘 다다다닥 타수', rollHits], ['🌟 피버 시간', `${feverTime.toFixed(1)}초`]] }));
+    Arcade.gameOver(acc);
+  }, clear ? 3000 : 900);
+}
+
+addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('a,button')) return; held = true; onHit(); });
+addEventListener('pointerup', onRelease); addEventListener('pointercancel', onRelease); addEventListener('blur', onRelease);
+addEventListener('keydown', e => { if (e.repeat || e.metaKey || e.ctrlKey) return; if (e.code === 'Space' || e.code === 'Enter' || e.key.length === 1) { e.preventDefault(); held = true; onHit(); } });
+addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'Enter' || e.key.length === 1) onRelease(); });
+
+// ---------- lane (2D) ----------
+const lane = $('lane'), lx = lane.getContext('2d'); let LW = 0, LH = 110, ldpr = 1;
+function sizeLane() { ldpr = Math.min(devicePixelRatio, 2); LW = innerWidth; lane.width = LW * ldpr; lane.height = LH * ldpr; lane.style.height = LH + 'px'; }
+sizeLane();
+const SPEED = 330;
+function drawLane(t) {
+  lx.setTransform(ldpr, 0, 0, ldpr, 0, 0); lx.clearRect(0, 0, LW, LH);
+  const hx = Math.min(110, LW * .2), cy = LH / 2;
+  lx.fillStyle = 'rgba(20,10,6,.55)'; lx.beginPath(); lx.roundRect(8, 14, LW - 16, LH - 28, 41); lx.fill();
+  // beat guide line
+  const pulse = me.hitT < .15 ? 1 - me.hitT / .15 : 0;
+  lx.lineWidth = 4; lx.strokeStyle = `rgba(255,224,102,${.6 + pulse * .4})`;
+  lx.beginPath(); lx.arc(hx, cy, 30 + pulse * 6, 0, Math.PI * 2); lx.stroke();
+  lx.fillStyle = `rgba(255,224,102,${.12 + pulse * .3})`; lx.fill();
+  // hit bursts: expanding ring + sparks + ghost note popping off the circle (red ✕ on a miss)
+  const pn = performance.now(), dtl = Math.min(.05, (pn - (drawLane.last || pn)) / 1000); drawLane.last = pn;
+  laneFx = laneFx.filter(f => {
+    f.t += dtl; const k = f.t / (f.big ? .45 : .35); if (k >= 1) return false;
+    lx.save(); lx.globalAlpha = 1 - k; lx.strokeStyle = f.color; lx.fillStyle = f.color;
+    if (f.miss) {
+      lx.lineWidth = 6; const r = 16 + k * 8;
+      lx.beginPath(); lx.moveTo(hx - r, cy - r); lx.lineTo(hx + r, cy + r); lx.moveTo(hx + r, cy - r); lx.lineTo(hx - r, cy + r); lx.stroke();
+    } else {
+      lx.lineWidth = f.big ? 5 : 3; lx.beginPath(); lx.arc(hx, cy, 30 + k * (f.big ? 46 : 30), 0, Math.PI * 2); lx.stroke();
+      for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + .2, r0 = 34 + k * 26, r1 = r0 + (f.big ? 16 : 10) * (1 - k);
+        lx.beginPath(); lx.moveTo(hx + Math.cos(a) * r0, cy + Math.sin(a) * r0); lx.lineTo(hx + Math.cos(a) * r1, cy + Math.sin(a) * r1); lx.stroke(); }
+      const sc = 1 + k * .8; lx.globalAlpha = (1 - k) * .8; lx.fillStyle = '#c4703a';
+      lx.beginPath(); lx.ellipse(hx, cy - k * 10, 24 * sc, 17 * sc, 0, 0, Math.PI * 2); lx.fill();
+    }
+    lx.restore(); return true;
+  });
+  if (state !== 'play') return;
+  for (const n of notes) {
+    if (n.judged || !n.roll) continue;
+    let x0 = hx + (n.t - t) * SPEED * n.sp; const x1 = hx + (n.end - t) * SPEED * n.sp;
+    if (x1 < hx - 30 || x0 > LW + 40) continue;
+    if (n.holding) x0 = Math.max(x0, hx);
+    const g = lx.createLinearGradient(0, cy - 20, 0, cy + 20); g.addColorStop(0, '#ffe066'); g.addColorStop(1, '#f08c00');
+    lx.fillStyle = g; lx.beginPath(); lx.roundRect(x0 - 22, cy - 19, Math.max(44, x1 - x0 + 44), 38, 19); lx.fill();
+    if (n.holding) { lx.strokeStyle = '#fff'; lx.lineWidth = 3; lx.stroke(); }
+    lx.fillStyle = 'rgba(255,255,255,.55)';
+    for (let x = x0 + 4; x < x1 - 4; x += 16) { lx.beginPath(); lx.moveTo(x, cy - 9); lx.lineTo(x + 7, cy); lx.lineTo(x, cy + 9); lx.fill(); }
+    lx.fillStyle = '#5c2d10'; lx.font = '700 15px "Jua", sans-serif'; lx.textAlign = 'center'; lx.fillText(n.holding ? '다다다닥!' : '꾹!', Math.max(x0, hx + 2) + 2, cy + 5);
+  }
+  for (const n of notes) {
+    if (n.judged || n.roll) continue;
+    const x = hx + (n.t - t) * SPEED * n.sp;
+    if (x < hx - 60 || x > LW + 40) continue; // per-note speeds: notes can overtake, so no early break
+    lx.fillStyle = '#9c4f1d'; lx.beginPath(); lx.ellipse(x, cy + 2, 24, 18, 0, 0, Math.PI * 2); lx.fill();
+    lx.fillStyle = '#c4703a'; lx.beginPath(); lx.ellipse(x, cy - 2, 24, 17, 0, 0, Math.PI * 2); lx.fill();
+    lx.fillStyle = '#5c2d10'; lx.fillRect(x - 12, cy + 3, 24, 3);
+  }
+}
+
+// ---------- loop ----------
+const v3 = new THREE.Vector3();
+let last = performance.now(), lastSong = -1;
+function animMonk(m, dt, t) {
+  m.hitT += dt;
+  const k = m.hitT < .06 ? m.hitT / .06 : m.hitT < .25 ? 1 - (m.hitT - .06) / .19 : 0;
+  m.arm.rotation.x = -.55 + k * .75;
+  const sq = m.hitT < .12 ? Math.sin(m.hitT / .12 * Math.PI) * .18 : 0;
+  m.mok.scale.set(1 + sq * .5, 1 - sq, 1 + sq * .5);
+  m.glareT = Math.max(0, m.glareT - dt);
+  const glaring = m.glareT > 0;
+  m.brow.visible = glaring; m.eyes.forEach(e => e.scale.y = glaring ? 3 : 1);
+  m.group.position.y = (m.lift || 0) + Math.sin(t * 1.5 + m.phase) * (.02 + (m.lift || 0) * .05);
+}
+function frame(nowMs) {
+  const dt = Math.min(.05, (nowMs - last) / 1000); last = nowMs;
+  const t = now(), tt = nowMs / 1000;
+  if (state === 'play') {
+    // NPC arm animation follows the chart
+    while (npcCursor < notes.length && notes[npcCursor].t <= t) { monks.forEach(m => m.hitT = 0); npcCursor++; }
+    const npcRoll = notes.find(n => n.roll && t >= n.t && t < n.end);
+    if (npcRoll && Math.floor((t - npcRoll.t) / ROLL_STEP) !== npcRoll.lastTick) { npcRoll.lastTick = Math.floor((t - npcRoll.t) / ROLL_STEP); monks.forEach(m => m.hitT = 0); }
+    // holding a roll → my own 다다다닥
+    if (activeRoll && held) {
+      rollAcc += dt;
+      while (rollAcc >= ROLL_STEP) { rollAcc -= ROLL_STEP; myTok(true); me.hitT = 0; rollHits++; chantRoll(); strikeFx(0xffa94d, false); laneBurst('#ffa94d', false); Arcade.vibrate(10 + Math.min(combo, 30)); Arcade.shake(.05 + Math.min(combo, 30) * .003); }
+    }
+    // auto-judge: rolls complete / tap notes that slipped by
+    for (const n of notes) {
+      if (n.judged) continue;
+      if (n.roll) {
+        if (n.holding) { if (t >= n.end) completeRoll(n); }
+        else if (t > n.end) { n.judged = true; offBeat('놓침!'); hud(); }
+        if (state !== 'play' || t < n.end) break; else continue;
+      }
+      if (n.t < t - MISS_AFTER) { n.judged = true; offBeat('놓침!'); hud(); if (state !== 'play') break; } else break;
+    }
+    for (const sm of speedMarks) if (!sm.done && t >= sm.t - .9) {
+      sm.done = true;
+      if (sm.sp) { Arcade.toast(sm.faster ? `⚡ 노트 빨라짐 ×${sm.sp}` : `🐢 노트 느려짐 ×${sm.sp}`, sm.faster ? '#e8590c' : '#1971c2'); Arcade.sfx.whoosh(sm.faster); }
+      else Arcade.toast(sm.faster ? `🔥 템포 UP ${sm.bpm} BPM` : `🍃 템포 DOWN ${sm.bpm} BPM`, sm.faster ? '#c92a2a' : '#2b8a3e');
+      Arcade.vibrate(25);
+    }
+    if (fever) feverTime += dt;
+    if (state === 'play' && t > songEnd + .4) end(true);
+  }
+  monks.forEach(m => animMonk(m, dt, tt)); animMonk(me, dt, tt); updateHitFx(dt); updateAscension(dt, tt); updateHair(dt);
+  // glaring heads turn toward the player
+  monks.forEach((m, i) => {
+    const target = m.glareT > 0 ? .5 : 0; m.head.rotation.y += ((m.group.position.x > 0 ? target : -target) - m.head.rotation.y) * Math.min(1, dt * 10);
+    m.head.getWorldPosition(v3); v3.y += 1; v3.project(camera);
+    glares[i].style.left = `${(v3.x + 1) / 2 * innerWidth}px`; glares[i].style.top = `${(1 - v3.y) / 2 * innerHeight}px`;
+    glares[i].style.opacity = m.glareT > 0 ? 1 : 0;
+  });
+  // camera over the player's shoulder
+  const camLift = Math.min(lift, 6) * .55;
+  camera.position.set(Math.sin(tt * .3) * .3, 7.6 + camLift * .5, 11.5);
+  Arcade.applyShake(camera, dt);
+  camera.lookAt(0, .6 + camLift, -3.2 + camLift * .4);
+  lamp.intensity = fever ? 95 + Math.sin(tt * 12) * 15 : 55 + Math.sin(tt * 7) * 3;
+  lamp.color.setHex(fever ? 0xffd34d : 0xffb347);
+  scene.background.lerp(fever ? FEVER_BG : BASE_BG, Math.min(1, dt * 3)); scene.fog.color.copy(scene.background);
+  petals.visible = fever || petals.userData.fade > 0;
+  petals.userData.fade = Math.max(0, petals.userData.fade + (fever ? dt : -dt));
+  petals.children.forEach(p => { p.position.y += p.userData.v * dt; p.rotation.x += dt * 2; p.rotation.y += dt * 3; p.position.x += Math.sin(tt + p.userData.ph) * dt * .5; if (p.position.y > 10) p.position.y = 0; });
+  if (fever) monks.concat(me).forEach(m => { const k = m.hitT < .12 ? 1 - m.hitT / .12 : 0; m.group.scale.y = (m === abbot ? 1.25 : 1) * (1 + k * .06); });
+  drawLane(t);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+showScreen(Arcade.titleScreen({ emoji: '🪘', title: '목탁 합주', cta: '탭해서 수행 시작', how: [
+  ['🙏', '스님들과 <b>똑같은 타이밍</b>에 목탁을 쳐요'],
+  ['👆', '나무 목탁이 노란 원에 닿을 때 <b>탭</b> (스페이스도 OK)'],
+  ['🟡', '노란 막대는 <b>꾹 누르고 있기</b> → 다다다닥!'],
+  ['🔥', `${FEVER_AT}콤보 이상이면 <b>FEVER</b>`],
+  ['😒', '엇박이면 스님들이 째려보고 <b>번뇌</b>가 쌓여요<br>번뇌가 쌓이면… 머리카락이 자라요 🦱'],
+  ['🔔', '번뇌 108 넘으면 파문! 끝까지 버티면 해탈'],
+] }));
+hud();
+window.__mok = { get state() { return state; }, get notes() { return notes; }, now, onHit };
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

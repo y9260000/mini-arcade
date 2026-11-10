@@ -132,8 +132,16 @@
     } catch {}
     return actx;
   }
-  addEventListener('pointerdown', A, { once: true, capture: true });
-  addEventListener('keydown', A, { once: true, capture: true });
+  // iOS: let Web Audio play even with the silent switch on, and unlock on touchend/click (pointerdown alone doesn't count)
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+  let unlocked = false;
+  function unlock() {
+    if (!A()) return;
+    if (!unlocked) { try { const b = actx.createBuffer(1, 1, 22050), s = actx.createBufferSource(); s.buffer = b; s.connect(actx.destination); s.start(0); unlocked = true; } catch {} }
+    if (actx.state === 'suspended') actx.resume();
+  }
+  for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) addEventListener(ev, unlock, { capture: true, passive: true });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && actx && actx.state !== 'running') actx.resume(); });
   const send = (node, wet = 1) => { node.connect(out); if (wet) { const w = actx.createGain(); w.gain.value = wet; node.connect(w).connect(room); } };
   function tone(type, f0, f1, dur, vol, { when = 0, attack = .004, wet = 1, vib = 0 } = {}) {
     if (!A()) return; const t = actx.currentTime + when;

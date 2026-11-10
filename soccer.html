@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>슛 말고!</title>
-<script src="common.js?v=12"></script>
+<script src="common.js?v=13"></script>
 <script src="sounds/shout-samples.js"></script>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#3a8f3e;
@@ -123,6 +123,21 @@ const crowd = [];
 const GOAL_W = 5.4, GOAL_H = 2.2;
 const zoneMat = new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: .0, depthWrite: false });
 const zone = new THREE.Mesh(new THREE.PlaneGeometry(16, 8.6 - .1), zoneMat); zone.rotation.x = -Math.PI / 2; zone.position.set(0, .02, 8.6 / 2); scene.add(zone);
+// solid yellow border + painted label so the zone reads clearly from the broadcast camera
+const zoneEdge = new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: 1, depthWrite: false });
+const zoneFrame = new THREE.Group(); scene.add(zoneFrame);
+for (const [w, d, x, z] of [[16.4, .28, 0, 8.6], [.28, 8.6, -8.06, 4.3], [.28, 8.6, 8.06, 4.3]]) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), zoneEdge); m.rotation.x = -Math.PI / 2; m.position.set(x, .03, z); zoneFrame.add(m);
+}
+{
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128; const g = c.getContext('2d');
+  g.font = '96px Jua, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 14; g.strokeStyle = 'rgba(120,80,0,.55)'; g.strokeText('🎯 슈팅 존', 256, 66);
+  g.fillStyle = '#ffe066'; g.fillText('🎯 슈팅 존', 256, 66);
+  const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;
+  const label = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 1.4), new THREE.MeshBasicMaterial({ map: tx, transparent: true, depthWrite: false }));
+  label.rotation.set(-Math.PI / 2, 0, Math.PI / 2); label.position.set(5.6, .04, 5.6); zoneFrame.add(label);   // reads upright from the +x touchline camera
+}
 let inZone = false;
 
 // ---------- people ----------
@@ -185,7 +200,15 @@ function initShouts() {
     });
   } catch {}
 }
-addEventListener('pointerdown', initShouts, { capture: true }); addEventListener('keydown', initShouts, { capture: true });
+function unlockShouts() {
+  initShouts();
+  if (!sac) return;
+  if (sac.state !== 'running') sac.resume();
+  if (!sac._primed) { try { const s = sac.createBufferSource(); s.buffer = sac.createBuffer(1, 1, 22050); s.connect(sac.destination); s.start(0); sac._primed = true; } catch {} }
+  // iOS speech also needs a first utterance inside a gesture
+  if (tts && !unlockShouts.tts) { try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; tts.speak(u); unlockShouts.tts = true; } catch {} }
+}
+for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) addEventListener(ev, unlockShouts, { capture: true, passive: true });
 function playShouts(times, gap) {
   if (!sac || !shoutBufs.length) return false;
   if (sac.state === 'suspended') sac.resume();
@@ -193,7 +216,7 @@ function playShouts(times, gap) {
     const src = sac.createBufferSource(), g = sac.createGain();
     src.buffer = shoutBufs[(Math.random() * shoutBufs.length) | 0];
     src.playbackRate.value = .95 + Math.random() * .12 + k * .03;
-    g.gain.value = 1.1;
+    g.gain.value = 1.6;
     src.connect(g).connect(sac._out); src.start(sac.currentTime + k * gap);
   }
   return true;
@@ -294,7 +317,7 @@ addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'Enter')
 // ---------- loop ----------
 let last = performance.now();
 reset(); showIntro();
-window.__soc = { get pz() { return pz; }, get shotInfo() { return shot && { far: shot.far, saved: shot.saved }; }, get state() { return state; }, get cast() { return castMode; }, shoot, get goals() { return goals; }, get lives() { return lives; }, get phase() { return phase; } };
+window.__soc = { get audio() { return { ctx: sac && sac.state, bufs: shoutBufs.length, durs: shoutBufs.map(b => +b.duration.toFixed(2)) }; }, get pz() { return pz; }, get shotInfo() { return shot && { far: shot.far, saved: shot.saved }; }, get state() { return state; }, get cast() { return castMode; }, shoot, get goals() { return goals; }, get lives() { return lives; }, get phase() { return phase; } };
 const camPos = new THREE.Vector3(24, 13, 10), camLook = new THREE.Vector3(0, .6, 8);
 
 function frame(now) {
@@ -349,7 +372,10 @@ function frame(now) {
   else defender.root.rotation.x = 0;
   defender.root.rotation.y = Math.PI * 0;
   // net + crowd
-  zoneMat.opacity = phase === 'run' && state === 'playing' ? (inZone ? .22 + Math.sin(t * 10) * .08 : .08) : 0;
+  const zoneOn = phase === 'run' && state === 'playing';
+  zoneMat.opacity = zoneOn ? (inZone ? .5 + Math.sin(t * 12) * .15 : .3) : .12;
+  zoneEdge.opacity = zoneOn && inZone ? .75 + Math.sin(t * 12) * .25 : .9;
+  zoneFrame.visible = state !== 'ready';
   netShake *= Math.exp(-dt * 4);
   window.__net.position.z = -.8 - Math.sin(t * 30) * netShake * .15;
   const cheer = castMode === 'shout' || castMode === 'goal' ? 1 : .3;

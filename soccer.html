@@ -204,6 +204,22 @@ const STRIKERS = [
     intro: '100미터 10초 컷!', cele: '🙅 팔짱 세리머니' },
   { id: 'gk', name: '공격 가담 골키퍼', emoji: '🧤', shirt: 0x40c057, shorts: 0x111111, gloves: true, num: '1', speed: .8, pts: 4, shot: 'header', w: .8,
     intro: '골키퍼가 올라왔어요?!', cele: '🧤 나도 공격수다!' },
+  { id: 'turn', name: '마르세유 대머리', emoji: '🌀', shirt: 0xffffff, shorts: 0xffffff, bald: true, num: '5', speed: 1.2, pts: 2, shot: 'volley', spin: true, w: 1,
+    intro: '빙글 돌면서 수비를 벗겨냅니다!', cele: '🌀 우아한 한 바퀴' },
+  { id: 'tank', name: '산소탱크 13번', emoji: '🫁', shirt: 0xe03131, shorts: 0x111111, num: '13', speed: 1.3, pts: 2, tackleBonus: 1.4, w: 1,
+    intro: '심장이 두 개래요! 지치지 않아요', cele: '🏃 끝없는 질주' },
+  { id: 'banana', name: '바나나킥 7번', emoji: '🍌', shirt: 0xe03131, shorts: 0xffffff, hair: 0xffd43b, mohawk: true, num: '7', speed: 1.1, pts: 2, shot: 'banana', w: 1,
+    intro: '오른발 하나로 세계를 정복!', cele: '😎 손가락 하늘로' },
+  { id: 'diver', name: '헐리웃 11번', emoji: '🎭', shirt: 0xffd43b, shorts: 0x1971c2, hair: 0x3b2a1a, mohawk: true, num: '11', speed: 1.45, pts: 2, zig: true, diver: true, w: 1,
+    intro: '살짝만 닿아도 쓰러집니다!', cele: '💃 삼바 댄스' },
+  { id: 'sniper', name: '스나이퍼 9번', emoji: '🎯', shirt: 0xe03131, shorts: 0xe03131, num: '9', speed: 1.15, pts: 2, shot: 'laser', w: 1,
+    intro: '골문 구석만 노립니다', cele: '🤸 공중제비' },
+  { id: 'cb93', name: '93분의 센터백', emoji: '⏱️', shirt: 0xffffff, shorts: 0xffffff, hair: 0x111111, beard: true, num: '4', speed: .95, pts: 3, shot: 'header', w: 1,
+    intro: '센터백이 공격까지?!', cele: '⏱️ 93분의 남자!' },
+  { id: 'trivela', name: '트리벨라 장인', emoji: '🪄', shirt: 0xffffff, shorts: 0xffffff, hair: 0xe9c46a, longhair: true, num: '10', speed: 1.15, pts: 2, shot: 'trivela', w: 1,
+    intro: '바깥발로 감아 찹니다!', cele: '🪄 미소 한 번' },
+  { id: 'ghost', name: '공간 연주자', emoji: '👻', shirt: 0xffffff, shorts: 0x111111, hair: 0x8d5a3b, skinny: true, num: '25', speed: 1.1, pts: 2, ghost: true, w: 1,
+    intro: '어디서 나타날지 몰라요!', cele: '👻 어디서 왔게?' },
   { id: 'stopper', name: '멈칫 장인', emoji: '🛑', shirt: 0x2f9e44, shorts: 0xffffff, num: '11', speed: 1.35, pts: 2, stops: 1.3, w: 1.2,
     intro: '멈췄다 달렸다, 리듬을 못 읽겠어요!', cele: '🕺 멈칫 댄스', stopLine: '어? 멈칫!' },
 ];
@@ -223,10 +239,12 @@ function buildStriker(d) {
   if (d.curly) { p.head.children[1].scale.set(1.25, 2.2, 1.3); box(.5, .35, .2, flat(d.hair), 0, .25, -.24, p.head); }
   if (d.headband) box(.48, .06, .45, flat(d.headband), 0, .4, 0, p.head);
   if (d.teeth) box(.16, .06, .02, flat(0xffffff), 0, .1, .21, p.head);
+  if (d.mohawk) { p.head.children[1].scale.set(.35, 1.8, 1.1); }
+  if (d.longhair) box(.46, .45, .16, flat(d.hair), 0, .25, -.22, p.head);
   if (d.gloves) p.arms.forEach(a => { const g = new THREE.Mesh(new THREE.DodecahedronGeometry(.14, 0), flat(0xff922b)); g.position.y = -.68; a.add(g); });
   const back = new THREE.Mesh(new THREE.PlaneGeometry(.36, .36), new THREE.MeshBasicMaterial({ map: numTex(d.num, d.shirt === 0xffffff ? '#1b1f3a' : '#ffffff'), transparent: true }));
   back.position.set(0, 1.3, -.185); back.rotation.y = Math.PI; p.root.add(back);
-  p.root.scale.setScalar(d.scale || 1);
+  if (d.skinny) p.root.scale.set(.85, 1.08, .85); else p.root.scale.setScalar(d.scale || 1);
   p.root.rotation.y = Math.PI;   // runs toward -z
   scene.add(p.root);
   return p;
@@ -249,7 +267,7 @@ const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(.17, 0), flat(0xffffff
 const SHOUTS = ['슛!!!', '슛!!!!!', '때려요!!', '지금!! 슛!!', '슈우우웃!!', '차요 차!!'];
 const FAKES = ['…슈퍼 플레이네요~', '…슈크림 먹고 싶네요', '…슈퍼스타 등장!', '…슈렉 닮았네요', '…슈팅 각 재는 중!'];
 // ---------- ball trails for special shots ----------
-const TRAIL = { ufo: 0x66d9e8, rocket: 0xff922b, bicycle: 0xffffff };
+const TRAIL = { ufo: 0x66d9e8, rocket: 0xff922b, bicycle: 0xffffff, banana: 0xffe066, laser: 0xff3b3b, trivela: 0xd0bfff, volley: 0xffffff };
 const trails = [];
 const trailGeo = new THREE.IcosahedronGeometry(.13, 0);
 function spawnTrail(p, color) {
@@ -329,6 +347,7 @@ const LIVES = 3, START_Z = 17, TACKLE_Z = 3.6, ZONE_Z = 7.6;   // only shots fro
 let state = 'ready', goals = 0, lives = LIVES, attack = 0, overAt = 0;
 let pz = START_Z, px = 0, runV = 3, phase = 'run', phaseT = 0, castMode = 'filler', castT = 0, castLine = '', fakeNext = false;
 let hype = 0, frenzy = false;
+let ghosted = false, dived = false;
 let matchMin = 0, score = 0, stopT = 0, burstT = 0, stopCool = 1;
 let shot = null, keeperDive = 0, keeperTarget = 0, netShake = 0, streak = 0;
 let best = 0; try { best = +localStorage.getItem('soccer-best') || 0; } catch {}
@@ -409,7 +428,7 @@ function nextCast() {
 }
 function newAttack() {
   if (frenzy) { frenzy = false; hype = .25; }
-  stopT = 0; burstT = 0; stopCool = .8 + Math.random();
+  stopT = 0; burstT = 0; stopCool = .8 + Math.random(); ghosted = false; dived = false;
   inZone = false; zoneSafe = 0; anaMode = 'idle'; anaT = 1 + Math.random(); $('ana').className = 'hud-ctl';
   const next = pickStriker();
   if (next !== striker || !me.root.parent) { scene.remove(me.root); striker = next; me = buildStriker(striker); }
@@ -436,10 +455,10 @@ function shoot() {
   const saved = far || lucky || castMode === 'shout';     // keeper reacts to the caster's "슛!" — and eats long shots
   const tx = (Math.random() < .5 ? -1 : 1) * (1 + Math.random() * 1.4), ty = .4 + Math.random() * 1.4;
   const style = far ? 'normal' : striker.shot || 'normal';
-  const DUR = { ufo: .9, rocket: .2, bicycle: .5, nolook: .5, header: .55 };
-  shot = { from: new THREE.Vector3(px + .2, .17, pz - .4), to: far ? new THREE.Vector3(tx * .35, ty * .7, -.2) : new THREE.Vector3(tx, ty, -.2), t: style === 'bicycle' || style === 'header' ? -.6 : 0,
+  const DUR = { ufo: .9, rocket: .2, bicycle: .5, nolook: .5, header: .55, volley: .45, banana: .75, laser: .24, trivela: .6 };
+  shot = { from: new THREE.Vector3(px + .2, .17, pz - .4), to: far ? new THREE.Vector3(tx * .35, ty * .7, -.2) : new THREE.Vector3(tx, ty, -.2), t: style === 'bicycle' || style === 'header' || style === 'volley' ? -.6 : 0,
     dur: far ? .8 : DUR[style] || (striker.power ? .3 : .5 - lvl() * .08), saved, far, lucky, style, curve: -Math.sign(tx), castWas: castLine, mode: castMode };
-  const SHOT_TOAST = { ufo: '🛸 UFO슛!!!', rocket: '🚀 로켓슛!', bicycle: '🚲 바이시클킥!', nolook: '👀 노룩슛!', header: '🧤 골키퍼 헤딩!?' };
+  const SHOT_TOAST = { ufo: '🛸 UFO슛!!!', rocket: '🚀 로켓슛!', bicycle: '🚲 바이시클킥!', nolook: '👀 노룩슛!', header: striker.id === 'gk' ? '🧤 골키퍼 헤딩!?' : '⏱️ 극장 헤딩!', volley: '🌀 발리슛!', banana: '🍌 바나나킥!', laser: '🎯 레이저 슛!', trivela: '🪄 트리벨라!' };
   if (SHOT_TOAST[style]) { Arcade.toast(SHOT_TOAST[style], '#7048e8'); if (style === 'ufo' || style === 'rocket') Arcade.sfx.whoosh(true); }
   phase = 'shot'; phaseT = 0;
   keeperTarget = far ? tx * .35 : saved ? tx : -tx * .8;  // reads it perfectly on a shout, guesses wrong otherwise
@@ -452,7 +471,7 @@ function resolve(goal) {
     goals++; streak++; netShake = 1; score += striker.pts;
     if (frenzy) { score += 1; setTimeout(() => Arcade.toast('😮‍💨 숨 쉬는 틈 공략! +1', '#7048e8'), 700); }
     hype = Math.min(.9, hype + .2);
-    const SPECIAL = { ufo: '공이 휘어 들어갑니다!!! 물리법칙 무시!!!', rocket: '보이지도 않았어요!!! 고오올!!', bicycle: '바이시클킥!!! 미쳤습니다!!!', nolook: '쳐다보지도 않고 넣어요!!!', header: '골키퍼가 넣었어요!!! 이게 무슨 일이죠!!!' };
+    const SPECIAL = { volley: '그림 같은 발리!!!', banana: '휘어서 구석으로!!! 바나나킥!!!', laser: '자로 잰 듯한 슈팅!!!', trivela: '바깥발이에요!!! 말도 안 돼!!!', ufo: '공이 휘어 들어갑니다!!! 물리법칙 무시!!!', rocket: '보이지도 않았어요!!! 고오올!!', bicycle: '바이시클킥!!! 미쳤습니다!!!', nolook: '쳐다보지도 않고 넣어요!!!', header: striker.id === 'gk' ? '골키퍼가 넣었어요!!! 이게 무슨 일이죠!!!' : '극장골!!! 또 이 선수예요!!!' };
     setCast('goal', SPECIAL[shot.style] || rnd(['…어? 골!!! 골이에요!!!', '아 슛… 아니 골이네요!?', '고오오오올!!!', '이걸 넣네요!!!']), 1.6);
     Arcade.sfx.crowd(1.2); Arcade.sfx.fanfare(); Arcade.shake(.3); Arcade.vibrate([30, 30, 90]);
     Arcade.confetti({ y: innerHeight * .4, count: 90, emoji: ['⚽', '🎉', '🔥'] });
@@ -536,7 +555,7 @@ function frame(now) {
     if (phase === 'run') {
       // stop & go: some strikers freeze mid-dribble, then burst forward
       stopCool -= dt;
-      if (stopT <= 0 && stopCool <= 0 && pz > TACKLE_Z + 1.2 && Math.random() < (striker.stops || .12) * dt * 2.2) {
+      if (!dived && stopT <= 0 && stopCool <= 0 && pz > TACKLE_Z + 1.2 && Math.random() < (striker.stops || .12) * dt * 2.2) {
         stopT = .45 + Math.random() * .6; stopCool = 1.2 + Math.random();
         Arcade.toast(`🛑 ${striker.stopLine || '멈칫!'}`, '#495057'); Arcade.sfx.boing();
       }
@@ -546,7 +565,18 @@ function frame(now) {
         pz -= runV * dt * (burstT > 0 ? 1.9 : 1);
         px += Math.sin(t * (striker.zig ? 7 : 2.3)) * dt * (striker.zig ? 3.2 : .8);
       }
-      if (pz <= TACKLE_Z) resolve(false);
+      if (striker.ghost && !ghosted && pz < ZONE_Z + 4 && pz > ZONE_Z + 1 && Math.random() < dt * 1.5) {   // vanishes and reappears inside the box
+        ghosted = true; for (let i = 0; i < 8; i++) spawnTrail(new THREE.Vector3(px + (Math.random() - .5), .8 + Math.random(), pz + (Math.random() - .5)), 0xffffff);
+        pz = ZONE_Z - .5; Arcade.toast('👻 어디서 나타났죠?!', '#495057'); Arcade.sfx.whoosh(true);
+      }
+      const tackleZ = TACKLE_Z - (striker.tackleBonus || 0);
+      if (pz <= tackleZ) {
+        if (striker.diver && !dived && Math.random() < .6) {   // theatrical fall → penalty from the spot
+          dived = true; pz = 5.2; px = 0; stopT = 2.2; zoneSafe = 0; inZone = true;
+          Arcade.toast('🎭 헐리웃 액션!… 어? PK 선언!', '#e8590c'); Arcade.sfx.boing(); Arcade.shake(.15);
+          setCast('filler', '아니 이게 PK라고요?!', .8);
+        } else resolve(false);
+      }
       if (!inZone && pz <= ZONE_Z) { inZone = true; zoneSafe = 0; Arcade.sfx.tick(); Arcade.toast('🎯 슈팅 존!', '#f59f00'); if (castMode === 'shout' || castMode === 'warn') castT = Math.min(castT, .45); }
       if (inZone && castMode !== 'shout' && castMode !== 'warn') zoneSafe += dt;
     }
@@ -555,10 +585,13 @@ function frame(now) {
       const k = Math.max(0, Math.min(1, shot.t));
       const p = new THREE.Vector3().lerpVectors(shot.from, shot.to, k);
       if (shot.t < 0) {                         // wind-up: ball popped up for the overhead/header
-        const u = 1 + shot.t / .6; p.copy(shot.from); p.y = .17 + Math.sin(u * Math.PI * .5) * (shot.style === 'header' ? 2.1 : 1.6); p.z -= u * .3;
+        const u = 1 + shot.t / .6; p.copy(shot.from); p.y = .17 + Math.sin(u * Math.PI * .5) * (shot.style === 'header' ? 2.1 : shot.style === 'volley' ? 1 : 1.6); p.z -= u * .3;
       } else if (shot.style === 'ufo') {        // huge outward swerve that bends back in
         p.x += shot.curve * Math.sin(k * Math.PI) * 5.5; p.y += Math.sin(k * Math.PI) * 1.4;
-      } else if (shot.style === 'rocket') { p.y += Math.sin(k * Math.PI) * .1; }
+      } else if (shot.style === 'rocket' || shot.style === 'laser') { p.y += Math.sin(k * Math.PI) * .05; }
+      else if (shot.style === 'banana') { p.x += shot.curve * Math.sin(k * Math.PI) * 2.6; p.y += Math.sin(k * Math.PI) * 1.1; }
+      else if (shot.style === 'trivela') { p.x -= shot.curve * Math.sin(k * Math.PI) * 2.2; p.y += Math.sin(k * Math.PI) * .7; }
+      else if (shot.style === 'volley') { p.lerpVectors(new THREE.Vector3(shot.from.x, 1.15, shot.from.z - .3), shot.to, k); }
       else if (shot.style === 'bicycle' || shot.style === 'header') { p.lerpVectors(new THREE.Vector3(shot.from.x, shot.style === 'header' ? 2.2 : 1.7, shot.from.z - .3), shot.to, k); }
       else p.y += Math.sin(k * Math.PI) * .6;
       ball.position.copy(p); ball.rotation.x -= dt * (shot.style === 'ufo' ? 60 : 25); ball.rotation.y += shot.style === 'ufo' ? dt * 40 : 0;
@@ -578,13 +611,15 @@ function frame(now) {
   me.arms[0].rotation.x = running ? -Math.sin(ph) * .6 : 0; me.arms[1].rotation.x = running ? Math.sin(ph) * .6 : 0;
   if (phase === 'shot' && phaseT < .25 && !['bicycle', 'header'].includes(shot?.style)) me.legs[1].rotation.x = -1.4 * Math.sin(phaseT / .25 * Math.PI);
   me.root.position.y = 0; me.root.rotation.y = Math.PI; me.root.rotation.z = 0;
-  me.arms.forEach(a => a.rotation.z = 0); me.legs.forEach(l => l.rotation.z = 0);
+  me.arms.forEach(a => a.rotation.z = 0); me.legs.forEach(l => l.rotation.z = 0); me.root.visible = true;
   if (phase === 'shot' && shot) {
     if (shot.style === 'bicycle') { const u = Math.min(1, phaseT / .85); me.root.position.y = Math.sin(u * Math.PI) * 1.3; me.root.rotation.x = -u * Math.PI * 1.2; me.legs[1].rotation.x = -2.4 * Math.sin(u * Math.PI); }
     else if (shot.style === 'header') { const u = Math.min(1, phaseT / .7); me.root.position.y = Math.sin(u * Math.PI) * .9; me.arms.forEach(a => a.rotation.x = -2.8 * Math.sin(u * Math.PI)); }
     else if (shot.style === 'nolook') { me.head.rotation.y = 1.4; }
   } else { me.root.rotation.x = 0; me.head.rotation.y = 0; }
-  if (phase === 'run' && stopT > 0) { me.root.rotation.z = Math.sin(t * 16) * .12; me.legs[0].rotation.z = Math.sin(t * 16) * .5; }   // feint shuffle
+  if (phase === 'run' && striker.spin && stopT <= 0) me.root.rotation.y = Math.PI + (Math.sin(t * 1.3) > .85 ? (t * 14) % (Math.PI * 2) : 0);   // Marseille turn
+  if (phase === 'shot' && shot?.style === 'volley') { const u = Math.min(1, phaseT / .7); me.root.position.y = Math.sin(u * Math.PI) * .4; me.legs[1].rotation.x = -1.8 * Math.sin(u * Math.PI); me.root.rotation.z = .4 * Math.sin(u * Math.PI); }
+  if (phase === 'run' && stopT > 0 && !dived) { me.root.rotation.z = Math.sin(t * 16) * .12; me.legs[0].rotation.z = Math.sin(t * 16) * .5; }   // feint shuffle
   if (phase === 'after' && shot && !shot.saved) {          // goal celebration per character
     const c = Math.min(1, phaseT / 1.2);
     if (striker.id === 'siu') { me.root.position.y = Math.sin(Math.min(1, phaseT / .7) * Math.PI) * 1.1; me.root.rotation.y = Math.PI + Math.min(1, phaseT / .7) * Math.PI; me.arms.forEach((a, i) => a.rotation.z = (i ? -1 : 1) * 1.2); }
@@ -596,6 +631,13 @@ function frame(now) {
     else if (striker.id === 'lion') { me.root.rotation.y = 0; me.arms.forEach((a, i) => { a.rotation.x = -1.2; a.rotation.z = (i ? -1 : 1) * 1.6; }); me.head.rotation.x = -.4; }
     else if (striker.id === 'smile') { me.root.rotation.y = Math.PI + Math.sin(phaseT * 10) * .6; me.arms.forEach((a, i) => a.rotation.z = (i ? -1 : 1) * (1 + Math.sin(phaseT * 10) * .5)); }
     else if (striker.id === 'ufo') { me.root.rotation.y = phaseT * 8; me.arms.forEach((a, i) => a.rotation.z = (i ? -1 : 1) * 1.5); }
+    else if (striker.id === 'turn') { me.root.rotation.y = phaseT * 5; }
+    else if (striker.id === 'tank') { me.root.rotation.y = 0; me.legs[0].rotation.x = Math.sin(phaseT * 16) * .9; me.legs[1].rotation.x = -Math.sin(phaseT * 16) * .9; me.root.position.x = px + Math.sin(phaseT * 2) * 1.5; }
+    else if (striker.id === 'banana' || striker.id === 'sniper') { me.root.rotation.y = 0; me.arms[1].rotation.x = -3; if (striker.id === 'sniper') { me.root.rotation.x = -Math.min(1, phaseT / .6) * Math.PI * 2; me.root.position.y = Math.sin(Math.min(1, phaseT / .6) * Math.PI) * 1.2; } }
+    else if (striker.id === 'diver') { me.root.rotation.y = Math.PI + Math.sin(phaseT * 12) * .5; me.root.position.y = Math.abs(Math.sin(phaseT * 12)) * .2; me.arms.forEach((a, i) => a.rotation.z = (i ? -1 : 1) * (.8 + Math.sin(phaseT * 12) * .4)); }
+    else if (striker.id === 'cb93') { me.root.rotation.y = 0; me.arms.forEach(a => a.rotation.x = -2.8); me.head.rotation.x = -.5; }
+    else if (striker.id === 'trivela') { me.root.rotation.y = 0; me.arms.forEach((a, i) => a.rotation.z = (i ? -1 : 1) * .6); }
+    else if (striker.id === 'ghost') { me.root.visible = Math.sin(phaseT * 20) > -.3; }
     else if (striker.id === 'gk') { me.root.rotation.y = 0; me.arms.forEach(a => a.rotation.x = -3); me.root.position.y = Math.abs(Math.sin(phaseT * 6)) * .4; }
     else { me.arms.forEach(a => a.rotation.x = -2.8); me.root.position.y = Math.abs(Math.sin(phaseT * 7)) * .25; }
   }

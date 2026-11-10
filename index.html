@@ -38,7 +38,7 @@
 <button class="run" id="run">▶ 연속 플레이 (전부 한 판씩)</button>
 <script>
   const { GAMES } = Arcade;
-  const TILE = { softserve: '#ffe3ec', skydive: '#d0ebff', stock: '#1b2240', moktak: '#f3d9c4', door: '#ffe8cc', elevator: '#dbe4ff', halo: '#fff3bf', cine: '#2b2438', cat: '#ffe8cc', soccer: '#d3f9d8', inventory: '#30251c', dialect: '#e5dbff' };
+  const TILE = { softserve: '#ffe3ec', skydive: '#d0ebff', stock: '#1b2240', moktak: '#f3d9c4', door: '#ffe8cc', elevator: '#dbe4ff', halo: '#fff3bf', cine: '#2b2438', cat: '#ffe8cc', soccer: '#d3f9d8', inventory: '#30251c', dialect: '#e5dbff', popcorn: '#3b2716' };
   const best = k => { try { return +localStorage.getItem(k) || 0; } catch { return 0; } };
   document.getElementById('list').innerHTML = GAMES.map(g => `
     <a class="card" href="${g.file}">

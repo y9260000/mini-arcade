@@ -27,6 +27,8 @@
       desc: '주어진 전리품을 전부 넣으면 딱! 60초 안에 돌리고 맞춰 가방 정리' },
     { id: 'dialect', file: 'dialect.html', name: '사투리 통역사', emoji: '🗣️', unit: '개', bestKey: 'dialect-best',
       desc: '전국 길거리 인터뷰! 사투리를 낱말 카드로 표준어 번역' },
+    { id: 'popcorn', file: 'popcorn.html', name: '카라멜 몰래 먹기', emoji: '🍿', unit: '점', bestKey: 'popcorn-best',
+      desc: '여친이 영화 볼 때 카라멜 팝콘만 쏙쏙. 쳐다보면 일반 팝콘인 척' },
   ];
 
   const q = new URLSearchParams(location.search);

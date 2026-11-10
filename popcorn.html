@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>카라멜 몰래 먹기</title>
+<script src="common.js?v=16"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#140f1e;
+    user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  #pip{position:fixed;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));width:min(38vw,230px);aspect-ratio:4/3;z-index:3;pointer-events:none;
+    border:4px solid #fff;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.5);box-sizing:border-box;transition:border-color .1s}
+  #pip.warn{border-color:#ffd43b;animation:wob .12s linear infinite} #pip.look{border-color:#ff6b6b}
+  @keyframes wob{25%{transform:rotate(-1.5deg)}75%{transform:rotate(1.5deg)}}
+  #pip .lbl{position:absolute;left:6px;top:5px;font:700 11px "Noto Sans KR",sans-serif;color:#fff;background:rgba(0,0,0,.55);border-radius:4px;padding:1px 6px}
+  #gstate{position:absolute;left:50%;bottom:-16px;transform:translateX(-50%);white-space:nowrap;font-family:"Jua",sans-serif;font-size:16px;color:#fff;background:#2b2438;
+    border-radius:999px;padding:4px 12px;box-shadow:0 4px 10px rgba(0,0,0,.4)}
+  #pip.warn #gstate{background:#f59f00} #pip.look #gstate{background:#e03131;font-size:18px}
+  .hud{align-items:flex-start!important;left:max(14px,env(safe-area-inset-left))!important;right:auto!important}
+  .hud-score{font-size:54px}
+  .pop{position:fixed;z-index:4;pointer-events:none;font-family:"Jua",sans-serif;font-size:24px;color:#fff;white-space:nowrap;transform:translate(-50%,-50%);
+    text-shadow:0 3px 0 #9c5a12,0 6px 14px rgba(0,0,0,.4);animation:popUp .9s ease-out forwards}
+  .pop.big{font-size:32px;color:#ffd43b}
+  @keyframes popUp{0%{opacity:0;transform:translate(-50%,-30%) scale(.6)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}100%{opacity:0;transform:translate(-50%,-170%)}}
+  #hint{position:fixed;bottom:max(12vh,76px);left:0;right:0;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
+  #hint .pill{font-size:15px;padding:10px 18px}
+  .toast{top:58%}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>점</small></div>
+  <div class="hud-row" style="justify-content:flex-start;padding:0"><span class="pill" id="lives"></span><span class="pill" id="time"></span></div>
+</div>
+<div id="pip" class="hud-ctl"><span class="lbl">💑 옆자리</span><div id="gstate">🎬 영화 몰입 중</div></div>
+<div id="hint" class="hud-ctl"><span class="pill">👆 카라멜 팝콘을 탭해서 냠! 여친이 볼 땐 일반 팝콘만</span></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const $ = id => document.getElementById(id);
+
+// ---------- main view: bucket from above ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1326);
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, .1, 100);
+scene.add(new THREE.HemisphereLight(0xfff1dc, 0x2a2040, 1.3));
+const key = new THREE.DirectionalLight(0xfff4e0, 1.6); key.position.set(2, 10, 3); key.castShadow = true; key.shadow.mapSize.set(1024, 1024);
+Object.assign(key.shadow.camera, { left: -5, right: 5, top: 5, bottom: -5, near: 1, far: 20 }); scene.add(key);
+const screenGlow = new THREE.PointLight(0x9ec5ff, 6, 14); screenGlow.position.set(-4, 4, -3); scene.add(screenGlow);
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, flatShading: true, ...extra });
+const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
+
+const R = 3;   // bucket radius
+{
+  // striped bucket wall (seen from above: the rim + a sliver of stripes)
+  const c = document.createElement('canvas'); c.width = 256; c.height = 32; const g = c.getContext('2d');
+  for (let i = 0; i < 16; i++) { g.fillStyle = i % 2 ? '#ffffff' : '#e03131'; g.fillRect(i * 16, 0, 16, 32); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(R + .15, R - .2, 1.6, 32, 1, true), new THREE.MeshStandardMaterial({ map: t, side: THREE.DoubleSide, roughness: .7 }));
+  wall.position.y = .3; wall.receiveShadow = true; scene.add(wall);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(R + .15, .09, 6, 40), flat(0xffffff)); rim.rotation.x = Math.PI / 2; rim.position.y = 1.1; scene.add(rim);
+  const bottom = new THREE.Mesh(new THREE.CircleGeometry(R, 32), flat(0xf3e2b8)); bottom.rotation.x = -Math.PI / 2; bottom.position.y = -.2; scene.add(bottom);
+  // armrest + seats around (theater)
+  box(14, .3, 14, flat(0x2b1d2e), 0, -.9, 0);
+  box(1.2, .5, 8, flat(0x7a1f2b), -4.6, -.4, 0); box(1.2, .5, 8, flat(0x7a1f2b), 4.6, -.4, 0);
+  const cup = new THREE.Mesh(new THREE.CylinderGeometry(.6, .5, 1.4, 12), flat(0xfab005)); cup.position.set(4.6, .4, -2.5); scene.add(cup);
+  const straw = box(.1, 1, .1, flat(0xe03131), 4.7, 1.4, -2.5); straw.rotation.z = .2;
+}
+
+// ---------- popcorn ----------
+const kGeo = [new THREE.DodecahedronGeometry(.22, 0), new THREE.IcosahedronGeometry(.21, 0), new THREE.DodecahedronGeometry(.19, 0)];
+const M_PLAIN = flat(0xfff3d1), M_PLAIN2 = flat(0xffe8a8);
+const M_LIGHT = new THREE.MeshStandardMaterial({ color: 0xd99a3e, roughness: .35, metalness: .1, flatShading: true });
+const M_HEAVY = new THREE.MeshStandardMaterial({ color: 0xa8601a, roughness: .2, metalness: .2, flatShading: true, emissive: 0x3a1a00, emissiveIntensity: .25 });
+const M_MEGA = new THREE.MeshStandardMaterial({ color: 0x8a4a10, roughness: .15, metalness: .3, flatShading: true, emissive: 0x6b3500, emissiveIntensity: .4 });
+const KIND = { plain: { pts: 0, mats: [M_PLAIN, M_PLAIN2] }, light: { pts: 2, mats: [M_LIGHT] }, heavy: { pts: 5, mats: [M_HEAVY] }, mega: { pts: 12, mats: [M_MEGA] } };
+let kernels = [], hotspots = [];
+function newHotspots() { hotspots = Array.from({ length: 5 }, () => { const a = Math.random() * 6.28, r = Math.random() * (R - .8); return { x: Math.cos(a) * r, z: Math.sin(a) * r }; }); }
+function kindAt(x, z) {
+  let d = 9; for (const h of hotspots) d = Math.min(d, Math.hypot(x - h.x, z - h.z));
+  const r = Math.random();
+  if (d < .35 && r < .25) return 'mega';
+  if (d < .7) return r < .7 ? 'heavy' : 'light';
+  if (d < 1.2) return r < .45 ? 'light' : 'plain';
+  return r < .08 ? 'light' : 'plain';
+}
+function addKernel(x, z, y = .55 + Math.random() * .35, drop = false) {
+  const kind = kindAt(x, z), K = KIND[kind];
+  const m = new THREE.Mesh(kGeo[(Math.random() * 3) | 0], K.mats[(Math.random() * K.mats.length) | 0]);
+  m.position.set(x, drop ? 4 : y, z); m.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+  const s = kind === 'mega' ? 1.5 : .85 + Math.random() * .35; m.scale.setScalar(s);
+  m.castShadow = true; scene.add(m);
+  const k = { m, kind, x, z, y, alive: true, drop };
+  kernels.push(k); return k;
+}
+function fillBucket() {
+  for (const k of kernels) scene.remove(k.m);
+  kernels = []; newHotspots();
+  for (let i = 0; i < 230; i++) { const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * (R - .25); addKernel(Math.cos(a) * r, Math.sin(a) * r); }
+}
+
+// ---------- my hand ----------
+const hand = new THREE.Group(); scene.add(hand);
+{
+  const skin = flat(0xffd2a8);
+  box(.7, .25, .8, skin, 0, 0, 0, hand);
+  for (let i = 0; i < 4; i++) box(.15, .16, .5, skin, -.24 + i * .16, -.02, -.6, hand);
+  const th = box(.16, .16, .4, skin, .45, 0, -.15, hand); th.rotation.y = -.6;
+  box(.75, .28, 2.2, flat(0x364fc7), 0, .05, 1.5, hand);   // sleeve toward the bottom of the screen (me)
+}
+hand.position.set(0, 1.6, 1.5);
+const handTarget = new THREE.Vector3(0, 1.6, 1.5);
+let grabT = 9, slapT = 0;
+
+// ---------- her hand ----------
+const herHand = new THREE.Group(); scene.add(herHand);
+{
+  const skin = flat(0xffe0c4);
+  box(.6, .22, .7, skin, 0, 0, 0, herHand);
+  for (let i = 0; i < 4; i++) box(.13, .14, .45, skin, 0, -.02, 0, herHand).position.set(-.4 - .0, -.02, -.21 + i * .14);
+  box(2.4, .26, .7, flat(0xf783ac), 1.5 - 3, .05, 0, herHand).position.x = -1.5;   // sleeve from the left (her seat)
+  for (let i = 0; i < 4; i++) herHand.children[1 + i].position.set(.5, -.02, -.21 + i * .14);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.06, .02, 4, 8), flat(0xffd43b, { metalness: .6, roughness: .2 })); ring.position.set(.5, .07, .07); ring.rotation.x = Math.PI / 2; herHand.add(ring);
+}
+const HER_HOME = new THREE.Vector3(-R - 3, 1.4, -.5);
+herHand.position.copy(HER_HOME);
+const H = { mode: 'away', t: 2.5, target: null };
+
+// ---------- PIP: girlfriend watching the movie ----------
+const pipScene = new THREE.Scene(); pipScene.background = new THREE.Color(0x0e0a16);
+pipScene.add(new THREE.HemisphereLight(0x99aaff, 0x221a2a, 1.4));
+const pipScreenLight = new THREE.PointLight(0x9ec5ff, 9, 10); pipScreenLight.position.set(-3, 2, 1); pipScene.add(pipScreenLight);
+const pipCam = new THREE.PerspectiveCamera(30, 4 / 3, .1, 30); pipCam.position.set(.7, 1.8, 2.6); pipCam.lookAt(-.05, 1.55, 0);   // I'm sitting to her right
+{ const fl = new THREE.DirectionalLight(0xffe8d0, 1.1); fl.position.set(1, 2, 3); pipScene.add(fl); }
+const gf = new THREE.Group(); pipScene.add(gf);
+const gfSkin = flat(0xffe0c4), gfHair = flat(0x3b2316);
+box(.62, .7, .4, flat(0xf783ac), 0, 1, 0, gf);                    // cardigan
+box(1.2, 1.1, .2, flat(0x7a1f2b), 0, .9, -.35, gf);               // seat back
+const gfArm = new THREE.Group(); gfArm.position.set(.36, 1.25, 0); box(.15, .55, .17, flat(0xf783ac), 0, -.28, 0, gfArm); gf.add(gfArm);
+const gfHead = new THREE.Group(); gfHead.position.y = 1.4; gf.add(gfHead);
+box(.42, .46, .4, gfSkin, 0, .23, 0, gfHead);
+box(.48, .2, .46, gfHair, 0, .5, -.02, gfHead); box(.48, .6, .14, gfHair, 0, .2, -.2, gfHead);
+for (const s of [-1, 1]) box(.1, .5, .3, gfHair, s * .24, .2, -.05, gfHead);
+const gfEyes = [-1, 1].map(s => box(.06, .08, .02, flat(0x222222), s * .1, .26, .205, gfHead));
+const gfBrows = [-1, 1].map(s => box(.1, .02, .02, flat(0x3b2316), s * .1, .35, .206, gfHead));
+const gfMouth = box(.1, .03, .02, flat(0xc2255c), 0, .11, .205, gfHead);
+for (const s of [-1, 1]) box(.05, .04, .02, flat(0xffa8a8), s * .15, .17, .206, gfHead);   // blush
+gf.rotation.y = -1.1;    // facing the movie screen (to the left)
+const pipScreen = new THREE.Mesh(new THREE.PlaneGeometry(6, 3), new THREE.MeshBasicMaterial({ color: 0x4dabf7 })); pipScreen.position.set(-4, 2, -2); pipScreen.rotation.y = 1.1; pipScene.add(pipScreen);
+
+// ---------- state ----------
+const ROUND = 45, LIVES = 3;
+let state = 'ready', score = 0, lives = LIVES, elapsed = 0, eaten = 0, caramelEaten = 0, overAt = 0, combo = 0;
+const G = { mode: 'watch', t: 3, grace: 0, mad: 0 };
+let best = 0; try { best = +localStorage.getItem('popcorn-best') || 0; } catch {}
+const $score = $('score'), $lives = $('lives'), $time = $('time'), $center = $('center'), $pip = $('pip'), $gstate = $('gstate'), $hint = $('hint');
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🍿', title: '카라멜 몰래 먹기', how: [
+  ['👆', '<b>카라멜 묻은 팝콘</b>을 탭해서 냠! 진할수록 고득점'],
+  ['💑', '오른쪽 위 여친이 <b>쳐다볼 때</b> 카라멜 먹으면 들켜요'],
+  ['🍿', '쳐다볼 땐 <b>일반 팝콘</b>만 먹는 척 (안전)'],
+  ['✋', '통에 들어오는 <b>여친 손</b>에 닿으면 들켜요'],
+] }));
+function updateHud() {
+  $score.innerHTML = `${score}<small>점</small>`;
+  $lives.textContent = '💗'.repeat(lives) + '🤍'.repeat(LIVES - lives);
+  $time.textContent = `⏱ ${Math.max(0, Math.ceil(ROUND - elapsed))}`;
+}
+function reset() {
+  score = 0; lives = LIVES; elapsed = 0; eaten = 0; caramelEaten = 0; combo = 0;
+  Object.assign(G, { mode: 'watch', t: 3, mad: 0 }); Object.assign(H, { mode: 'away', t: 3, target: null }); herHand.position.copy(HER_HOME);
+  fillBucket(); updateHud();
+}
+function start() {
+  state = 'count'; $center.style.display = 'none'; $hint.style.display = '';
+  Arcade.countdown({ final: '냠!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { state = 'playing'; } });
+}
+function setG(mode, t) { G.mode = mode; G.t = t; if (mode === 'warn') Arcade.sfx.hmm(); if (mode === 'look') G.grace = .1; }
+function busted(why) {
+  lives--; combo = 0; G.mad = 1.4; slapT = .5; updateHud();
+  setG('look', 1.6);
+  Arcade.sfx.crash(); Arcade.shake(.3); Arcade.vibrate([60, 40, 120]);
+  Arcade.toast(why, '#e03131');
+  if (lives <= 0) setTimeout(finish, 800);
+}
+const tmp = new THREE.Vector3();
+function popText(x, y, text, big) {
+  const el = document.createElement('div'); el.className = 'pop' + (big ? ' big' : ''); el.textContent = text;
+  el.style.left = x + 'px'; el.style.top = y + 'px'; document.body.appendChild(el); setTimeout(() => el.remove(), 950);
+}
+function grab() {
+  if (state !== 'playing' || slapT > 0 || grabT < .18) return;
+  grabT = 0;
+  // nearest kernel under the hand, preferring the top layer
+  let bestK = null, bd = .55;
+  for (const k of kernels) { if (!k.alive || k.drop) continue; const d = Math.hypot(k.m.position.x - hand.position.x, k.m.position.z - (hand.position.z - .55)) - k.m.position.y * .05; if (d < bd) { bd = d; bestK = k; } }
+  if (!bestK) { Arcade.sfx.tap(); return; }
+  $hint.style.display = 'none';
+  const sweet = bestK.kind !== 'plain';
+  if (sweet && G.mode === 'look' && G.grace <= 0) { eatKernel(bestK, false); return busted(rnd(['😠 너 카라멜만 골라 먹지?!', '😤 야! 그거 내 카라멜이야', '🙄 카라멜 도둑 검거'])); }
+  eatKernel(bestK, true);
+}
+const rnd = a => a[(Math.random() * a.length) | 0];
+function eatKernel(k, count) {
+  k.alive = false; k.flyT = 0; k.from = k.m.position.clone();
+  if (!count) return;
+  const pts = KIND[k.kind].pts;
+  eaten++;
+  tmp.copy(k.m.position).project(camera);
+  const sx = (tmp.x * .5 + .5) * innerWidth, sy = (-tmp.y * .5 + .5) * innerHeight;
+  if (pts > 0) {
+    caramelEaten++; combo++;
+    const bonus = combo >= 5 ? 1 : 0;
+    score += pts + bonus;
+    popText(sx, sy, `+${pts + bonus}${k.kind === 'mega' ? ' 🍯' : ''}`, pts >= 5);
+    Arcade.sfx.pop(1.1 + Math.min(combo, 12) * .04); if (pts >= 5) Arcade.sfx.coin();
+    Arcade.vibrate(pts >= 5 ? 25 : 12);
+    if (k.kind === 'mega') { Arcade.toast('🍯 카라멜 덩어리 득템!', '#e8590c'); Arcade.confetti({ x: sx, y: sy, count: 40, colors: ['#a8601a', '#d99a3e', '#ffe8a8'], power: .6 }); }
+  } else { popText(sx, sy, '냠 (일반)', false); Arcade.sfx.pop(.9); }
+  updateHud();
+  // refill: a new kernel tumbles in somewhere
+  setTimeout(() => { if (state === 'playing') { const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * (R - .3); addKernel(Math.cos(a) * r, Math.sin(a) * r, undefined, true); } }, 500);
+  if (Math.random() < .04) newHotspots();
+}
+function finish() {
+  if (state === 'over') return;
+  state = 'over'; overAt = performance.now();
+  const isBest = score > best;
+  if (isBest) { best = score; try { localStorage.setItem('popcorn-best', best); } catch {} }
+  isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  const msg = lives <= 0 ? '여친: "팝콘 너 다 먹어. 나 콜라만 마실게"' : score >= 120 ? '카라멜 장인. 여친은 아직 눈치 못 챘어요' : score >= 60 ? '야무지게 골라 먹었다' : '일반 팝콘으로 배만 불렀어요';
+  setTimeout(() => {
+    showScreen(Arcade.resultScreen({ emoji: lives <= 0 ? '😤' : '🍿', label: '카라멜 점수', score, unit: '점', msg,
+      rows: [['카라멜 팝콘', `${caramelEaten}개`], ['먹은 팝콘', `${eaten}개`]], isBest: isBest && score > 0, best }));
+    Arcade.gameOver(score);
+  }, 400);
+}
+function tapStart() {
+  if (state === 'ready') start();
+  else if (state === 'over' && performance.now() - overAt > 1200 && !Arcade.inRun()) { reset(); start(); }
+}
+
+// ---------- input ----------
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -1.6), hit = new THREE.Vector3();
+function aim(x, y) {
+  ndc.set(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
+  if (ray.ray.intersectPlane(plane, hit)) {
+    const r = Math.hypot(hit.x, hit.z), lim = R - .1;
+    if (r > lim) { hit.x *= lim / r; hit.z *= lim / r; }
+    handTarget.set(hit.x, 1.6, hit.z + .55);   // fingertips sit on the pointer
+  }
+}
+addEventListener('pointermove', e => aim(e.clientX, e.clientY));
+addEventListener('pointerdown', e => {
+  if (state !== 'playing') { tapStart(); return; }
+  aim(e.clientX, e.clientY); hand.position.copy(handTarget); grab();
+});
+addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); state === 'playing' ? grab() : tapStart(); } });
+
+function placeCamera() {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  const need = (R + .7) * 2;
+  const vis = Math.max(need, need / camera.aspect);
+  const d = vis / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  camera.position.set(0, d + 1, d * .12); camera.lookAt(0, 0, 0);
+}
+placeCamera();
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
+
+// ---------- loop ----------
+let last = performance.now();
+reset(); showIntro();
+window.__pop = { G, H, get state() { return state; }, get score() { return score; }, get lives() { return lives; }, kernels: () => kernels, hand, grab,
+  aimAt(x, z) { handTarget.set(x, 1.6, z + .55); hand.position.copy(handTarget); } };
+
+function frame(now) {
+  const dt = Math.min(.04, (now - last) / 1000); last = now; const t = now / 1000;
+  if (state === 'playing') {
+    elapsed += dt; if (elapsed >= ROUND) { elapsed = ROUND; finish(); }
+    const lv = Math.min(1, elapsed / ROUND);
+    // girlfriend's attention
+    G.t -= dt; G.grace -= dt; G.mad = Math.max(0, G.mad - dt);
+    if (G.mode === 'watch' && G.t <= 0) setG('warn', Math.max(.38, .75 - lv * .35));
+    else if (G.mode === 'warn' && G.t <= 0) Math.random() < .2 + lv * .15 ? setG('watch', .8 + Math.random()) : setG('look', .9 + Math.random() * .8);
+    else if (G.mode === 'look' && G.t <= 0) setG('watch', Math.max(1.1, 3.4 - lv * 1.8) * (.6 + Math.random() * .7));
+    // her hand dips in for popcorn too (she likes caramel as well)
+    H.t -= dt;
+    if (H.mode === 'away' && H.t <= 0) {
+      const sweet = kernels.filter(k => k.alive && !k.drop && k.kind !== 'plain');
+      const pick = sweet.length && Math.random() < .7 ? rnd(sweet) : rnd(kernels.filter(k => k.alive && !k.drop));
+      if (pick) { H.mode = 'in'; H.target = pick; H.t = 0; gfArm.rotation.x = 0; }
+    }
+    if (H.mode === 'in') {
+      tmp.set(H.target.m.position.x - .5, 1.25, H.target.m.position.z);
+      herHand.position.lerp(tmp, Math.min(1, dt * (3 + lv * 3)));
+      if (herHand.position.distanceTo(tmp) < .15) { H.mode = 'grab'; H.t = .35; if (H.target.alive) { H.target.alive = false; H.target.flyT = 0; H.target.from = H.target.m.position.clone(); H.target.toHer = true; } }
+    } else if (H.mode === 'grab') { H.t -= dt; herHand.position.y = 1.05 + Math.max(0, H.t) * .5; if (H.t <= 0) H.mode = 'out'; }
+    else if (H.mode === 'out') { herHand.position.lerp(HER_HOME, Math.min(1, dt * 4)); if (herHand.position.distanceTo(HER_HOME) < .3) { H.mode = 'away'; H.t = Math.max(1.2, 4.5 - lv * 2.5) * (.6 + Math.random() * .8); } }
+    // touching her hand = busted
+    if (H.mode !== 'away' && slapT <= 0 && Math.hypot(herHand.position.x + .3 - hand.position.x, herHand.position.z - (hand.position.z - .4)) < .62) {
+      busted(rnd(['😳 손 닿았다… "너 지금 카라멜 노렸지?"', '✋ 손 겹침! 수상한 손놀림 적발', '😠 "왜 자꾸 내 쪽으로 손 와?"']));
+      H.mode = 'out';
+    }
+    updateHud();
+  }
+  grabT += dt; slapT = Math.max(0, slapT - dt);
+
+  // my hand: follows the pointer, dips on grab, recoils when slapped
+  const dip = grabT < .2 ? Math.sin(grabT / .2 * Math.PI) : 0;
+  const target = slapT > 0 ? new THREE.Vector3(handTarget.x, 2.2, handTarget.z + 1.5) : handTarget;
+  hand.position.lerp(target, Math.min(1, dt * 18));
+  hand.position.y = (slapT > 0 ? 2.2 : 1.6) - dip * .8;
+  hand.rotation.x = -dip * .3;
+
+  // kernels: eaten ones fly to my mouth (bottom of screen) or to her (left); new ones tumble in
+  for (let i = kernels.length - 1; i >= 0; i--) {
+    const k = kernels[i];
+    if (k.drop) { k.m.position.y -= dt * 9; k.m.rotation.x += dt * 8; if (k.m.position.y <= k.y) { k.m.position.y = k.y; k.drop = false; } }
+    if (!k.alive) {
+      k.flyT += dt * 2.6; const u = Math.min(1, k.flyT);
+      const to = k.toHer ? new THREE.Vector3(-R - 4, 3, -.5) : new THREE.Vector3(hand.position.x * .3, 6, R + 3);
+      k.m.position.lerpVectors(k.from, to, u); k.m.position.y += Math.sin(u * Math.PI) * 1.5;
+      if (u >= 1) { scene.remove(k.m); kernels.splice(i, 1); }
+    }
+  }
+  screenGlow.color.setHSL((t * .05) % 1, .5, .7); screenGlow.intensity = 5 + Math.sin(t * 3) * 1.5;
+
+  Arcade.applyShake(camera, dt);
+  renderer.render(scene, camera);
+  placeCameraLite();
+
+  // ---- PIP: her head turns toward me when she checks
+  const yaw = G.mode === 'look' ? 1.15 : G.mode === 'warn' ? .45 : 0;
+  gfHead.rotation.y += (yaw - gfHead.rotation.y) * Math.min(1, dt * 12);
+  gfEyes.forEach(e => { e.position.x = (e.position.x > 0 ? .1 : -.1) + (G.mode === 'warn' ? .03 : 0); e.scale.y = G.mode === 'watch' && Math.sin(t * .9) > .98 ? .2 : 1; });
+  gfBrows.forEach((b, i) => b.rotation.z = G.mad > 0 ? (i ? .5 : -.5) : G.mode === 'look' ? (i ? .15 : -.15) : 0);
+  gfMouth.scale.set(G.mad > 0 ? 1.4 : 1, G.mad > 0 ? 2.5 : G.mode === 'watch' ? 1 + Math.abs(Math.sin(t * 2)) * .3 : 1, 1);
+  gfArm.rotation.x = H.mode === 'in' || H.mode === 'grab' ? -1.2 : G.mode === 'watch' ? -.3 : 0;
+  gfArm.rotation.z = H.mode === 'in' || H.mode === 'grab' ? -.6 : 0;
+  pipScreen.material.color.setHSL((t * .05) % 1, .55, .55); pipScreenLight.color.copy(pipScreen.material.color);
+  const cls = state === 'playing' || G.mad > 0 ? (G.mode === 'look' ? 'look' : G.mode === 'warn' ? 'warn' : '') : '';
+  $pip.className = `hud-ctl ${cls}`;
+  const lbl = G.mad > 0 ? '😠 째려보는 중' : G.mode === 'look' ? '👀 쳐다봄!' : G.mode === 'warn' ? '…?' : H.mode !== 'away' ? '🍿 팝콘 집는 중' : '🎬 영화 몰입 중';
+  if ($gstate.textContent !== lbl) $gstate.textContent = lbl;
+  const pr = $pip.getBoundingClientRect();
+  if (pr.width > 0 && getComputedStyle($pip).visibility !== 'hidden') {
+    const b = 4, y = innerHeight - pr.bottom + b;
+    renderer.setScissorTest(true);
+    renderer.setScissor(pr.left + b, y, pr.width - b * 2, pr.height - b * 2); renderer.setViewport(pr.left + b, y, pr.width - b * 2, pr.height - b * 2);
+    pipCam.aspect = (pr.width - b * 2) / (pr.height - b * 2); pipCam.updateProjectionMatrix();
+    renderer.render(pipScene, pipCam);
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
+  }
+  requestAnimationFrame(frame);
+}
+const camHome = new THREE.Vector3();
+function placeCameraLite() { if (!camHome.lengthSq()) camHome.copy(camera.position); camera.position.lerp(camHome, .35); }
+addEventListener('resize', () => camHome.set(0, 0, 0));
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

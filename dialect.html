@@ -32,6 +32,13 @@
     cursor:pointer;transition:transform .06s}
   .tile:active{transform:translateY(2px)}
   .tile.used{visibility:hidden}
+  .tile.in{animation:tileIn .22s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes tileIn{0%{transform:translateY(18px) scale(.6);opacity:.3}60%{transform:translateY(-4px) scale(1.12)}100%{transform:none}}
+  #ans.shake{animation:ansShake .42s}
+  @keyframes ansShake{15%,55%{transform:translateX(-10px)}35%,75%{transform:translateX(10px)}}
+  #ans.good .tile{background:#d3f9d8;border-color:#51cf66;color:#2b8a3e;animation:goodHop .4s cubic-bezier(.2,1.6,.4,1) both}
+  #ans.bad .tile{background:#ffe3e3;border-color:#ff8787;color:#c92a2a}
+  @keyframes goodHop{40%{transform:translateY(-10px) scale(1.08)}}
   #check{border:0;border-radius:16px;padding:14px;font:24px "Jua",sans-serif;color:#fff;background:#adb5bd;box-shadow:0 5px 0 #868e96;cursor:pointer}
   #check.ready{background:#51cf66;box-shadow:0 5px 0 #2b8a3e}
   #check:active{transform:translateY(3px)}
@@ -227,7 +234,7 @@ function updateHud() {
 function reset() { score = 0; lives = LIVES; combo = 0; maxCombo = 0; order = shuffle(QS.map((_, i) => i)); qi = 0; updateHud(); }
 function nextQ() {
   if (state !== 'playing') return;
-  $fb.className = '';
+  $fb.className = ''; $ans.classList.remove('shake', 'good', 'bad');
   if (qi >= order.length) { order = shuffle(order); qi = 0; }
   const [rg, line, correct, wrong, note] = QS[order[qi++]];
   const R = REGIONS[rg], wi = (Math.random() * R.who.length) | 0;
@@ -242,13 +249,15 @@ function nextQ() {
   tMax = Math.max(9, 18 - score * .5); tLeft = tMax; talkT = 1.2; react = null;
   renderTiles(); Arcade.sfx.tap(); placeCamera();
 }
+let justAdded = -1;
 function renderTiles() {
-  $ans.innerHTML = q.picked.map((ti, k) => `<button class="tile" data-a="${k}">${q.tiles[ti].t}</button>`).join('');
+  $ans.innerHTML = q.picked.map((ti, k) => `<button class="tile ${k === justAdded ? 'in' : ''}" data-a="${k}" style="animation-delay:${q.done ? k * 60 : 0}ms">${q.tiles[ti].t}</button>`).join('');
+  justAdded = -1;
   $bank.innerHTML = q.tiles.map((o, k) => `<button class="tile ${q.picked.includes(k) ? 'used' : ''}" data-b="${k}">${o.t}</button>`).join('');
   $check.classList.toggle('ready', q.picked.length > 0);
 }
-$bank.addEventListener('click', e => { const b = e.target.closest('[data-b]'); if (!b || !q || q.done || state !== 'playing') return; const k = +b.dataset.b; if (q.picked.includes(k)) return; q.picked.push(k); Arcade.sfx.pop(1.2); renderTiles(); });
-$ans.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (!b || !q || q.done) return; q.picked.splice(+b.dataset.a, 1); Arcade.sfx.tap(); renderTiles(); });
+$bank.addEventListener('click', e => { const b = e.target.closest('[data-b]'); if (!b || !q || q.done || state !== 'playing') return; const k = +b.dataset.b; if (q.picked.includes(k)) return; q.picked.push(k); justAdded = q.picked.length - 1; Arcade.sfx.pop(1.1 + q.picked.length * .06); Arcade.vibrate(14); renderTiles(); });
+$ans.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (!b || !q || q.done) return; q.picked.splice(+b.dataset.a, 1); Arcade.sfx.tap(); Arcade.vibrate(6); renderTiles(); });
 $check.addEventListener('click', () => { if (q && !q.done && q.picked.length && state === 'playing') judge(false); });
 function judge(timeout) {
   q.done = true;
@@ -258,13 +267,15 @@ function judge(timeout) {
   $('fbh').textContent = ok ? `✅ ${rnd(['정확해요!', '완벽한 통역!', '현지인 인증!'])}` : timeout ? '⏰ 시간 초과! 방송 사고' : `❌ ${rnd(['아쉬워요!', '오역이에요!'])}`;
   $('fba').textContent = `표준어: ${q.correct.join(' ')}`;
   $('fbm').textContent = `💡 ${q.note} · ${ok ? rnd(OK_LINES) : rnd(NO_LINES)}`;
+  $ans.classList.remove('shake', 'good', 'bad'); void $ans.offsetWidth;
+  if (ok) { $ans.classList.add('good'); renderTiles(); } else { $ans.classList.add('shake', 'bad'); }
   if (ok) {
     score++; combo++; maxCombo = Math.max(maxCombo, combo); react = { k: 'ok', t: 0 };
-    Arcade.sfx.perfect(Math.min(combo, 12)); Arcade.vibrate(20);
+    Arcade.sfx.perfect(Math.min(combo, 12)); Arcade.vibrate(combo >= 3 ? [20, 30, 20, 30, 60] : [20, 30, 50]);
     if (combo % 5 === 0) { Arcade.confetti({ y: innerHeight * .3, count: 70, emoji: ['🗣️', '🎤', '⭐'] }); Arcade.sfx.coin(); }
   } else {
     lives--; combo = 0; react = { k: 'no', t: 0 };
-    Arcade.sfx.miss(); Arcade.shake(.1); Arcade.vibrate([40, 30, 60]);
+    Arcade.sfx.miss(); Arcade.shake(.1); Arcade.vibrate([70, 40, 70, 40, 120]);
   }
   updateHud();
   setTimeout(() => { if (lives <= 0) finish(); else nextQ(); }, ok ? 1500 : 2300);
@@ -290,7 +301,7 @@ addEventListener('pointerdown', e => { if (!e.target.closest('#panel, .arcade-bt
 addEventListener('keydown', e => {
   if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); if (state === 'playing' && q && !q.done && q.picked.length) judge(false); else tapStart(); }
   if (e.code === 'Backspace' && q && !q.done && q.picked.length) { q.picked.pop(); renderTiles(); }
-  const n = +e.key; if (n >= 1 && n <= 9 && q && !q.done && state === 'playing') { const k = n - 1; if (k < q.tiles.length && !q.picked.includes(k)) { q.picked.push(k); renderTiles(); } }
+  const n = +e.key; if (n >= 1 && n <= 9 && q && !q.done && state === 'playing') { const k = n - 1; if (k < q.tiles.length && !q.picked.includes(k)) { q.picked.push(k); justAdded = q.picked.length - 1; Arcade.sfx.pop(1.1 + q.picked.length * .06); Arcade.vibrate(14); renderTiles(); } }
 });
 
 // ---------- loop ----------

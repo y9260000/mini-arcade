@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>도와드릴까요?</title>
+<script src="common.js?v=16"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#f8f0e3;
+    user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  .hud-score{font-size:50px}
+  #goal{font-family:"Jua",sans-serif;font-size:16px}
+  #goal.go{background:#2b8a3e;color:#fff}
+  #bubble{position:fixed;left:0;top:0;z-index:2;pointer-events:none;display:none}
+  #bubble div{position:absolute;bottom:0;left:0;transform:translateX(-50%);white-space:nowrap;background:#fff;color:#2b2438;border-radius:16px;padding:5px 11px;
+    font-family:"Jua",sans-serif;font-size:19px;box-shadow:0 6px 16px rgba(0,0,0,.25);border:3px solid #51cf66}
+  #bubble.close div{border-color:#ff6b6b;animation:wob .12s linear infinite}
+  #bubble.scared div{border-color:#4dabf7}
+  @keyframes wob{25%{transform:translateX(-52%) rotate(-3deg)}75%{transform:translateX(-48%) rotate(3deg)}}
+  #phone{position:fixed;left:50%;top:max(110px,calc(env(safe-area-inset-top) + 100px));transform:translateX(-50%);z-index:3;pointer-events:none;display:none;
+    font-family:"Jua",sans-serif;font-size:18px;color:#fff;background:#1971c2;border-radius:999px;padding:6px 16px;box-shadow:0 6px 16px rgba(0,0,0,.25)}
+  #hint{position:fixed;bottom:max(12vh,76px);left:0;right:0;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
+  #hint .pill{font-size:15px;padding:10px 18px}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>점</small></div>
+  <div class="hud-row"><span class="pill" id="lives"></span><span class="pill dark" id="lvl">1층</span><span class="pill" id="goal">🎒 가방 찾기</span></div>
+</div>
+<div id="bubble" class="hud-ctl"><div>고객님~?</div></div>
+<div id="phone" class="hud-ctl">📱 통화하는 척 중…</div>
+<div id="hint" class="hud-ctl"><span class="pill">👆 스와이프 / 방향키로 이동</span></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const $ = id => document.getElementById(id);
+
+// ---------- store layout (# rack, . sale tag, o phone, b bag spot, P start, S staff room, E exit) ----------
+const MAP = [
+  '###############',
+  '#P.....#.....b#',
+  '#.###..#..###.#',
+  '#o#b.........o#',
+  '#.#.##.#.##.#.#',
+  '#......#......#',
+  '###.##...##.###',
+  '#b..#.SSS.#..b#',
+  '#.#.#.###.#.#.#',
+  '#.#.........#.#',
+  '#.###.#.#.###.#',
+  '#o....#.#....o#',
+  '#.##.##.##.##.#',
+  '#b...........b#',
+  '#######E#######',
+];
+const ROWS = MAP.length, COLS = MAP[0].length;
+const at = (c, r) => (r < 0 || r >= ROWS || c < 0 || c >= COLS) ? '#' : MAP[r][c];
+const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
+let exitC, exitR, startC, startR; const staffHome = [], bagSpots = [];
+MAP.forEach((row, r) => [...row].forEach((ch, c) => {
+  if (ch === 'E') { exitC = c; exitR = r; } if (ch === 'P') { startC = c; startR = r; }
+  if (ch === 'S') staffHome.push([c, r]); if (ch === 'b') bagSpots.push([c, r]);
+}));
+
+// ---------- three ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf8f0e3);
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, .1, 100);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd8c8b0, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.3); sun.position.set(4, 14, 8); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: 1, far: 40 }); scene.add(sun);
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, flatShading: true, ...extra });
+const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
+const W = (c) => c - (COLS - 1) / 2, Z = (r) => r - (ROWS - 1) / 2;   // tile → world
+
+// floor (wood) + store dressing
+{
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = '#e8d2b0'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#dcc39c'; for (let i = 0; i < 64; i += 16) g.fillRect(0, i, 64, 2); g.fillRect(31, 0, 2, 16); g.fillRect(15, 16, 2, 16); g.fillRect(47, 32, 2, 16);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(COLS / 2, ROWS / 2); t.colorSpace = THREE.SRGBColorSpace;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(COLS, ROWS), new THREE.MeshStandardMaterial({ map: t, roughness: .85 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+  const outer = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), flat(0xd9c7aa)); outer.rotation.x = -Math.PI / 2; outer.position.y = -.01; scene.add(outer);
+}
+const CLOTH = [0xff6b6b, 0x4dabf7, 0xffd43b, 0x69db7c, 0xb197fc, 0xffa94d, 0xf783ac, 0x212529, 0xffffff, 0x20c997];
+const rackMat = flat(0xced4da, { metalness: .4, roughness: .4 }), shelfMat = flat(0xf1e3cc), wallMat = flat(0xfff4e6);
+MAP.forEach((row, r) => [...row].forEach((ch, c) => {
+  if (ch !== '#') return;
+  const edge = r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1;
+  if (edge) { box(1, 1.3, 1, wallMat, W(c), .65, Z(r)); return; }
+  // clothing rack: base + rail + hanging garments
+  box(.92, .12, .92, shelfMat, W(c), .06, Z(r));
+  box(.08, 1, .08, rackMat, W(c), .55, Z(r));
+  box(.9, .05, .05, rackMat, W(c), 1.05, Z(r));
+  for (let i = 0; i < 4; i++) {
+    const g = box(.18, .6, .5, flat(CLOTH[(r * 7 + c * 3 + i) % CLOTH.length]), W(c) - .33 + i * .22, .72, Z(r));
+    g.rotation.y = (Math.random() - .5) * .3;
+  }
+}));
+// fitting room curtain at the start, counter in the staff room, exit door
+box(.9, 1.4, .06, flat(0xae3ec9), W(startC), .7, Z(startR) - .47);
+for (const [c, r] of staffHome) box(.9, .5, .3, flat(0x8d5a3b), W(c), .25, Z(r) + .35);
+const doorMat = new THREE.MeshStandardMaterial({ color: 0xa5d8ff, transparent: true, opacity: .6, roughness: .1 });
+const door = box(.95, 1.3, .08, doorMat, W(exitC), .65, Z(exitR));
+const exitSign = new THREE.Mesh(new THREE.PlaneGeometry(.9, .3), new THREE.MeshBasicMaterial({ color: 0xe03131 })); exitSign.position.set(W(exitC), 1.5, Z(exitR)); exitSign.rotation.x = -.6; scene.add(exitSign);
+
+// pellets (sale tags) and phones
+const tagGeo = new THREE.BoxGeometry(.16, .03, .22), tagMat = flat(0xff8787);
+const phoneGeo = new THREE.BoxGeometry(.24, .05, .4), phoneMat = new THREE.MeshStandardMaterial({ color: 0x1971c2, emissive: 0x1971c2, emissiveIntensity: .5 });
+let pellets = new Map();
+function placePellets() {
+  for (const m of pellets.values()) scene.remove(m);
+  pellets.clear();
+  MAP.forEach((row, r) => [...row].forEach((ch, c) => {
+    if (ch === '.' || ch === 'o' || ch === 'b') {
+      if (ch === 'b' && c === bag.c && r === bag.r) return;
+      const ph = ch === 'o';
+      const m = new THREE.Mesh(ph ? phoneGeo : tagGeo, ph ? phoneMat : tagMat); m.position.set(W(c), ph ? .3 : .08, Z(r)); m.rotation.y = Math.random() * .6;
+      m.userData = { phone: ph }; scene.add(m); pellets.set(`${c},${r}`, m);
+    }
+  }));
+}
+const bagMesh = new THREE.Group(); scene.add(bagMesh);
+box(.5, .5, .3, flat(0x5f3dc4), 0, .35, 0, bagMesh); box(.4, .2, .06, flat(0x7950f2), 0, .3, .17, bagMesh); box(.3, .06, .06, flat(0x3b2a5c), 0, .64, 0, bagMesh);
+const bagGlow = new THREE.Mesh(new THREE.RingGeometry(.35, .48, 24), new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: .8, side: THREE.DoubleSide, depthWrite: false }));
+bagGlow.rotation.x = -Math.PI / 2; bagGlow.position.y = .03; bagMesh.add(bagGlow);
+const bag = { c: 0, r: 0, held: false };
+
+// ---------- people ----------
+function makePerson({ top, bottom = 0x2b2f3a, skin = 0xffd2a8, hair = 0x2b2b2b, hood = false, apron = null, scale = .5 }) {
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  const legs = [-1, 1].map(s => { const p = new THREE.Group(); p.position.set(s * .15, .85, 0); box(.22, .85, .24, flat(bottom), 0, -.42, 0, p); body.add(p); return p; });
+  box(.62, .78, .38, flat(top), 0, 1.25, 0, body);
+  if (apron) { box(.5, .7, .04, flat(apron), 0, 1.15, .21, body); box(.18, .08, .02, flat(0xffffff), .12, 1.4, .235, body); }
+  const arms = [-1, 1].map(s => { const p = new THREE.Group(); p.position.set(s * .4, 1.58, 0); box(.16, .62, .18, flat(top), 0, -.3, 0, p); body.add(p); return p; });
+  const head = new THREE.Group(); head.position.y = 1.66; body.add(head);
+  box(.42, .44, .4, flat(skin), 0, .22, 0, head);
+  for (const s of [-1, 1]) box(.06, .07, .02, flat(0x222222), s * .1, .26, .205, head);
+  if (hood) { box(.52, .5, .5, flat(top), 0, .28, -.04, head); box(.06, .06, .06, flat(0xffffff), .22, .2, .05, head); }
+  else box(.46, .14, .44, flat(hair), 0, .48, 0, head);
+  root.scale.setScalar(scale);
+  root.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  scene.add(root);
+  return { root, body, legs, arms, head };
+}
+const me = makePerson({ top: 0x495057, hood: true, scale: .62 });   // grey hoodie, hood up
+const meRing = new THREE.Mesh(new THREE.RingGeometry(.32, .42, 24), new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: .9, side: THREE.DoubleSide, depthWrite: false }));
+meRing.rotation.x = -Math.PI / 2; meRing.position.y = .03; scene.add(meRing);
+const myBag = box(.45, .5, .2, flat(0x5f3dc4), 0, 1.2, -.3, me.body); myBag.visible = false;
+const STAFF_STYLE = [
+  { top: 0xffffff, apron: 0x2f9e44, hair: 0x2b2b2b, name: '열정 직원', line: '고객님~ 뭐 찾으세요?' },
+  { top: 0xffffff, apron: 0x2f9e44, hair: 0x8d5a3b, name: '신입 알바', line: '사이즈 찾아드릴까요?' },
+  { top: 0x212529, apron: null, hair: 0x111111, name: '매니저', line: '이거 신상인데 입어보실래요?' },
+  { top: 0xffffff, apron: 0xe64980, hair: 0x3b2316, name: '판촉 직원', line: '지금 1+1 행사 중이에요~!' },
+];
+
+// ---------- movers ----------
+function mover(c, r, speed) { return { x: c, y: r, dir: null, next: null, speed }; }
+const center = m => Math.abs(m.x - Math.round(m.x)) < 1e-6 && Math.abs(m.y - Math.round(m.y)) < 1e-6;
+const canGo = (c, r, d, who) => { const [dx, dy] = DIRS[d]; const ch = at(c + dx, r + dy); if (ch === '#') return false; if (ch === 'E' && (who !== 'me' || !bag.held)) return false; if (ch === 'S' && who === 'me') return false; return true; };
+function step(m, dt, who, choose) {
+  let left = m.speed * dt;
+  while (left > 0) {
+    const c = Math.round(m.x), r = Math.round(m.y);
+    if (center(m)) {
+      if (choose) m.dir = choose(c, r, m);
+      else if (m.next && canGo(c, r, m.next, who)) m.dir = m.next;
+      if (!m.dir || !canGo(c, r, m.dir, who)) { m.moving = false; return; }
+    } else if (m.next === OPP[m.dir] && who === 'me') m.dir = m.next;   // instant reverse
+    m.moving = true;
+    const [dx, dy] = DIRS[m.dir];
+    // distance to the next tile centre along dir
+    const tx = dx ? (dx > 0 ? Math.floor(m.x + 1e-6) + 1 : Math.ceil(m.x - 1e-6) - 1) : m.x;
+    const ty = dy ? (dy > 0 ? Math.floor(m.y + 1e-6) + 1 : Math.ceil(m.y - 1e-6) - 1) : m.y;
+    const dist = Math.abs(tx - m.x) + Math.abs(ty - m.y);
+    if (dist <= left) { m.x = Math.round(tx); m.y = Math.round(ty); left -= dist; }
+    else { m.x += dx * left; m.y += dy * left; left = 0; }
+  }
+}
+
+// ---------- state ----------
+const LIVES = 3;
+let state = 'ready', score = 0, lives = LIVES, level = 1, overAt = 0, phoneT = 0, freezeT = 0, tagsLeft = 0, levelT = 0;
+let P = mover(startC, startR, 4.3), staff = [];
+let best = 0; try { best = +localStorage.getItem('shop-best') || 0; } catch {}
+const $score = $('score'), $lives = $('lives'), $lvl = $('lvl'), $goal = $('goal'), $center = $('center'), $bubble = $('bubble'), $bt = $bubble.firstElementChild, $phone = $('phone'), $hint = $('hint');
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🛍️', title: '도와드릴까요?', how: [
+  ['😶', '내성적인 나, 탈의실에서 나왔더니 <b>가방이 어디 갔지?</b>'],
+  ['🎒', '매장 어딘가의 <b>내 가방</b>을 찾아서 <b>출구 🚪</b>로 탈출'],
+  ['🙋', '"뭐 찾으세요~?" <b>직원</b>한테 잡히면 대화해야 함 (목숨 -1)'],
+  ['📱', '<b>폰</b>을 주우면 통화하는 척! 직원이 피해요. 🏷️ 할인택은 점수'],
+] }));
+function updateHud() {
+  $score.innerHTML = `${score}<small>점</small>`;
+  $lives.textContent = '😶'.repeat(lives) + '💦'.repeat(LIVES - lives);
+  $lvl.textContent = `${level}층`;
+  $goal.textContent = bag.held ? '🚪 출구로 도망!' : '🎒 가방 찾기'; $goal.classList.toggle('go', bag.held);
+}
+function spawnStaff() {
+  for (const s of staff) scene.remove(s.p.root);
+  staff = [];
+  const n = Math.min(4, 1 + level);
+  for (let i = 0; i < n; i++) {
+    const [c, r] = staffHome[i % staffHome.length];
+    const st = STAFF_STYLE[i % STAFF_STYLE.length];
+    const s = { ...mover(c, r, Math.min(4.4, 2.9 + level * .3 + i * .08)), p: makePerson({ top: st.top, apron: st.apron, hair: st.hair }), st, wait: 1.5 + i * 2.6, i, out: false };
+    staff.push(s);
+  }
+}
+function setupLevel() {
+  const spot = bagSpots[(Math.random() * bagSpots.length) | 0];
+  Object.assign(bag, { c: spot[0], r: spot[1], held: false });
+  bagMesh.visible = true; bagMesh.position.set(W(bag.c), 0, Z(bag.r)); myBag.visible = false;
+  placePellets(); tagsLeft = [...pellets.values()].filter(m => !m.userData.phone).length;
+  P = mover(startC, startR, 4.3); phoneT = 0; levelT = 0;
+  spawnStaff(); updateHud();
+}
+function reset() { score = 0; lives = LIVES; level = 1; setupLevel(); }
+function start() {
+  state = 'count'; $center.style.display = 'none'; $hint.style.display = '';
+  Arcade.countdown({ final: '도망쳐!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { state = 'playing'; } });
+}
+function respawnAfterCatch() {
+  P = mover(startC, startR, 4.3);
+  staff.forEach((s, i) => { const [c, r] = staffHome[i % staffHome.length]; Object.assign(s, mover(c, r, s.speed)); s.wait = 1 + i * 1.5; s.out = false; });
+}
+function caught(s) {
+  state = 'caught'; freezeT = 1.6; lives--; updateHud();
+  bubbleFor(s, 'close', s.st.line);
+  Arcade.sfx.hmm(); Arcade.shake(.25); Arcade.vibrate([60, 40, 100]);
+  Arcade.toast(['😶 아… 그냥 구경이요…', '😅 아 네네… 괜찮아요…', '🫠 (어색한 미소)'][(Math.random() * 3) | 0], '#495057');
+}
+function escaped() {
+  state = 'clear'; freezeT = 2;
+  const bonus = 200 + Math.max(0, Math.round(120 - levelT * 2));
+  score += bonus; updateHud();
+  Arcade.sfx.fanfare(); Arcade.confetti({ y: innerHeight * .4, count: 100, emoji: ['🛍️', '🏃', '🎒'] }); Arcade.shake(.2); Arcade.vibrate([30, 30, 80]);
+  Arcade.toast(`🏃 탈출 성공! +${bonus}`, '#2b8a3e');
+}
+function finish() {
+  state = 'over'; overAt = performance.now();
+  const isBest = score > best;
+  if (isBest) { best = score; try { localStorage.setItem('shop-best', best); } catch {} }
+  isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  showScreen(Arcade.resultScreen({ emoji: '🫠', label: '도망 점수', score, unit: '점', msg: level > 3 ? '이 정도면 직원들도 포기했어요' : level > 1 ? '몇 층은 무사히 빠져나왔어요' : '결국 니트 3벌 추천받았습니다',
+    rows: [['탈출한 층', `${level - 1}층`]], isBest: isBest && score > 0, best }));
+  Arcade.gameOver(score);
+}
+function tapStart() {
+  if (state === 'ready') start();
+  else if (state === 'over' && performance.now() - overAt > 1200 && !Arcade.inRun()) { reset(); start(); }
+}
+
+// ---------- staff brain ----------
+const dist2 = (c, r, x, y) => (c - x) ** 2 + (r - y) ** 2;
+function staffChoose(s) {
+  return (c, r, m) => {
+    const opts = Object.keys(DIRS).filter(d => canGo(c, r, d, 'staff') && d !== OPP[m.dir]);
+    const pool = opts.length ? opts : Object.keys(DIRS).filter(d => canGo(c, r, d, 'staff'));
+    if (!pool.length) return null;
+    // keep staff out of the exit and back out of the staff room once released
+    if (phoneT > 0) return pool.reduce((a, d) => { const [dx, dy] = DIRS[d]; return dist2(c + dx, r + dy, P.x, P.y) > dist2(c + DIRS[a][0], r + DIRS[a][1], P.x, P.y) ? d : a; });
+    let tx = P.x, ty = P.y;
+    if (s.i === 1 && P.dir) { tx += DIRS[P.dir][0] * 3; ty += DIRS[P.dir][1] * 3; }      // cuts you off
+    if (s.i === 3 && bag.held) { tx = exitC; ty = exitR - 1; }                             // guards the door
+    const chase = Math.min(.9, .55 + level * .08 + (s.i === 0 ? .15 : 0));
+    if (Math.random() > chase) return pool[(Math.random() * pool.length) | 0];
+    return pool.reduce((a, d) => { const [dx, dy] = DIRS[d]; return dist2(c + dx, r + dy, tx, ty) < dist2(c + DIRS[a][0], r + DIRS[a][1], tx, ty) ? d : a; });
+  };
+}
+const tmpV = new THREE.Vector3();
+function bubbleFor(s, cls, text) {
+  tmpV.set(W(s.x), 1.35, Z(s.y)).project(camera);
+  $bubble.style.display = 'block';
+  $bubble.style.transform = `translate(${(tmpV.x * .5 + .5) * innerWidth}px,${(-tmpV.y * .5 + .5) * innerHeight}px)`;
+  $bubble.className = `hud-ctl ${cls}`; if ($bt.textContent !== text) $bt.textContent = text;
+}
+
+// ---------- input: swipe / keys ----------
+let sw = null;
+addEventListener('pointerdown', e => { if (state === 'ready' || state === 'over') { tapStart(); return; } sw = { x: e.clientX, y: e.clientY }; });
+addEventListener('pointermove', e => {
+  if (!sw) return;
+  const dx = e.clientX - sw.x, dy = e.clientY - sw.y;
+  if (Math.hypot(dx, dy) < 24) return;
+  P.next = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+  sw = { x: e.clientX, y: e.clientY }; $hint.style.display = 'none';
+});
+addEventListener('pointerup', () => { sw = null; });
+addEventListener('keydown', e => {
+  const k = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' }[e.code];
+  if (k) { e.preventDefault(); P.next = k; $hint.style.display = 'none'; }
+  else if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); tapStart(); }
+});
+
+function placeCamera() {
+  camera.aspect = innerWidth / innerHeight; camera.fov = camera.aspect < 1 ? 55 : 42; camera.updateProjectionMatrix();
+  const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
+  const dW = (COLS / 2 + .6) / Math.tan(half), dH = (ROWS / 2 + 3.2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));   // room for the HUD on top
+  const d = Math.max(dW, dH);
+  camera.position.set(0, d * .92, d * .38); camera.lookAt(0, 0, -1.1);
+}
+placeCamera();
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
+
+// ---------- loop ----------
+let last = performance.now();
+reset(); showIntro();
+window.__shop = { get state() { return state; }, P, get Pm() { return P; }, staff: () => staff, bag, get score() { return score; }, get lives() { return lives; }, get level() { return level; },
+  teleport(c, r) { P.x = c; P.y = r; P.dir = null; } };
+const faceYaw = { up: Math.PI, down: 0, left: -Math.PI / 2, right: Math.PI / 2 };
+
+function frame(now) {
+  const dt = Math.min(.04, (now - last) / 1000); last = now; const t = now / 1000;
+  if (state === 'playing') {
+    levelT += dt;
+    step(P, dt, 'me');
+    const pc = Math.round(P.x), pr = Math.round(P.y), key = `${pc},${pr}`;
+    if (Math.abs(P.x - pc) < .3 && Math.abs(P.y - pr) < .3) {
+      const m = pellets.get(key);
+      if (m) {
+        scene.remove(m); pellets.delete(key);
+        if (m.userData.phone) { phoneT = 6; score += 30; Arcade.sfx.coin(); Arcade.toast('📱 여보세요? (통화하는 척)', '#1971c2'); Arcade.vibrate(30); }
+        else { score += 10; tagsLeft--; Arcade.sfx.pop(1.3 + (tagsLeft % 5) * .04); }
+        updateHud();
+      }
+      if (!bag.held && pc === bag.c && pr === bag.r) {
+        bag.held = true; bagMesh.visible = false; myBag.visible = true; score += 100; updateHud();
+        Arcade.sfx.perfect(4); Arcade.vibrate([20, 30, 40]); Arcade.toast('🎒 내 가방 찾았다! 이제 출구로!', '#7048e8');
+      }
+      if (bag.held && pc === exitC && pr === exitR) escaped();
+    }
+    if (phoneT > 0) { phoneT -= dt; if (phoneT <= 0) Arcade.sfx.hmm(); }
+    // staff
+    let nearest = null, nd = 99;
+    for (const s of staff) {
+      if (s.wait > 0) { s.wait -= dt; if (s.wait <= 0) { s.out = true; s.y -= 0; } continue; }
+      s.speedNow = phoneT > 0 ? 2 : s.speed;
+      const sp = s.speed; s.speed = s.speedNow; step(s, dt, 'staff', staffChoose(s)); s.speed = sp;
+      const d = Math.hypot(s.x - P.x, s.y - P.y);
+      if (d < nd) { nd = d; nearest = s; }
+      if (d < .55) {
+        if (phoneT > 0) {   // they back off politely
+          score += 80; updateHud(); Arcade.sfx.boing(); Arcade.toast(`🙇 ${s.st.name}: "아 통화 중이시구나…" +80`, '#1971c2');
+          const [c, r] = staffHome[s.i % staffHome.length]; Object.assign(s, mover(c, r, sp)); s.wait = 3;
+        } else { caught(s); break; }
+      }
+    }
+    if (state === 'playing') {
+      if (nearest && nd < 3.2) bubbleFor(nearest, phoneT > 0 ? 'scared' : nd < 1.6 ? 'close' : '', phoneT > 0 ? '(통화 중이시네…)' : nd < 1.6 ? nearest.st.line : '고객님~?');
+      else $bubble.style.display = 'none';
+    }
+  } else if (state === 'caught' || state === 'clear') {
+    freezeT -= dt;
+    if (freezeT <= 0) {
+      $bubble.style.display = 'none';
+      if (state === 'caught') { if (lives <= 0) return finish(), requestAnimationFrame(frame); respawnAfterCatch(); state = 'playing'; }
+      else { level++; setupLevel(); state = 'playing'; Arcade.toast(`🛗 ${level}층 매장… 직원이 더 많다`, '#2b2438'); }
+    }
+  }
+  $phone.style.display = phoneT > 0 && state === 'playing' ? 'block' : 'none';
+  if (phoneT > 0) $phone.textContent = `📱 통화하는 척 중… ${Math.ceil(phoneT)}`;
+
+  // visuals
+  const walkAnim = (p, m, sp) => {
+    const moving = m.moving && (state === 'playing');
+    const ph = t * sp;
+    p.legs[0].rotation.x = moving ? Math.sin(ph) * .7 : 0; p.legs[1].rotation.x = moving ? -Math.sin(ph) * .7 : 0;
+    if (m.dir) p.root.rotation.y += ((faceYaw[m.dir] - p.root.rotation.y + Math.PI * 3) % (Math.PI * 2) - Math.PI) * .3;
+  };
+  me.root.position.set(W(P.x), 0, Z(P.y)); walkAnim(me, P, 14); meRing.position.set(W(P.x), .03, Z(P.y)); meRing.material.color.setHex(phoneT > 0 ? 0x4dabf7 : 0xffd43b);
+  me.head.rotation.x = .25;   // head down, avoiding eye contact
+  me.arms[0].rotation.x = phoneT > 0 ? -2.3 : 0;   // phone to ear
+  if (state === 'caught') { me.body.rotation.z = Math.sin(t * 30) * .05; } else me.body.rotation.z = 0;
+  for (const s of staff) {
+    s.p.root.position.set(W(s.x), 0, Z(s.y)); walkAnim(s.p, s, 11);
+    s.p.arms[1].rotation.x = phoneT > 0 ? 0 : -1.4 + Math.sin(t * 6 + s.i) * .4;   // waving "고객님~"
+    s.p.root.visible = true;
+  }
+  bagMesh.rotation.y += dt; bagGlow.material.opacity = .5 + Math.sin(t * 6) * .3;
+  doorMat.color.setHex(bag.held ? 0x8ce99a : 0xa5d8ff); exitSign.material.color.setHex(bag.held ? 0x2f9e44 : 0xe03131);
+  for (const m of pellets.values()) if (m.userData.phone) { m.rotation.y += dt * 2; m.position.y = .3 + Math.sin(t * 4) * .06; }
+
+  Arcade.applyShake(camera, dt);
+  renderer.render(scene, camera);
+  placeCamera();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

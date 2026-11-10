@@ -45,7 +45,7 @@
 <button class="run" id="run">▶ 연속 플레이 (전부 한 판씩)</button>
 <script>
   const { GAMES } = Arcade;
-  const TILE = { softserve: '#ffe3ec', skydive: '#d0ebff', stock: '#1b2240', moktak: '#f3d9c4', door: '#ffe8cc', elevator: '#dbe4ff', halo: '#fff3bf', cine: '#2b2438', cat: '#ffe8cc', soccer: '#d3f9d8', inventory: '#30251c', dialect: '#e5dbff', popcorn: '#3b2716' };
+  const TILE = { softserve: '#ffe3ec', skydive: '#d0ebff', stock: '#1b2240', moktak: '#f3d9c4', door: '#ffe8cc', elevator: '#dbe4ff', halo: '#fff3bf', cine: '#2b2438', cat: '#ffe8cc', soccer: '#d3f9d8', inventory: '#30251c', dialect: '#e5dbff', popcorn: '#3b2716', shop: '#fff0f6' };
   const best = k => { try { return +localStorage.getItem(k) || 0; } catch { return 0; } };
   const NEW = new Set(GAMES.slice(-4).map(g => g.id));
   document.getElementById('sub').textContent = `3D 미니게임 ${GAMES.length}종 · 하나씩 or 연속으로!`;

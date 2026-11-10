@@ -29,6 +29,8 @@
       desc: '전국 길거리 인터뷰! 사투리를 낱말 카드로 표준어 번역' },
     { id: 'popcorn', file: 'popcorn.html', name: '카라멜 몰래 먹기', emoji: '🍿', unit: '점', bestKey: 'popcorn-best',
       desc: '여친이 영화 볼 때 카라멜 팝콘만 쏙쏙. 쳐다보면 일반 팝콘인 척' },
+    { id: 'shop', file: 'shop.html', name: '도와드릴까요?', emoji: '🛍️', unit: '점', bestKey: 'shop-best',
+      desc: '내성적인 나, 직원을 피해 가방 찾아 옷가게 탈출! 폰 주우면 통화하는 척' },
   ];
 
   const q = new URLSearchParams(location.search);

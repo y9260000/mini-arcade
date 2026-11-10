@@ -33,8 +33,8 @@
       desc: '내성적인 나, 직원을 피해 가방 찾아 옷가게 탈출! 폰 주우면 통화하는 척' },
     { id: 'sake', file: 'sake.html', name: '찰랑찰랑 사케', emoji: '🍶', unit: '점', bestKey: 'sake-best',
       desc: '도레미파솔라시도~ 넘치기 직전까지 꽉! 표면장력의 한계에 도전' },
-    { id: 'radio', file: 'radio.html', name: '지구 반대편 전파', emoji: '📡', unit: '점', bestKey: 'radio-best',
-      desc: '반사판 위성을 돌려 전파를 튕겨서 지구 반대편까지 메시지 배달' },
+    { id: 'radio', file: 'radio.html', name: '우주 전파 배달', emoji: '📡', unit: '점', bestKey: 'radio-best',
+      desc: '반사판 위성으로 전파를 튕겨 달·화성·목성까지 메시지 배달' },
   ];
 
   const q = new URLSearchParams(location.search);

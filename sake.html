@@ -76,7 +76,10 @@ const CUPS = [
   { name: '와인잔(?!)', rt: .36, rb: .1, h: .55, speed: 1.15, masu: false, stem: true },
 ];
 const cupGroup = new THREE.Group(); scene.add(cupGroup);
-const sakeMat = new THREE.MeshStandardMaterial({ color: 0xfff4d6, transparent: true, opacity: .78, roughness: .05, metalness: .1 });
+const sakeMat = new THREE.MeshPhysicalMaterial({ color: 0xfff0c8, transparent: true, opacity: .6, roughness: .02, metalness: 0, clearcoat: 1, clearcoatRoughness: .03, ior: 1.33, side: THREE.DoubleSide, depthWrite: false });
+const surfMat = new THREE.MeshPhysicalMaterial({ color: 0xfff6dc, transparent: true, opacity: .82, roughness: .01, clearcoat: 1, clearcoatRoughness: .02, ior: 1.33, side: THREE.DoubleSide, depthWrite: false });
+const SURF_SEG = 40, SURF_RINGS = 7;
+let surface = null, foam = null, ripples = [];   // ripples: {x, z, t, amp} in surface-local units (radius 1)
 const glassMat = new THREE.MeshStandardMaterial({ color: 0xdff4ff, transparent: true, opacity: .28, roughness: .05, metalness: .2, side: THREE.DoubleSide, depthWrite: false });
 let liquid, dome, spillSheet, cupBaseY = 0, cup = CUPS[0];
 function buildCup(def) {
@@ -97,7 +100,11 @@ function buildCup(def) {
   const rimRing = new THREE.Mesh(new THREE.TorusGeometry(def.rt, .012, 6, seg), new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: .7 }));
   rimRing.rotation.x = Math.PI / 2; if (def.square) rimRing.rotation.z = Math.PI / 4; rimRing.position.y = cupBaseY + def.h; cupGroup.add(rimRing);
   const bottom = new THREE.Mesh(new THREE.CylinderGeometry(def.rb, def.rb, .03, seg), def.square ? wall.material : glassMat); bottom.rotation.y = wall.rotation.y; bottom.position.y = cupBaseY + .015; cupGroup.add(bottom);
-  liquid = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, seg), sakeMat); liquid.rotation.y = wall.rotation.y; cupGroup.add(liquid);
+  liquid = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, seg, 1, true), sakeMat); liquid.rotation.y = wall.rotation.y; cupGroup.add(liquid);
+  surface = new THREE.Mesh(new THREE.RingGeometry(.0001, 1, SURF_SEG, SURF_RINGS), surfMat); surface.rotation.x = -Math.PI / 2; cupGroup.add(surface);
+  surface.userData.base = surface.geometry.attributes.position.array.slice();
+  foam = new THREE.Mesh(new THREE.TorusGeometry(1, .035, 4, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false })); foam.rotation.x = Math.PI / 2; cupGroup.add(foam);
+  ripples = [];
   dome = new THREE.Mesh(new THREE.SphereGeometry(1, seg, 8, 0, Math.PI * 2, 0, Math.PI / 2), sakeMat); dome.rotation.y = wall.rotation.y; cupGroup.add(dome);
   spillSheet = new THREE.Mesh(new THREE.CylinderGeometry(def.rt + .02, def.rt + .06, 1, seg, 1, true), new THREE.MeshStandardMaterial({ color: 0xfff4d6, transparent: true, opacity: .55, side: THREE.DoubleSide })); spillSheet.rotation.y = wall.rotation.y; spillSheet.visible = false; cupGroup.add(spillSheet);
 }
@@ -107,7 +114,21 @@ function drawLiquid() {
   liquid.visible = level > .002;
   liquid.geometry.dispose(); liquid.geometry = new THREE.CylinderGeometry(r * .97, cup.rb * .97, Math.max(.001, h), cup.square ? 4 : 24);
   liquid.position.y = cupBaseY + h / 2 + .01;
-  liquid.rotation.z = slosh * .25; liquid.rotation.x = slosh2 * .2;
+  liquid.rotation.set(0, liquid.rotation.y, 0);
+  // wavy surface: slosh tilt + expanding ripples from the stream
+  surface.visible = level > .01 && !(level > 1 && !spilled);
+  const sy = cupBaseY + h + .012;
+  surface.position.set(0, sy, 0); surface.scale.set(r * .97, r * .97, 1);
+  const pos = surface.geometry.attributes.position, base = surface.userData.base, tt = performance.now() / 1000;
+  for (let i = 0; i < pos.count; i++) {
+    const x = base[i * 3], y = base[i * 3 + 1];
+    let z = slosh * x * .22 + slosh2 * y * .18;
+    for (const rp of ripples) { const d = Math.hypot(x - rp.x, y - rp.y), k = d * 16 - rp.t * 18; if (k < 0 && k > -12) z += Math.sin(k) * rp.amp * Math.exp(-rp.t * 2.2) * (1 - d * .5); }
+    z += Math.sin(x * 9 + tt * 3) * .004 + Math.cos(y * 8 - tt * 2.5) * .004;
+    pos.setZ(i, z / (r * .97) * .9);
+  }
+  pos.needsUpdate = true; if ((surface.userData.n = (surface.userData.n || 0) + 1) % 2) surface.geometry.computeVertexNormals();
+  foam.position.y = sy + .005; foam.scale.set(r * .93, r * .93, 1); foam.material.opacity += ((inAir.length ? .55 : 0) - foam.material.opacity) * .08;
   const over = Math.max(0, level - 1);
   dome.visible = over > 0 && !spilled;
   dome.scale.set(cup.rt * .98, Math.max(.001, over * cup.h * 1.6), cup.rt * .98);
@@ -117,18 +138,31 @@ function drawLiquid() {
 // ---------- the tokkuri (bottle) and the stream ----------
 const bottle = new THREE.Group(); scene.add(bottle);
 {
-  const ceramic = flat(0xf3efe6, { roughness: .4 }), blue = flat(0x1c3d6e, { roughness: .4 });
-  const body = new THREE.Mesh(new THREE.SphereGeometry(.42, 14, 10), ceramic); body.scale.y = 1.25; body.position.y = -.35; bottle.add(body);
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(.1, .18, .55, 12), ceramic); neck.position.y = .3; bottle.add(neck);
-  const lip = new THREE.Mesh(new THREE.TorusGeometry(.1, .03, 6, 12), ceramic); lip.rotation.x = Math.PI / 2; lip.position.y = .58; bottle.add(lip);
-  const band = new THREE.Mesh(new THREE.CylinderGeometry(.43, .43, .16, 14, 1, true), blue); band.position.y = -.3; bottle.add(band);
+  // tokkuri: lathe profile (round belly, slim neck, flared lip) with an indigo glaze pattern and 酒
+  const prof = [[0, -1.0], [.22, -1.0], [.3, -.95], [.38, -.75], [.4, -.5], [.36, -.2], [.25, .05], [.13, .25], [.095, .4], [.09, .5], [.11, .56], [.15, .6], [.13, .62], [.08, .6]].map(([r, y]) => new THREE.Vector2(r, y));
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256; const g = c.getContext('2d');
+  g.fillStyle = '#f6f1e6'; g.fillRect(0, 0, 512, 256);
+  g.fillStyle = '#1f3a6e'; g.fillRect(0, 0, 512, 26); g.fillRect(0, 196, 512, 14);   // bottom band + shoulder band (v runs bottom→top)
+  g.strokeStyle = '#1f3a6e'; g.lineWidth = 5;
+  for (let x = 0; x < 512; x += 40) { g.beginPath(); g.arc(x + 20, 58, 16, Math.PI, 0); g.stroke(); g.beginPath(); g.arc(x + 20, 58, 8, Math.PI, 0); g.stroke(); }   // seigaiha waves
+  g.font = 'bold 90px serif'; g.fillStyle = '#1f3a6e'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.save(); g.translate(128, 130); g.scale(1, -1); g.fillText('酒', 0, 0); g.restore();
+  g.save(); g.translate(384, 130); g.scale(1, -1); g.fillText('酒', 0, 0); g.restore();
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.flipY = false;
+  const body = new THREE.Mesh(new THREE.LatheGeometry(prof, 28), new THREE.MeshStandardMaterial({ map: tex, roughness: .35, metalness: .05, side: THREE.DoubleSide }));
+  body.scale.setScalar(1); bottle.add(body);
+  const cord = new THREE.Mesh(new THREE.TorusGeometry(.105, .022, 6, 16), new THREE.MeshStandardMaterial({ color: 0xc92a2a, roughness: .6 })); cord.rotation.x = Math.PI / 2; cord.position.y = .33; bottle.add(cord);   // red cord on the neck
   bottle.traverse(o => { if (o.isMesh) o.castShadow = true; });
 }
-const BOTTLE_PIVOT = new THREE.Vector3(-.75, 1.55, 0);
-bottle.position.copy(BOTTLE_PIVOT); bottle.scale.setScalar(.62);
+const BOTTLE_PIVOT = new THREE.Vector3(-.75, 1.38, 0);
+bottle.position.copy(BOTTLE_PIVOT); bottle.scale.setScalar(.7);
 const spout = new THREE.Vector3();
 const streamMat = new THREE.MeshStandardMaterial({ color: 0xfff4d6, transparent: true, opacity: .75, roughness: .05 });
-const stream = new THREE.Mesh(new THREE.CylinderGeometry(.025, .02, 1, 8), streamMat); stream.visible = false; scene.add(stream);
+streamMat.dispose();
+const streamMat2 = new THREE.MeshPhysicalMaterial({ color: 0xfff0c8, transparent: true, opacity: .7, roughness: .02, clearcoat: 1, ior: 1.33, depthWrite: false });
+const stream = new THREE.Mesh(new THREE.BufferGeometry(), streamMat2); stream.visible = false; scene.add(stream);
+const bubbles = [], bubGeo = new THREE.SphereGeometry(1, 6, 4), bubMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .7, depthWrite: false }), dropGeo = new THREE.SphereGeometry(.016, 6, 4);
+let flowNow = 0;
 const drops = [];
 
 // ---------- state ----------
@@ -230,11 +264,11 @@ addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); pl
 // ---------- loop ----------
 let last = performance.now();
 reset(); showIntro();
-window.__sake = { get wave() { return (Math.abs(slosh) + Math.abs(slosh2)) * .045 * (cup.rt / .3); }, get state() { return state; }, get level() { return level; }, get limit() { return limit; }, get cupState() { return cupState; }, get score() { return score; }, get lives() { return lives; },
+window.__sake = { get dbg() { return { tilt, holdT, flowNow, cs: cupState, inAir: inAir.length }; }, get wave() { return (Math.abs(slosh) + Math.abs(slosh2)) * .045 * (cup.rt / .3); }, get state() { return state; }, get level() { return level; }, get limit() { return limit; }, get cupState() { return cupState; }, get score() { return score; }, get lives() { return lives; },
   hold(v) { holding = v; } };
 
 function frame(now) {
-  const dt = Math.min(.04, (now - last) / 1000); last = now; const t = now / 1000;
+  const dt = Math.min(.1, (now - last) / 1000); last = now; const t = now / 1000;
   if (state === 'playing') {
     if (cupState === 'slide') { cupGroup.position.x += (0 - cupGroup.position.x) * Math.min(1, dt * 9); if (Math.abs(cupGroup.position.x) < .01) { cupGroup.position.x = 0; cupState = 'pour'; } }
     // bottle tilt follows the hold; flow ramps with tilt and how long you've held
@@ -242,6 +276,7 @@ function frame(now) {
     tilt += (want - tilt) * Math.min(1, dt * (want ? 5 : 9));
     if (holding && cupState === 'pour') holdT += dt; else holdT = 0;
     const flow = tilt > .35 ? (tilt - .35) / .65 * (.1 + Math.min(.62, holdT * holdT * .22 + holdT * .08) + Math.min(.12, cupNo * .01)) * cup.speed   /* accelerates the longer you hold */ : 0;   // cup-fulls per second
+    flowNow += (flow - flowNow) * Math.min(1, dt * 10);
     if (flow > 0) inAir.push({ amt: flow * dt, t: FALL_T });
     let arrived = 0;
     for (const p of inAir) p.t -= dt;
@@ -268,7 +303,7 @@ function frame(now) {
   // bottle pose + stream
   bottle.rotation.z = -.5 - tilt * (1.55 + Math.min(.45, holdT * .25));
   bottle.position.set(BOTTLE_PIVOT.x + tilt * .3, BOTTLE_PIVOT.y - tilt * .12, 0);
-  bottle.updateMatrixWorld(); spout.set(0, .6, 0); bottle.localToWorld(spout);
+  bottle.updateMatrixWorld(); spout.set(0, .62, 0); bottle.localToWorld(spout);
   const surfaceY = cupBaseY + cup.h * Math.min(level, 1) + .02;
   const flowing = state === 'playing' && inAir.length > 0;
   stream.visible = flowing;
@@ -277,12 +312,20 @@ function frame(now) {
     const bot = new THREE.Vector3(cupGroup.position.x + Math.sin(t * 20) * .01, surfaceY, 0);
     const lowest = inAir[0]; const arrivedFrac = lowest ? 1 - lowest.t / FALL_T : 1;
     if (!(holding && tilt > .35) && inAir.length) bot.y = surfaceY;
-    const mid = top.clone().add(bot).multiplyScalar(.5), len = top.distanceTo(bot);
-    stream.position.copy(mid); stream.scale.set(1 + Math.sin(t * 40) * .1, len, 1);
-    stream.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), top.clone().sub(bot).normalize());
-    if (Math.random() < .5) { const d = new THREE.Mesh(new THREE.SphereGeometry(.02, 6, 4), streamMat); d.position.set(bot.x + (Math.random() - .5) * .1, bot.y, (Math.random() - .5) * .1); scene.add(d); drops.push({ m: d, v: new THREE.Vector3((Math.random() - .5) * .8, .8 + Math.random(), (Math.random() - .5) * .8), t: 0 }); }
+    // arcing stream: leaves the spout sideways, curves down under gravity, wobbles and thins as it falls
+    const ctrl = new THREE.Vector3(top.x + (bot.x - top.x) * .85, top.y - .05, 0);
+    const pts = []; for (let i = 0; i <= 18; i++) { const u = i / 18; const p = new THREE.Vector3().copy(top).multiplyScalar((1 - u) * (1 - u)).addScaledVector(ctrl, 2 * u * (1 - u)).addScaledVector(bot, u * u); p.x += Math.sin(u * 12 - t * 30) * .006 * u; p.z += Math.cos(u * 10 - t * 26) * .006 * u; pts.push(p); }
+    const thick = .012 + Math.min(.035, flowNow * .05);
+    stream.geometry.dispose(); stream.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, thick, 6, false);
+    // impact: ripples on the surface, rising bubbles, a few splash droplets
+    if (Math.random() < dt * 14) ripples.push({ x: (bot.x - cupGroup.position.x) / Math.max(.05, cup.rt), y: 0, t: 0, amp: .02 + flowNow * .03 });
+    if (bubbles.length < 40 && Math.random() < .5) { const b = new THREE.Mesh(bubGeo, bubMat); b.scale.setScalar(.012 + Math.random() * .014); b.position.set(bot.x + (Math.random() - .5) * .08, bot.y - .02 - Math.random() * cup.h * Math.min(level, 1) * .6, (Math.random() - .5) * .08); scene.add(b); bubbles.push({ m: b, t: 0, top: bot.y - .01 }); }
+    if (drops.length < 30 && Math.random() < .35) { const d = new THREE.Mesh(dropGeo, streamMat2); d.position.set(bot.x + (Math.random() - .5) * .1, bot.y, (Math.random() - .5) * .1); scene.add(d); drops.push({ m: d, v: new THREE.Vector3((Math.random() - .5) * .7, .6 + Math.random() * .8, (Math.random() - .5) * .7), t: 0 }); }
   }
-  for (let i = drops.length - 1; i >= 0; i--) { const d = drops[i]; d.t += dt; d.v.y -= 9 * dt; d.m.position.addScaledVector(d.v, dt); if (d.t > .35) { scene.remove(d.m); d.m.geometry.dispose(); drops.splice(i, 1); } }
+  for (let i = bubbles.length - 1; i >= 0; i--) { const b = bubbles[i]; b.t += dt; b.m.position.y += dt * (.35 + b.t * .6); b.m.position.x += Math.sin(b.t * 20) * .002; b.m.scale.multiplyScalar(1 - dt * .6);
+    if (b.m.position.y > b.top || b.t > 1.2) { scene.remove(b.m); bubbles.splice(i, 1); } }
+  for (const rp of ripples) rp.t += dt; ripples = ripples.filter(rp => rp.t < 1.4).slice(-10);
+  for (let i = drops.length - 1; i >= 0; i--) { const d = drops[i]; d.t += dt; d.v.y -= 9 * dt; d.m.position.addScaledVector(d.v, dt); if (d.t > .35) { scene.remove(d.m); drops.splice(i, 1); } }
   if (liquid) drawLiquid();
   if (spilled && spillSheet) { spillSheet.visible = true; spillSheet.scale.y = Math.min(1, spillSheet.scale.y + dt * 3); spillSheet.position.y = cupBaseY + cup.h - spillSheet.scale.y * cup.h / 2; }
   else if (spillSheet) spillSheet.scale.y = .01;

@@ -390,7 +390,13 @@ function setCast(mode, line, t) {
   else if (mode === 'warn') Arcade.sfx.hmm();
 }
 const lvl = () => Math.min(1, attack / 8);
+let zoneSafe = 0;   // seconds of 'safe to shoot' commentary since entering the box
 function nextCast() {
+  // fairness: inside the box you always get at least one real window to shoot
+  if (inZone && zoneSafe < .6 && phase === 'run') {
+    if (frenzy) return setCast('breath', '(헉… 헉…)', .6);
+    if (castMode !== 'filler') return setCast('filler', rnd(FILLER), .7 + Math.random() * .3);
+  }
   if (frenzy) {   // machine-gun "슛!" with tiny breaths in between
     if (castMode === 'shout') return setCast('breath', '(헉)', .2 + Math.random() * .14);
     return setCast('shout', rnd(['슛슛슛!!', '슛!슛!슛!', '슈슈슈슛!!', '때려때려!!']), .5 + Math.random() * .4);
@@ -404,7 +410,7 @@ function nextCast() {
 function newAttack() {
   if (frenzy) { frenzy = false; hype = .25; }
   stopT = 0; burstT = 0; stopCool = .8 + Math.random();
-  inZone = false; anaMode = 'idle'; anaT = 1 + Math.random(); $('ana').className = 'hud-ctl';
+  inZone = false; zoneSafe = 0; anaMode = 'idle'; anaT = 1 + Math.random(); $('ana').className = 'hud-ctl';
   const next = pickStriker();
   if (next !== striker || !me.root.parent) { scene.remove(me.root); striker = next; me = buildStriker(striker); }
   pz = START_Z; px = (Math.random() - .5) * 4; runV = (3 + lvl() * 1.8) * striker.speed; phase = 'run'; phaseT = 0; shot = null; keeperDive = 0;
@@ -426,7 +432,7 @@ function shoot() {
   if (state !== 'playing' || phase !== 'run') return;
   $hint.style.display = 'none';
   const far = pz > ZONE_Z;
-  const lucky = !far && !striker.noLuck && castMode !== 'shout' && Math.random() < .12 + lvl() * .13;   // keeper sometimes just guesses right
+  const lucky = false;   // no random keeper saves: a clean-timed shot from the box always scores
   const saved = far || lucky || castMode === 'shout';     // keeper reacts to the caster's "슛!" — and eats long shots
   const tx = (Math.random() < .5 ? -1 : 1) * (1 + Math.random() * 1.4), ty = .4 + Math.random() * 1.4;
   const style = far ? 'normal' : striker.shot || 'normal';
@@ -541,7 +547,8 @@ function frame(now) {
         px += Math.sin(t * (striker.zig ? 7 : 2.3)) * dt * (striker.zig ? 3.2 : .8);
       }
       if (pz <= TACKLE_Z) resolve(false);
-      if (!inZone && pz <= ZONE_Z) { inZone = true; Arcade.sfx.tick(); Arcade.toast('🎯 슈팅 존!', '#f59f00'); }
+      if (!inZone && pz <= ZONE_Z) { inZone = true; zoneSafe = 0; Arcade.sfx.tick(); Arcade.toast('🎯 슈팅 존!', '#f59f00'); if (castMode === 'shout' || castMode === 'warn') castT = Math.min(castT, .45); }
+      if (inZone && castMode !== 'shout' && castMode !== 'warn') zoneSafe += dt;
     }
     if (phase === 'shot' && shot) {
       shot.t += dt / shot.dur;

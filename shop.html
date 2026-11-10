@@ -9,62 +9,94 @@
   html,body{margin:0;height:100%;overflow:hidden;background:#f8f0e3;
     user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
   canvas{display:block}
-  .hud-score{font-size:50px}
-  #goal{font-family:"Jua",sans-serif;font-size:16px}
+  .hud-score{font-size:46px}
   #goal.go{background:#2b8a3e;color:#fff}
+  #bat{display:inline-flex;align-items:center;gap:6px}
+  #bat .bar{width:70px;height:10px;border-radius:5px;background:#e9ecef;overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,.2)}
+  #bat .bar i{display:block;height:100%;background:#51cf66;border-radius:5px;transition:background .3s}
+  #bat.low{animation:lowB .5s ease-in-out infinite}
+  @keyframes lowB{50%{background:#ffe3e3}}
   #bubble{position:fixed;left:0;top:0;z-index:2;pointer-events:none;display:none}
   #bubble div{position:absolute;bottom:0;left:0;transform:translateX(-50%);white-space:nowrap;background:#fff;color:#2b2438;border-radius:16px;padding:5px 11px;
-    font-family:"Jua",sans-serif;font-size:19px;box-shadow:0 6px 16px rgba(0,0,0,.25);border:3px solid #51cf66}
-  #bubble.close div{border-color:#ff6b6b;animation:wob .12s linear infinite}
-  #bubble.scared div{border-color:#4dabf7}
+    font-family:"Jua",sans-serif;font-size:18px;box-shadow:0 6px 16px rgba(0,0,0,.25);border:3px solid #ffd43b}
+  #bubble.alert div{border-color:#ff6b6b;animation:wob .12s linear infinite}
+  #bubble.talk div{border-color:#7048e8;font-size:17px}
   @keyframes wob{25%{transform:translateX(-52%) rotate(-3deg)}75%{transform:translateX(-48%) rotate(3deg)}}
-  #phone{position:fixed;left:50%;top:max(110px,calc(env(safe-area-inset-top) + 100px));transform:translateX(-50%);z-index:3;pointer-events:none;display:none;
-    font-family:"Jua",sans-serif;font-size:18px;color:#fff;background:#1971c2;border-radius:999px;padding:6px 16px;box-shadow:0 6px 16px rgba(0,0,0,.25)}
-  #hint{position:fixed;bottom:max(12vh,76px);left:0;right:0;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
-  #hint .pill{font-size:15px;padding:10px 18px}
+  #state{position:fixed;left:50%;top:max(118px,calc(env(safe-area-inset-top) + 108px));transform:translateX(-50%);z-index:3;pointer-events:none;display:none;
+    font-family:"Jua",sans-serif;font-size:18px;color:#fff;background:#495057;border-radius:999px;padding:6px 16px;box-shadow:0 6px 16px rgba(0,0,0,.25);white-space:nowrap}
+  .toast{top:44%}
+  #hint{position:fixed;bottom:max(11vh,72px);left:0;right:0;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
+  #hint .pill{font-size:14px;padding:9px 16px;text-align:center;line-height:1.4}
 </style>
 </head>
 <body>
 <div class="hud">
   <div id="score" class="hud-score">0<small>점</small></div>
-  <div class="hud-row"><span class="pill" id="lives"></span><span class="pill dark" id="lvl">1층</span><span class="pill" id="goal">🎒 가방 찾기</span></div>
+  <div class="hud-row"><span class="pill" id="bat">🔋 <span class="bar"><i id="batf"></i></span> <b id="batp">100%</b></span><span class="pill dark" id="lvl">1층</span><span class="pill" id="goal">🎒 가방 찾기</span></div>
 </div>
-<div id="bubble" class="hud-ctl"><div>고객님~?</div></div>
-<div id="phone" class="hud-ctl">📱 통화하는 척 중…</div>
-<div id="hint" class="hud-ctl"><span class="pill">👆 스와이프 / 방향키로 이동</span></div>
+<div id="bubble" class="hud-ctl"><div>?</div></div>
+<div id="state" class="hud-ctl"></div>
+<div id="hint" class="hud-ctl"><span class="pill" style="display:block">👆 스와이프로 이동 · 탭하면 멈춤<br>✋ 꾹 누르면 마네킹인 척</span></div>
 <div class="screen" id="center"></div>
 
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 const $ = id => document.getElementById(id);
+const rnd = a => a[(Math.random() * a.length) | 0];
+const ri = (a, b) => a + ((Math.random() * (b - a + 1)) | 0);
 
-// ---------- store layout (# rack, . sale tag, o phone, b bag spot, P start, S staff room, E exit) ----------
-const MAP = [
-  '###############',
-  '#P.....#.....b#',
-  '#.###..#..###.#',
-  '#o#b.........o#',
-  '#.#.##.#.##.#.#',
-  '#......#......#',
-  '###.##...##.###',
-  '#b..#.SSS.#..b#',
-  '#.#.#.###.#.#.#',
-  '#.#.........#.#',
-  '#.###.#.#.###.#',
-  '#o....#.#....o#',
-  '#.##.##.##.##.#',
-  '#b...........b#',
-  '#######E#######',
+// ---------- store types ----------
+const STORES = [
+  { key: 'clothes', name: '👕 옷가게', floor: 0xe8d2b0, gen: 'segments', lines: ['고객님~ 뭐 찾으세요?', '사이즈 찾아드릴까요?', '이거 신상이에요~ 입어보세요!'] },
+  { key: 'shoes', name: '👟 신발 매장', floor: 0xdfe3e8, gen: 'rows', lines: ['발 사이즈 어떻게 되세요?', '신어보셔도 돼요~', '이거 한정판이에요!'] },
+  { key: 'beauty', name: '💄 화장품 가게', floor: 0xffe8f0, gen: 'cols', lines: ['테스트 해보세요~', '피부 타입이 어떻게 되세요?', '샘플 챙겨드릴게요!'] },
+  { key: 'furniture', name: '🛋️ 가구 매장', floor: 0xf1e3cc, gen: 'blocks', lines: ['앉아보셔도 돼요~', '배송도 가능해요!', '이 소파 지금 30% 할인!'] },
+  { key: 'sale', name: '🏷️ 백화점 세일', floor: 0xffe3e3, gen: 'scatter', crowd: true, lines: ['고객님 이거 마지막 하나예요!', '2개 사시면 1개 더!', '카드 만드시면 10% 할인!'] },
 ];
-const ROWS = MAP.length, COLS = MAP[0].length;
-const at = (c, r) => (r < 0 || r >= ROWS || c < 0 || c >= COLS) ? '#' : MAP[r][c];
-const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
-let exitC, exitR, startC, startR; const staffHome = [], bagSpots = [];
-MAP.forEach((row, r) => [...row].forEach((ch, c) => {
-  if (ch === 'E') { exitC = c; exitR = r; } if (ch === 'P') { startC = c; startR = r; }
-  if (ch === 'S') staffHome.push([c, r]); if (ch === 'b') bagSpots.push([c, r]);
-}));
+const EXCUSES = ['😶 아… 그냥 둘러보는 중이에요…', '😅 아 네네 괜찮아요…', '🫠 (어색한 미소 + 끄덕끄덕)', '😬 친구 기다리는 중이라…', '🙂 다음에 올게요…'];
+
+// ---------- grid generation ----------
+const N = 15;
+let G = [], START, EXIT, restTiles = [];
+const key = (c, r) => r * N + c;
+const isOpen = (c, r) => c >= 0 && r >= 0 && c < N && r < N && G[r][c] !== '#';
+const NB = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+function bfs(from, passExit = true) {
+  const d = new Map([[key(...from), 0]]), q = [from];
+  while (q.length) { const [c, r] = q.shift(); for (const [dx, dy] of NB) { const nc = c + dx, nr = r + dy; if (!isOpen(nc, nr) || d.has(key(nc, nr))) continue; if (!passExit && nc === EXIT[0] && nr === EXIT[1]) continue; d.set(key(nc, nr), d.get(key(c, r)) + 1); q.push([nc, nr]); } }
+  return d;
+}
+function openCount() { let n = 0; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (G[r][c] !== '#') n++; return n; }
+function tryPlace(cells, reserved) {
+  if (cells.some(([c, r]) => c < 1 || r < 1 || c > N - 2 || r > N - 2 || G[r][c] === '#' || reserved.has(key(c, r)))) return false;
+  cells.forEach(([c, r]) => G[r][c] = '#');
+  if (bfs(START).size !== openCount()) { cells.forEach(([c, r]) => G[r][c] = '.'); return false; }
+  return true;
+}
+function generate(store) {
+  G = Array.from({ length: N }, (_, r) => Array.from({ length: N }, (_, c) => (r === 0 || c === 0 || r === N - 1 || c === N - 1) ? '#' : '.'));
+  START = [Math.random() < .5 ? 1 : N - 2, 1];
+  EXIT = [(N - 1) / 2, N - 1]; G[EXIT[1]][EXIT[0]] = 'E';
+  const reserved = new Set();
+  for (let dc = -1; dc <= 1; dc++) for (let dr = 0; dr <= 1; dr++) reserved.add(key(START[0] + dc, START[1] + dr));
+  for (let dc = -1; dc <= 1; dc++) reserved.add(key(EXIT[0] + dc, N - 2));
+  const seg = (c, r, len, horiz) => Array.from({ length: len }, (_, i) => horiz ? [c + i, r] : [c, r + i]);
+  if (store.gen === 'segments') { for (let i = 0; i < 70; i++) tryPlace(seg(ri(1, N - 3), ri(2, N - 3), ri(2, 3), Math.random() < .5), reserved); }
+  else if (store.gen === 'rows' || store.gen === 'cols') {
+    const horiz = store.gen === 'rows';
+    for (let k = 3; k <= N - 4; k += 2) {
+      let run = [];
+      for (let j = 2; j <= N - 3; j++) {
+        if (Math.random() < .2 && run.length) { tryPlace(run, reserved); run = []; continue; }
+        run.push(horiz ? [j, k] : [k, j]);
+        if (run.length >= ri(3, 5)) { tryPlace(run, reserved); run = []; j++; }
+      }
+      if (run.length) tryPlace(run, reserved);
+    }
+  } else if (store.gen === 'blocks') {
+    for (let i = 0; i < 40; i++) { const w = ri(2, 3), h = ri(1, 2), c = ri(2, N - 2 - w), r = ri(2, N - 3 - h); const cells = []; for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) cells.push([c + x, r + y]); tryPlace(cells, reserved); }
+  } else { for (let i = 0; i < 80; i++) tryPlace([[ri(1, N - 2), ri(2, N - 3)]], reserved); }
+}
 
 // ---------- three ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -77,67 +109,76 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf8f0e3);
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, .1, 100);
 scene.add(new THREE.HemisphereLight(0xffffff, 0xd8c8b0, 1.6));
-const sun = new THREE.DirectionalLight(0xffffff, 1.3); sun.position.set(4, 14, 8); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(4, 14, 8); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: 1, far: 40 }); scene.add(sun);
 const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, flatShading: true, ...extra });
 const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
-const W = (c) => c - (COLS - 1) / 2, Z = (r) => r - (ROWS - 1) / 2;   // tile → world
-
-// floor (wood) + store dressing
-{
-  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
-  g.fillStyle = '#e8d2b0'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#dcc39c'; for (let i = 0; i < 64; i += 16) g.fillRect(0, i, 64, 2); g.fillRect(31, 0, 2, 16); g.fillRect(15, 16, 2, 16); g.fillRect(47, 32, 2, 16);
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(COLS / 2, ROWS / 2); t.colorSpace = THREE.SRGBColorSpace;
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(COLS, ROWS), new THREE.MeshStandardMaterial({ map: t, roughness: .85 }));
-  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
-  const outer = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), flat(0xd9c7aa)); outer.rotation.x = -Math.PI / 2; outer.position.y = -.01; scene.add(outer);
-}
-const CLOTH = [0xff6b6b, 0x4dabf7, 0xffd43b, 0x69db7c, 0xb197fc, 0xffa94d, 0xf783ac, 0x212529, 0xffffff, 0x20c997];
-const rackMat = flat(0xced4da, { metalness: .4, roughness: .4 }), shelfMat = flat(0xf1e3cc), wallMat = flat(0xfff4e6);
-MAP.forEach((row, r) => [...row].forEach((ch, c) => {
-  if (ch !== '#') return;
-  const edge = r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1;
-  if (edge) { box(1, 1.3, 1, wallMat, W(c), .65, Z(r)); return; }
-  // clothing rack: base + rail + hanging garments
-  box(.92, .12, .92, shelfMat, W(c), .06, Z(r));
-  box(.08, 1, .08, rackMat, W(c), .55, Z(r));
-  box(.9, .05, .05, rackMat, W(c), 1.05, Z(r));
-  for (let i = 0; i < 4; i++) {
-    const g = box(.18, .6, .5, flat(CLOTH[(r * 7 + c * 3 + i) % CLOTH.length]), W(c) - .33 + i * .22, .72, Z(r));
-    g.rotation.y = (Math.random() - .5) * .3;
-  }
-}));
-// fitting room curtain at the start, counter in the staff room, exit door
-box(.9, 1.4, .06, flat(0xae3ec9), W(startC), .7, Z(startR) - .47);
-for (const [c, r] of staffHome) box(.9, .5, .3, flat(0x8d5a3b), W(c), .25, Z(r) + .35);
-const doorMat = new THREE.MeshStandardMaterial({ color: 0xa5d8ff, transparent: true, opacity: .6, roughness: .1 });
-const door = box(.95, 1.3, .08, doorMat, W(exitC), .65, Z(exitR));
-const exitSign = new THREE.Mesh(new THREE.PlaneGeometry(.9, .3), new THREE.MeshBasicMaterial({ color: 0xe03131 })); exitSign.position.set(W(exitC), 1.5, Z(exitR)); exitSign.rotation.x = -.6; scene.add(exitSign);
-
-// pellets (sale tags) and phones
-const tagGeo = new THREE.BoxGeometry(.16, .03, .22), tagMat = flat(0xff8787);
-const phoneGeo = new THREE.BoxGeometry(.24, .05, .4), phoneMat = new THREE.MeshStandardMaterial({ color: 0x1971c2, emissive: 0x1971c2, emissiveIntensity: .5 });
-let pellets = new Map();
-function placePellets() {
-  for (const m of pellets.values()) scene.remove(m);
-  pellets.clear();
-  MAP.forEach((row, r) => [...row].forEach((ch, c) => {
-    if (ch === '.' || ch === 'o' || ch === 'b') {
-      if (ch === 'b' && c === bag.c && r === bag.r) return;
-      const ph = ch === 'o';
-      const m = new THREE.Mesh(ph ? phoneGeo : tagGeo, ph ? phoneMat : tagMat); m.position.set(W(c), ph ? .3 : .08, Z(r)); m.rotation.y = Math.random() * .6;
-      m.userData = { phone: ph }; scene.add(m); pellets.set(`${c},${r}`, m);
+const W = c => c - (N - 1) / 2, Z = r => r - (N - 1) / 2;
+const outer = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), flat(0xd9c7aa)); outer.rotation.x = -Math.PI / 2; outer.position.y = -.01; scene.add(outer);
+const floorMat = flat(0xe8d2b0);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(N, N), floorMat); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+let world = new THREE.Group(); scene.add(world);
+const COLORS = [0xff6b6b, 0x4dabf7, 0xffd43b, 0x69db7c, 0xb197fc, 0xffa94d, 0xf783ac, 0x212529, 0xffffff, 0x20c997];
+function buildWorld(store) {
+  scene.remove(world); world = new THREE.Group(); scene.add(world);
+  floorMat.color.setHex(store.floor);
+  const P = world, wallM = flat(0xfff4e6);
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    if (G[r][c] !== '#') continue;
+    const x = W(c), z = Z(r), edge = r === 0 || c === 0 || r === N - 1 || c === N - 1, col = COLORS[(r * 7 + c * 3) % COLORS.length];
+    if (edge) { box(1, 1.3, 1, wallM, x, .65, z, P); continue; }
+    if (store.key === 'clothes') {
+      box(.92, .1, .92, flat(0xf1e3cc), x, .05, z, P); box(.06, 1, .06, flat(0xced4da, { metalness: .4 }), x, .55, z, P);
+      for (let i = 0; i < 4; i++) box(.18, .6, .5, flat(COLORS[(r * 5 + c + i * 3) % COLORS.length]), x - .33 + i * .22, .72, z, P);
+    } else if (store.key === 'shoes') {
+      box(.96, .9, .8, flat(0xf8f9fa), x, .45, z, P);
+      for (let k = 0; k < 2; k++) for (let i = 0; i < 2; i++) box(.3, .14, .22, flat(COLORS[(r + c + i + k * 2) % COLORS.length]), x - .2 + i * .4, .35 + k * .35, z + .32, P);
+    } else if (store.key === 'beauty') {
+      box(.8, 1.1, .8, flat(0xffffff), x, .55, z, P); box(.84, .06, .84, flat(0xf783ac), x, 1.12, z, P);
+      for (let i = 0; i < 4; i++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .2, 6), flat(COLORS[(r + c + i) % COLORS.length])); b.position.set(x - .27 + i * .18, 1.25, z); P.add(b); }
+    } else if (store.key === 'furniture') {
+      box(.96, .45, .96, flat(col === 0x212529 ? 0x868e96 : col), x, .22, z, P); box(.96, .35, .2, flat(0x495057), x, .6, z - .38, P);
+    } else {
+      box(.9, .5, .7, flat(0xadb5bd, { metalness: .5 }), x, .35, z, P);
+      for (let i = 0; i < 5; i++) box(.2 + Math.random() * .1, .15, .2, flat(rnd(COLORS)), x - .3 + Math.random() * .6, .66 + Math.random() * .15, z - .2 + Math.random() * .4, P);
+      const tag = box(.3, .2, .02, flat(0xe03131), x, .45, z + .36, P);
     }
-  }));
+  }
+  // fitting room curtain + rest spots (benches) + exit door
+  box(.9, 1.4, .06, flat(0xae3ec9), W(START[0]), .7, Z(START[1]) - .47, P);
+  restTiles = [START.slice()];
+  const d = bfs(START), cand = [];
+  for (let r = 1; r < N - 1; r++) for (let c = 1; c < N - 1; c++) if (G[r][c] === '.' && (d.get(key(c, r)) || 0) > 5 && NB.filter(([dx, dy]) => !isOpen(c + dx, r + dy)).length >= 2) cand.push([c, r]);
+  for (let i = 0; i < 2 && cand.length; i++) { const t = cand.splice((Math.random() * cand.length) | 0, 1)[0]; restTiles.push(t); }
+  for (const [c, r] of restTiles) { const mat = new THREE.Mesh(new THREE.PlaneGeometry(.9, .9), new THREE.MeshBasicMaterial({ color: 0x8ce99a, transparent: true, opacity: .55 })); mat.rotation.x = -Math.PI / 2; mat.position.set(W(c), .02, Z(r)); P.add(mat);
+    if (c !== START[0] || r !== START[1]) box(.7, .25, .35, flat(0x8d5a3b), W(c), .13, Z(r) - .25, P); }
+  doorMat = new THREE.MeshStandardMaterial({ color: 0xa5d8ff, transparent: true, opacity: .6, roughness: .1 });
+  box(.95, 1.3, .08, doorMat, W(EXIT[0]), .65, Z(EXIT[1]), P);
+  exitSign = new THREE.Mesh(new THREE.PlaneGeometry(.9, .3), new THREE.MeshBasicMaterial({ color: 0xe03131 })); exitSign.position.set(W(EXIT[0]), 1.5, Z(EXIT[1])); exitSign.rotation.x = -.6; P.add(exitSign);
 }
+let doorMat, exitSign;
+
+// bag + shopping-bag pickup
 const bagMesh = new THREE.Group(); scene.add(bagMesh);
 box(.5, .5, .3, flat(0x5f3dc4), 0, .35, 0, bagMesh); box(.4, .2, .06, flat(0x7950f2), 0, .3, .17, bagMesh); box(.3, .06, .06, flat(0x3b2a5c), 0, .64, 0, bagMesh);
 const bagGlow = new THREE.Mesh(new THREE.RingGeometry(.35, .48, 24), new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: .8, side: THREE.DoubleSide, depthWrite: false }));
 bagGlow.rotation.x = -Math.PI / 2; bagGlow.position.y = .03; bagMesh.add(bagGlow);
-const bag = { c: 0, r: 0, held: false };
+const sbMesh = new THREE.Group(); scene.add(sbMesh);
+box(.4, .45, .18, flat(0xffffff), 0, .3, 0, sbMesh); box(.42, .1, .2, flat(0xe64980), 0, .3, 0, sbMesh);
+const bag = { c: 0, r: 0, held: false }, sbag = { c: 0, r: 0, taken: false };
+function iconSprite(emoji, ring) {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(64, 64, 56, 0, 7); g.fill(); g.lineWidth = 10; g.strokeStyle = ring; g.stroke();
+  g.font = '68px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(emoji, 64, 70);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false })); sp.scale.set(1, 1, 1); sp.position.y = 1.35; sp.renderOrder = 5; return sp;
+}
+bagMesh.add(iconSprite('🎒', '#7048e8'));
+sbMesh.add(iconSprite('🛍️', '#e64980'));
+{ const h = new THREE.Mesh(new THREE.TorusGeometry(.12, .025, 4, 10, Math.PI), flat(0xe64980)); h.position.y = .53; sbMesh.add(h); }
 
 // ---------- people ----------
-function makePerson({ top, bottom = 0x2b2f3a, skin = 0xffd2a8, hair = 0x2b2b2b, hood = false, apron = null, scale = .5 }) {
+function makePerson({ top, bottom = 0x2b2f3a, skin = 0xffd2a8, hair = 0x2b2b2b, hood = false, apron = null, scale = .55 }) {
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
   const legs = [-1, 1].map(s => { const p = new THREE.Group(); p.position.set(s * .15, .85, 0); box(.22, .85, .24, flat(bottom), 0, -.42, 0, p); body.add(p); return p; });
   box(.62, .78, .38, flat(top), 0, 1.25, 0, body);
@@ -148,113 +189,139 @@ function makePerson({ top, bottom = 0x2b2f3a, skin = 0xffd2a8, hair = 0x2b2b2b, 
   for (const s of [-1, 1]) box(.06, .07, .02, flat(0x222222), s * .1, .26, .205, head);
   if (hood) { box(.52, .5, .5, flat(top), 0, .28, -.04, head); box(.06, .06, .06, flat(0xffffff), .22, .2, .05, head); }
   else box(.46, .14, .44, flat(hair), 0, .48, 0, head);
-  root.scale.setScalar(scale);
-  root.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  root.scale.setScalar(scale); root.traverse(o => { if (o.isMesh) o.castShadow = true; });
   scene.add(root);
   return { root, body, legs, arms, head };
 }
-const me = makePerson({ top: 0x495057, hood: true, scale: .62 });   // grey hoodie, hood up
+const me = makePerson({ top: 0x495057, hood: true, scale: .62 });
+const myBag = box(.45, .5, .2, flat(0x5f3dc4), 0, 1.2, -.3, me.body); myBag.visible = false;
+const mySB = box(.35, .4, .15, flat(0xffffff), .5, .9, 0, me.body); mySB.visible = false;
 const meRing = new THREE.Mesh(new THREE.RingGeometry(.32, .42, 24), new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: .9, side: THREE.DoubleSide, depthWrite: false }));
 meRing.rotation.x = -Math.PI / 2; meRing.position.y = .03; scene.add(meRing);
-const myBag = box(.45, .5, .2, flat(0x5f3dc4), 0, 1.2, -.3, me.body); myBag.visible = false;
-const STAFF_STYLE = [
-  { top: 0xffffff, apron: 0x2f9e44, hair: 0x2b2b2b, name: '열정 직원', line: '고객님~ 뭐 찾으세요?' },
-  { top: 0xffffff, apron: 0x2f9e44, hair: 0x8d5a3b, name: '신입 알바', line: '사이즈 찾아드릴까요?' },
-  { top: 0x212529, apron: null, hair: 0x111111, name: '매니저', line: '이거 신상인데 입어보실래요?' },
-  { top: 0xffffff, apron: 0xe64980, hair: 0x3b2316, name: '판촉 직원', line: '지금 1+1 행사 중이에요~!' },
-];
+const STAFF_STYLE = [{ top: 0xffffff, apron: 0x2f9e44, hair: 0x2b2b2b }, { top: 0xffffff, apron: 0x2f9e44, hair: 0x8d5a3b }, { top: 0x212529, hair: 0x111111 }, { top: 0xffffff, apron: 0xe64980, hair: 0x3b2316 }, { top: 0xffffff, apron: 0x1971c2, hair: 0x6b4f3a }];
 
-// ---------- movers ----------
-function mover(c, r, speed) { return { x: c, y: r, dir: null, next: null, speed }; }
-const center = m => Math.abs(m.x - Math.round(m.x)) < 1e-6 && Math.abs(m.y - Math.round(m.y)) < 1e-6;
-const canGo = (c, r, d, who) => { const [dx, dy] = DIRS[d]; const ch = at(c + dx, r + dy); if (ch === '#') return false; if (ch === 'E' && (who !== 'me' || !bag.held)) return false; if (ch === 'S' && who === 'me') return false; return true; };
-function step(m, dt, who, choose) {
-  let left = m.speed * dt;
+// ---------- movement on the grid ----------
+const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
+const isCenter = m => Math.abs(m.x - Math.round(m.x)) < 1e-6 && Math.abs(m.y - Math.round(m.y)) < 1e-6;
+const passable = (c, r, who) => { if (!isOpen(c, r)) return false; if (c === EXIT[0] && r === EXIT[1]) return who === 'me' && bag.held; return true; };
+function stepMover(m, dt, who, choose) {
+  let left = m.speed * dt; m.moving = false;
   while (left > 0) {
     const c = Math.round(m.x), r = Math.round(m.y);
-    if (center(m)) {
-      if (choose) m.dir = choose(c, r, m);
-      else if (m.next && canGo(c, r, m.next, who)) m.dir = m.next;
-      if (!m.dir || !canGo(c, r, m.dir, who)) { m.moving = false; return; }
-    } else if (m.next === OPP[m.dir] && who === 'me') m.dir = m.next;   // instant reverse
+    if (isCenter(m)) {
+      if (choose) m.dir = choose(c, r);
+      else { if (m.stop) { m.dir = null; m.stop = false; } if (m.next && passable(c + DIRS[m.next][0], r + DIRS[m.next][1], who)) m.dir = m.next; }
+      if (!m.dir || !passable(c + DIRS[m.dir][0], r + DIRS[m.dir][1], who)) return;
+    } else if (!choose && m.next === OPP[m.dir]) m.dir = m.next;
     m.moving = true;
     const [dx, dy] = DIRS[m.dir];
-    // distance to the next tile centre along dir
     const tx = dx ? (dx > 0 ? Math.floor(m.x + 1e-6) + 1 : Math.ceil(m.x - 1e-6) - 1) : m.x;
     const ty = dy ? (dy > 0 ? Math.floor(m.y + 1e-6) + 1 : Math.ceil(m.y - 1e-6) - 1) : m.y;
     const dist = Math.abs(tx - m.x) + Math.abs(ty - m.y);
-    if (dist <= left) { m.x = Math.round(tx); m.y = Math.round(ty); left -= dist; }
-    else { m.x += dx * left; m.y += dy * left; left = 0; }
+    if (dist <= left) { m.x = Math.round(tx); m.y = Math.round(ty); left -= dist; } else { m.x += dx * left; m.y += dy * left; left = 0; }
   }
+}
+function pathStep(c, r, tc, tr) {   // first direction on a shortest path from (c,r) to (tc,tr)
+  const d = bfs([tc, tr], false); let best = null, bd = d.get(key(c, r)) ?? 1e9;
+  for (const [name, [dx, dy]] of Object.entries(DIRS)) { const v = d.get(key(c + dx, r + dy)); if (v !== undefined && v < bd && passable(c + dx, r + dy, 'staff')) { bd = v; best = name; } }
+  return best;
+}
+function lineOfSight(x0, y0, x1, y1) {
+  const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / .2);
+  for (let i = 1; i < n; i++) { const x = x0 + (x1 - x0) * i / n, y = y0 + (y1 - y0) * i / n; if (!isOpen(Math.round(x), Math.round(y))) return false; }
+  return true;
+}
+
+// ---------- vision cones ----------
+const RAYS = 16, HALF = .6;
+function makeCone() {
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((RAYS + 1) * 3 * 3), 3));
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: .28, side: THREE.DoubleSide, depthWrite: false }));
+  m.frustumCulled = false; scene.add(m); return m;
+}
+function updateCone(s) {
+  const pos = s.cone.geometry.attributes.position.array, range = s.range, ox = s.x, oy = s.y;
+  const pts = [];
+  for (let i = 0; i <= RAYS; i++) {
+    const a = s.yaw - HALF + (2 * HALF) * i / RAYS, dx = Math.sin(a), dy = Math.cos(a);
+    let t = 0; while (t < range) { t += .1; if (!isOpen(Math.round(ox + dx * t), Math.round(oy + dy * t))) { t -= .1; break; } }
+    pts.push([ox + dx * t, oy + dy * t]);
+  }
+  let k = 0;
+  for (let i = 0; i < RAYS; i++) {
+    for (const [x, y] of [[ox, oy], pts[i], pts[i + 1]]) { pos[k++] = W(x); pos[k++] = .04; pos[k++] = Z(y); }
+  }
+  s.cone.geometry.attributes.position.needsUpdate = true;
+  s.cone.material.color.setHex(s.mode === 'approach' ? 0xff3b3b : s.notice > .05 ? 0xff7a1a : 0xffb000);
+  s.cone.material.opacity = s.mode === 'cool' || s.mode === 'talk' ? .1 : .38 + s.notice * .3;
 }
 
 // ---------- state ----------
-const LIVES = 3;
-let state = 'ready', score = 0, lives = LIVES, level = 1, overAt = 0, phoneT = 0, freezeT = 0, tagsLeft = 0, levelT = 0;
-let P = mover(startC, startR, 4.3), staff = [];
+let state = 'ready', score = 0, floorN = 1, battery = 100, overAt = 0, levelT = 0, frozenT = 0, frozen = false, talking = null, sbT = 0, store = STORES[0];
+let P = { x: 0, y: 0, dir: null, next: null, speed: 3.4 }, staff = [], crowd = [];
 let best = 0; try { best = +localStorage.getItem('shop-best') || 0; } catch {}
-const $score = $('score'), $lives = $('lives'), $lvl = $('lvl'), $goal = $('goal'), $center = $('center'), $bubble = $('bubble'), $bt = $bubble.firstElementChild, $phone = $('phone'), $hint = $('hint');
+const $score = $('score'), $lvl = $('lvl'), $goal = $('goal'), $center = $('center'), $bubble = $('bubble'), $bt = $bubble.firstElementChild, $state = $('state'), $hint = $('hint');
 const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
 const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🛍️', title: '도와드릴까요?', how: [
-  ['😶', '내성적인 나, 탈의실에서 나왔더니 <b>가방이 어디 갔지?</b>'],
-  ['🎒', '매장 어딘가의 <b>내 가방</b>을 찾아서 <b>출구 🚪</b>로 탈출'],
-  ['🙋', '"뭐 찾으세요~?" <b>직원</b>한테 잡히면 대화해야 함 (목숨 -1)'],
-  ['📱', '<b>폰</b>을 주우면 통화하는 척! 직원이 피해요. 🏷️ 할인택은 점수'],
+  ['🎒', '탈의실에서 나왔더니 가방이 없다! <b>가방 찾아 출구로</b>'],
+  ['👀', '직원 <b>시야(노란 부채꼴)</b>에 오래 있으면 눈치채고 말 걸러 와요'],
+  ['✋', '꾹 누르면 <b>마네킹인 척</b>. 너무 오래 서 있으면 의심받아요'],
+  ['🔋', '<b>소셜 배터리</b>가 0이면 니트 3벌 사고 귀가. 🟩 구석 벤치에서 충전'],
 ] }));
 function updateHud() {
   $score.innerHTML = `${score}<small>점</small>`;
-  $lives.textContent = '😶'.repeat(lives) + '💦'.repeat(LIVES - lives);
-  $lvl.textContent = `${level}층`;
-  $goal.textContent = bag.held ? '🚪 출구로 도망!' : '🎒 가방 찾기'; $goal.classList.toggle('go', bag.held);
+  $('batf').style.width = `${battery}%`; $('batf').style.background = battery < 25 ? '#fa5252' : battery < 55 ? '#fcc419' : '#51cf66';
+  $('batp').textContent = `${Math.ceil(battery)}%`; $('bat').classList.toggle('low', battery < 25);
+  $lvl.textContent = `${floorN}층 ${store.name}`;
+  $('goal').textContent = bag.held ? '🚪 출구로!' : '🎒 가방 찾기'; $('goal').classList.toggle('go', bag.held);
 }
-function spawnStaff() {
-  for (const s of staff) scene.remove(s.p.root);
+function openTiles() { const a = []; for (let r = 1; r < N - 1; r++) for (let c = 1; c < N - 1; c++) if (G[r][c] === '.') a.push([c, r]); return a; }
+function setupFloor() {
+  store = STORES[(floorN - 1) % STORES.length];
+  generate(store); buildWorld(store);
+  const d = bfs(START), tiles = openTiles(), maxD = Math.max(...tiles.map(([c, r]) => d.get(key(c, r)) || 0));
+  const far = tiles.filter(([c, r]) => (d.get(key(c, r)) || 0) >= maxD * .55 && r < N - 3);
+  const bt = rnd(far.length ? far : tiles); Object.assign(bag, { c: bt[0], r: bt[1], held: false });
+  bagMesh.visible = true; bagMesh.position.set(W(bag.c), 0, Z(bag.r)); myBag.visible = false;
+  const mid = tiles.filter(([c, r]) => { const v = d.get(key(c, r)) || 0; return v > 3 && v < maxD * .6 && !(c === bag.c && r === bag.r); });
+  const st = rnd(mid.length ? mid : tiles); Object.assign(sbag, { c: st[0], r: st[1], taken: false }); sbMesh.visible = true; sbMesh.position.set(W(sbag.c), 0, Z(sbag.r));
+  P = { x: START[0], y: START[1], dir: null, next: null, speed: 3.4 };
+  frozen = false; talking = null; sbT = 0; mySB.visible = false; levelT = 0;
+  // staff
+  for (const s of staff) { scene.remove(s.p.root); scene.remove(s.cone); }
   staff = [];
-  const n = Math.min(4, 1 + level);
+  const n = Math.min(5, 1 + floorN), spots = tiles.filter(([c, r]) => (d.get(key(c, r)) || 0) >= 5);
   for (let i = 0; i < n; i++) {
-    const [c, r] = staffHome[i % staffHome.length];
-    const st = STAFF_STYLE[i % STAFF_STYLE.length];
-    const s = { ...mover(c, r, Math.min(4.4, 2.9 + level * .3 + i * .08)), p: makePerson({ top: st.top, apron: st.apron, hair: st.hair }), st, wait: 1.5 + i * 2.6, i, out: false };
+    const [c, r] = rnd(spots);
+    const s = { x: c, y: r, dir: null, speed: 1.5 + floorN * .1, p: makePerson({ ...STAFF_STYLE[i % STAFF_STYLE.length], scale: .62 }), cone: makeCone(), i,
+      mode: 'patrol', target: rnd(tiles), lookT: 0, yaw: Math.random() * 6.28, baseYaw: 0, notice: 0, seenFrozen: 0, coolT: 0, lostT: 0, range: Math.min(5.5, 3.6 + floorN * .3), line: rnd(store.lines) };
     staff.push(s);
   }
+  for (const c of crowd) scene.remove(c.p.root);
+  crowd = [];
+  if (store.crowd) for (let i = 0; i < 4; i++) { const [c, r] = rnd(tiles); crowd.push({ x: c, y: r, dir: null, speed: 1.2, p: makePerson({ top: rnd(COLORS), hair: 0x3b2316, scale: .5 }) }); }
+  updateHud();
 }
-function setupLevel() {
-  const spot = bagSpots[(Math.random() * bagSpots.length) | 0];
-  Object.assign(bag, { c: spot[0], r: spot[1], held: false });
-  bagMesh.visible = true; bagMesh.position.set(W(bag.c), 0, Z(bag.r)); myBag.visible = false;
-  placePellets(); tagsLeft = [...pellets.values()].filter(m => !m.userData.phone).length;
-  P = mover(startC, startR, 4.3); phoneT = 0; levelT = 0;
-  spawnStaff(); updateHud();
-}
-function reset() { score = 0; lives = LIVES; level = 1; setupLevel(); }
+function reset() { score = 0; floorN = 1; battery = 100; setupFloor(); }
 function start() {
   state = 'count'; $center.style.display = 'none'; $hint.style.display = '';
-  Arcade.countdown({ final: '도망쳐!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { state = 'playing'; } });
-}
-function respawnAfterCatch() {
-  P = mover(startC, startR, 4.3);
-  staff.forEach((s, i) => { const [c, r] = staffHome[i % staffHome.length]; Object.assign(s, mover(c, r, s.speed)); s.wait = 1 + i * 1.5; s.out = false; });
-}
-function caught(s) {
-  state = 'caught'; freezeT = 1.6; lives--; updateHud();
-  bubbleFor(s, 'close', s.st.line);
-  Arcade.sfx.hmm(); Arcade.shake(.25); Arcade.vibrate([60, 40, 100]);
-  Arcade.toast(['😶 아… 그냥 구경이요…', '😅 아 네네… 괜찮아요…', '🫠 (어색한 미소)'][(Math.random() * 3) | 0], '#495057');
+  Arcade.countdown({ final: '살금살금!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { state = 'playing'; } });
 }
 function escaped() {
-  state = 'clear'; freezeT = 2;
-  const bonus = 200 + Math.max(0, Math.round(120 - levelT * 2));
-  score += bonus; updateHud();
-  Arcade.sfx.fanfare(); Arcade.confetti({ y: innerHeight * .4, count: 100, emoji: ['🛍️', '🏃', '🎒'] }); Arcade.shake(.2); Arcade.vibrate([30, 30, 80]);
-  Arcade.toast(`🏃 탈출 성공! +${bonus}`, '#2b8a3e');
+  state = 'clear'; frozenT = 2;
+  const bonus = 300 + Math.round(battery * 2) + Math.max(0, Math.round(150 - levelT * 3));
+  score += bonus; battery = Math.min(100, battery + 25); updateHud();
+  Arcade.sfx.fanfare(); Arcade.confetti({ y: innerHeight * .4, count: 100, emoji: ['🛍️', '🏃', '🎒'] }); Arcade.vibrate([30, 30, 80]);
+  Arcade.toast(`🏃 탈출 성공! +${bonus} · 🔋+25`, '#2b8a3e');
 }
 function finish() {
-  state = 'over'; overAt = performance.now();
+  state = 'over'; overAt = performance.now(); $bubble.style.display = 'none'; $state.style.display = 'none';
   const isBest = score > best;
   if (isBest) { best = score; try { localStorage.setItem('shop-best', best); } catch {} }
   isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
-  showScreen(Arcade.resultScreen({ emoji: '🫠', label: '도망 점수', score, unit: '점', msg: level > 3 ? '이 정도면 직원들도 포기했어요' : level > 1 ? '몇 층은 무사히 빠져나왔어요' : '결국 니트 3벌 추천받았습니다',
-    rows: [['탈출한 층', `${level - 1}층`]], isBest: isBest && score > 0, best }));
+  showScreen(Arcade.resultScreen({ emoji: '🫠', label: '도망 점수', score, unit: '점', msg: '🔋 방전… 결국 니트 3벌 사서 나왔습니다',
+    rows: [['탈출한 매장', `${floorN - 1}곳`], ['마지막 매장', store.name]], isBest: isBest && score > 0, best }));
   Arcade.gameOver(score);
 }
 function tapStart() {
@@ -263,134 +330,153 @@ function tapStart() {
 }
 
 // ---------- staff brain ----------
-const dist2 = (c, r, x, y) => (c - x) ** 2 + (r - y) ** 2;
-function staffChoose(s) {
-  return (c, r, m) => {
-    const opts = Object.keys(DIRS).filter(d => canGo(c, r, d, 'staff') && d !== OPP[m.dir]);
-    const pool = opts.length ? opts : Object.keys(DIRS).filter(d => canGo(c, r, d, 'staff'));
-    if (!pool.length) return null;
-    // keep staff out of the exit and back out of the staff room once released
-    if (phoneT > 0) return pool.reduce((a, d) => { const [dx, dy] = DIRS[d]; return dist2(c + dx, r + dy, P.x, P.y) > dist2(c + DIRS[a][0], r + DIRS[a][1], P.x, P.y) ? d : a; });
-    let tx = P.x, ty = P.y;
-    if (s.i === 1 && P.dir) { tx += DIRS[P.dir][0] * 3; ty += DIRS[P.dir][1] * 3; }      // cuts you off
-    if (s.i === 3 && bag.held) { tx = exitC; ty = exitR - 1; }                             // guards the door
-    const chase = Math.min(.9, .55 + level * .08 + (s.i === 0 ? .15 : 0));
-    if (Math.random() > chase) return pool[(Math.random() * pool.length) | 0];
-    return pool.reduce((a, d) => { const [dx, dy] = DIRS[d]; return dist2(c + dx, r + dy, tx, ty) < dist2(c + DIRS[a][0], r + DIRS[a][1], tx, ty) ? d : a; });
-  };
+function seesPlayer(s) {
+  const dx = P.x - s.x, dy = P.y - s.y, d = Math.hypot(dx, dy);
+  if (d > s.range || d < .01) return d < .01;
+  let da = Math.atan2(dx, dy) - s.yaw; da = Math.atan2(Math.sin(da), Math.cos(da));
+  return Math.abs(da) <= HALF && lineOfSight(s.x, s.y, P.x, P.y);
 }
-const tmpV = new THREE.Vector3();
-function bubbleFor(s, cls, text) {
-  tmpV.set(W(s.x), 1.35, Z(s.y)).project(camera);
-  $bubble.style.display = 'block';
-  $bubble.style.transform = `translate(${(tmpV.x * .5 + .5) * innerWidth}px,${(-tmpV.y * .5 + .5) * innerHeight}px)`;
-  $bubble.className = `hud-ctl ${cls}`; if ($bt.textContent !== text) $bt.textContent = text;
+const yawOf = d => ({ down: 0, up: Math.PI, right: Math.PI / 2, left: -Math.PI / 2 })[d];
+function updateStaff(s, dt, t) {
+  if (s.mode === 'talk') return;
+  if (s.mode === 'cool') { s.coolT -= dt; if (s.coolT <= 0) s.mode = 'patrol'; }
+  const sees = s.mode !== 'cool' && !talking && seesPlayer(s);
+  if (s.mode === 'patrol' || s.mode === 'look') {
+    if (sees) {
+      let rate = 1 / .75;
+      if (frozen) { rate *= .12; s.seenFrozen += dt; if (s.seenFrozen > 2.4) { s.notice = 1; s.line = '어? 이 마네킹 처음 보는데…'; } }
+      if (sbT > 0) rate *= .45;
+      s.notice = Math.min(1, s.notice + dt * rate);
+      if (s.notice >= 1) { s.mode = 'approach'; s.lostT = 0; Arcade.sfx.hmm(); Arcade.vibrate(30); if (s.line.startsWith('어?')) Arcade.toast('🧍 마네킹 들킴!', '#e8590c'); }
+    } else { s.notice = Math.max(0, s.notice - dt * .6); s.seenFrozen = Math.max(0, s.seenFrozen - dt); }
+  }
+  if (s.mode === 'approach') {
+    if (sees || Math.hypot(P.x - s.x, P.y - s.y) < 2) s.lostT = 0; else s.lostT += dt;
+    if (s.lostT > 2.2) { s.mode = 'patrol'; s.notice = 0; s.target = [Math.round(s.x), Math.round(s.y)]; s.line = rnd(store.lines); Arcade.toast('🤷 "어디 가셨지…?"', '#868e96'); }
+    if (Math.hypot(P.x - s.x, P.y - s.y) < .75) startTalk(s);
+  }
+  // movement
+  const speed = s.mode === 'approach' ? 2.9 + floorN * .12 : s.speed;
+  if (s.mode === 'look') { s.lookT -= dt; s.yaw = s.baseYaw + Math.sin(t * 1.8 + s.i) * 1.1; if (s.lookT <= 0) { s.mode = 'patrol'; s.target = rnd(openTiles()); } return; }
+  const sp = s.speed; s.speed = speed;
+  stepMover(s, dt, 'staff', (c, r) => {
+    const [tc, tr] = s.mode === 'approach' ? [Math.round(P.x), Math.round(P.y)] : s.target;
+    if (s.mode !== 'approach' && c === tc && r === tr) { s.mode = 'look'; s.lookT = 1.4 + Math.random() * 1.4; s.baseYaw = s.yaw; return null; }
+    return pathStep(c, r, tc, tr);
+  });
+  s.speed = sp;
+  if (s.dir && s.moving) { const ty = yawOf(s.dir); let dy = ty - s.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); s.yaw += dy * Math.min(1, dt * 10); }
+}
+function startTalk(s) {
+  talking = s; s.mode = 'talk'; s.talkT = 1.6; frozen = false; P.dir = null; P.next = null;
+  battery = Math.max(0, battery - 28); updateHud();
+  Arcade.sfx.hmm(); Arcade.shake(.2); Arcade.vibrate([60, 40, 100]);
+  Arcade.toast(rnd(EXCUSES), '#495057');
 }
 
-// ---------- input: swipe / keys ----------
-let sw = null;
-addEventListener('pointerdown', e => { if (state === 'ready' || state === 'over') { tapStart(); return; } sw = { x: e.clientX, y: e.clientY }; });
+// ---------- input: swipe to walk, tap to stop, hold = mannequin ----------
+let ptr = null, keyDir = null, spaceHeld = false;
+addEventListener('pointerdown', e => { if (state === 'ready' || state === 'over') { tapStart(); return; } ptr = { x: e.clientX, y: e.clientY, t: performance.now(), moved: false }; });
 addEventListener('pointermove', e => {
-  if (!sw) return;
-  const dx = e.clientX - sw.x, dy = e.clientY - sw.y;
-  if (Math.hypot(dx, dy) < 24) return;
+  if (!ptr) return;
+  const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
+  if (Math.hypot(dx, dy) < 22) return;
   P.next = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
-  sw = { x: e.clientX, y: e.clientY }; $hint.style.display = 'none';
+  ptr.x = e.clientX; ptr.y = e.clientY; ptr.moved = true; frozen = false; $hint.style.display = 'none';
 });
-addEventListener('pointerup', () => { sw = null; });
+addEventListener('pointerup', () => {
+  if (ptr && !ptr.moved && performance.now() - ptr.t < 250 && !frozen) { P.next = null; P.stop = true; }
+  if (frozen && !spaceHeld) { frozen = false; }
+  ptr = null;
+});
+const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
 addEventListener('keydown', e => {
-  const k = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' }[e.code];
-  if (k) { e.preventDefault(); P.next = k; $hint.style.display = 'none'; }
-  else if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); tapStart(); }
+  if (KEYMAP[e.code]) { e.preventDefault(); keyDir = KEYMAP[e.code]; P.next = keyDir; frozen = false; spaceHeld = false; $hint.style.display = 'none'; }
+  else if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); if (state === 'playing') { spaceHeld = true; } else tapStart(); }
+});
+addEventListener('keyup', e => {
+  if (KEYMAP[e.code] === keyDir) { keyDir = null; P.next = null; P.stop = true; }
+  if (e.code === 'Space') { spaceHeld = false; frozen = false; }
 });
 
 function placeCamera() {
   camera.aspect = innerWidth / innerHeight; camera.fov = camera.aspect < 1 ? 55 : 42; camera.updateProjectionMatrix();
   const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
-  const dW = (COLS / 2 + .6) / Math.tan(half), dH = (ROWS / 2 + 3.2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));   // room for the HUD on top
-  const d = Math.max(dW, dH);
+  const d = Math.max((N / 2 + .6) / Math.tan(half), (N / 2 + 3.2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
   camera.position.set(0, d * .92, d * .38); camera.lookAt(0, 0, -1.1);
 }
 placeCamera();
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
 
 // ---------- loop ----------
+const tmpV = new THREE.Vector3();
+function bubbleAt(x, y, cls, text) {
+  tmpV.set(W(x), 1.25, Z(y)).project(camera);
+  $bubble.style.display = 'block'; $bubble.style.transform = `translate(${(tmpV.x * .5 + .5) * innerWidth}px,${(-tmpV.y * .5 + .5) * innerHeight}px)`;
+  $bubble.className = `hud-ctl ${cls}`; if ($bt.textContent !== text) $bt.textContent = text;
+}
 let last = performance.now();
 reset(); showIntro();
-window.__shop = { get state() { return state; }, P, get Pm() { return P; }, staff: () => staff, bag, get score() { return score; }, get lives() { return lives; }, get level() { return level; },
-  teleport(c, r) { P.x = c; P.y = r; P.dir = null; } };
-const faceYaw = { up: Math.PI, down: 0, left: -Math.PI / 2, right: Math.PI / 2 };
+window.__shop = { get state() { return state; }, get P() { return P; }, staff: () => staff, bag, get battery() { return battery; }, get floorN() { return floorN; }, get score() { return score; }, G: () => G, START: () => START,
+  teleport(c, r) { P.x = c; P.y = r; P.dir = null; }, freeze(v) { frozen = v; spaceHeld = v; } };
 
 function frame(now) {
   const dt = Math.min(.04, (now - last) / 1000); last = now; const t = now / 1000;
   if (state === 'playing') {
     levelT += dt;
-    step(P, dt, 'me');
-    const pc = Math.round(P.x), pr = Math.round(P.y), key = `${pc},${pr}`;
+    // mannequin: hold still (touch) or Space
+    if ((ptr && !ptr.moved && now - ptr.t > 250) || spaceHeld) { if (!frozen) { frozen = true; Arcade.sfx.tap(); Arcade.vibrate(15); } }
+    if (talking) {
+      talking.talkT -= dt;
+      if (talking.talkT <= 0) { talking.mode = 'cool'; talking.coolT = 4; talking.notice = 0; talking.target = rnd(openTiles()); talking.line = rnd(store.lines); talking = null; }
+    } else if (!frozen) stepMover(P, dt, 'me');
+    const pc = Math.round(P.x), pr = Math.round(P.y);
     if (Math.abs(P.x - pc) < .3 && Math.abs(P.y - pr) < .3) {
-      const m = pellets.get(key);
-      if (m) {
-        scene.remove(m); pellets.delete(key);
-        if (m.userData.phone) { phoneT = 6; score += 30; Arcade.sfx.coin(); Arcade.toast('📱 여보세요? (통화하는 척)', '#1971c2'); Arcade.vibrate(30); }
-        else { score += 10; tagsLeft--; Arcade.sfx.pop(1.3 + (tagsLeft % 5) * .04); }
-        updateHud();
-      }
-      if (!bag.held && pc === bag.c && pr === bag.r) {
-        bag.held = true; bagMesh.visible = false; myBag.visible = true; score += 100; updateHud();
-        Arcade.sfx.perfect(4); Arcade.vibrate([20, 30, 40]); Arcade.toast('🎒 내 가방 찾았다! 이제 출구로!', '#7048e8');
-      }
-      if (bag.held && pc === exitC && pr === exitR) escaped();
+      if (!bag.held && pc === bag.c && pr === bag.r) { bag.held = true; bagMesh.visible = false; myBag.visible = true; score += 100; Arcade.sfx.perfect(4); Arcade.vibrate([20, 30, 40]); Arcade.toast('🎒 내 가방! 이제 출구로 살금살금', '#7048e8'); }
+      if (!sbag.taken && pc === sbag.c && pr === sbag.r) { sbag.taken = true; sbMesh.visible = false; sbT = 9; mySB.visible = true; score += 50; Arcade.sfx.coin(); Arcade.toast('🛍️ 쇼핑백 위장! 이미 산 사람인 척 (9초)', '#e64980'); }
+      if (bag.held && pc === EXIT[0] && pr === EXIT[1]) escaped();
     }
-    if (phoneT > 0) { phoneT -= dt; if (phoneT <= 0) Arcade.sfx.hmm(); }
-    // staff
-    let nearest = null, nd = 99;
-    for (const s of staff) {
-      if (s.wait > 0) { s.wait -= dt; if (s.wait <= 0) { s.out = true; s.y -= 0; } continue; }
-      s.speedNow = phoneT > 0 ? 2 : s.speed;
-      const sp = s.speed; s.speed = s.speedNow; step(s, dt, 'staff', staffChoose(s)); s.speed = sp;
-      const d = Math.hypot(s.x - P.x, s.y - P.y);
-      if (d < nd) { nd = d; nearest = s; }
-      if (d < .55) {
-        if (phoneT > 0) {   // they back off politely
-          score += 80; updateHud(); Arcade.sfx.boing(); Arcade.toast(`🙇 ${s.st.name}: "아 통화 중이시구나…" +80`, '#1971c2');
-          const [c, r] = staffHome[s.i % staffHome.length]; Object.assign(s, mover(c, r, sp)); s.wait = 3;
-        } else { caught(s); break; }
-      }
-    }
-    if (state === 'playing') {
-      if (nearest && nd < 3.2) bubbleFor(nearest, phoneT > 0 ? 'scared' : nd < 1.6 ? 'close' : '', phoneT > 0 ? '(통화 중이시네…)' : nd < 1.6 ? nearest.st.line : '고객님~?');
-      else $bubble.style.display = 'none';
-    }
-  } else if (state === 'caught' || state === 'clear') {
-    freezeT -= dt;
-    if (freezeT <= 0) {
-      $bubble.style.display = 'none';
-      if (state === 'caught') { if (lives <= 0) return finish(), requestAnimationFrame(frame); respawnAfterCatch(); state = 'playing'; }
-      else { level++; setupLevel(); state = 'playing'; Arcade.toast(`🛗 ${level}층 매장… 직원이 더 많다`, '#2b2438'); }
-    }
+    if (sbT > 0) { sbT -= dt; if (sbT <= 0) mySB.visible = false; }
+    for (const s of staff) updateStaff(s, dt, t);
+    for (const c of crowd) stepMover(c, dt, 'staff', (cc, rr) => { const o = Object.keys(DIRS).filter(d => passable(cc + DIRS[d][0], rr + DIRS[d][1], 'staff') && d !== OPP[c.dir]); return o.length ? rnd(o) : rnd(Object.keys(DIRS).filter(d => passable(cc + DIRS[d][0], rr + DIRS[d][1], 'staff'))); });
+    // social battery
+    let drain = .35;
+    for (const s of staff) if (s.mode !== 'talk' && Math.hypot(s.x - P.x, s.y - P.y) < 2.2) drain += 3;
+    for (const c of crowd) if (Math.hypot(c.x - P.x, c.y - P.y) < 1.6) drain += 2.5;
+    const resting = restTiles.some(([c, r]) => Math.abs(P.x - c) < .45 && Math.abs(P.y - r) < .45);
+    battery = Math.max(0, Math.min(100, battery + (resting ? 14 : -drain) * dt));
+    if (battery <= 0) finish();
+    updateHud();
+    // HUD: the most alert staff gets the bubble
+    const alert = staff.filter(s => s.notice > .05 || s.mode === 'approach' || s.mode === 'talk').sort((a, b) => (b.mode === 'talk') - (a.mode === 'talk') || b.notice - a.notice)[0];
+    if (alert) bubbleAt(alert.x, alert.y, alert.mode === 'talk' ? 'talk' : alert.mode === 'approach' ? 'alert' : '', alert.mode === 'talk' || alert.mode === 'approach' ? alert.line : alert.notice > .6 ? '…!?' : '…?');
+    else $bubble.style.display = 'none';
+    const st = talking ? '😶 대화 중… 🔋 쭉쭉 닳는 중' : frozen ? '🧍 마네킹인 척…' : resting ? '🟩 혼자만의 시간 (충전 중)' : sbT > 0 ? `🛍️ 이미 산 사람 위장 ${Math.ceil(sbT)}` : '';
+    $state.style.display = st ? 'block' : 'none'; if (st) $state.textContent = st;
+  } else if (state === 'clear') {
+    frozenT -= dt;
+    if (frozenT <= 0) { floorN++; setupFloor(); state = 'playing'; Arcade.toast(`🛗 ${floorN}층 · ${store.name}`, '#2b2438'); }
   }
-  $phone.style.display = phoneT > 0 && state === 'playing' ? 'block' : 'none';
-  if (phoneT > 0) $phone.textContent = `📱 통화하는 척 중… ${Math.ceil(phoneT)}`;
 
   // visuals
-  const walkAnim = (p, m, sp) => {
-    const moving = m.moving && (state === 'playing');
-    const ph = t * sp;
-    p.legs[0].rotation.x = moving ? Math.sin(ph) * .7 : 0; p.legs[1].rotation.x = moving ? -Math.sin(ph) * .7 : 0;
-    if (m.dir) p.root.rotation.y += ((faceYaw[m.dir] - p.root.rotation.y + Math.PI * 3) % (Math.PI * 2) - Math.PI) * .3;
-  };
-  me.root.position.set(W(P.x), 0, Z(P.y)); walkAnim(me, P, 14); meRing.position.set(W(P.x), .03, Z(P.y)); meRing.material.color.setHex(phoneT > 0 ? 0x4dabf7 : 0xffd43b);
-  me.head.rotation.x = .25;   // head down, avoiding eye contact
-  me.arms[0].rotation.x = phoneT > 0 ? -2.3 : 0;   // phone to ear
-  if (state === 'caught') { me.body.rotation.z = Math.sin(t * 30) * .05; } else me.body.rotation.z = 0;
+  const face = (p, m, yaw) => { let d = yaw - p.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); p.root.rotation.y += d * .3; };
+  const walk = (p, moving, sp) => { const ph = t * sp; p.legs[0].rotation.x = moving ? Math.sin(ph) * .7 : 0; p.legs[1].rotation.x = moving ? -Math.sin(ph) * .7 : 0; };
+  me.root.position.set(W(P.x), 0, Z(P.y)); walk(me, P.moving && !frozen && !talking && state === 'playing', 14);
+  if (P.dir) face(me, P, yawOf(P.dir));
+  me.head.rotation.x = frozen ? 0 : .25;
+  me.arms.forEach((a, i) => { a.rotation.z = frozen ? (i ? -1.2 : 1.2) : 0; a.rotation.x = frozen ? -.3 : 0; });   // stiff mannequin pose
+  me.body.rotation.z = talking ? Math.sin(t * 25) * .04 : 0;
+  meRing.position.set(W(P.x), .03, Z(P.y)); meRing.material.color.setHex(frozen ? 0xadb5bd : sbT > 0 ? 0xf783ac : 0xffd43b);
   for (const s of staff) {
-    s.p.root.position.set(W(s.x), 0, Z(s.y)); walkAnim(s.p, s, 11);
-    s.p.arms[1].rotation.x = phoneT > 0 ? 0 : -1.4 + Math.sin(t * 6 + s.i) * .4;   // waving "고객님~"
-    s.p.root.visible = true;
+    s.p.root.position.set(W(s.x), 0, Z(s.y)); walk(s.p, s.moving && s.mode !== 'look' && s.mode !== 'talk', 11);
+    const yawToMe = Math.atan2(P.x - s.x, P.y - s.y);
+    s.p.root.rotation.y = s.mode === 'talk' ? yawToMe : s.yaw;
+    s.p.arms[1].rotation.x = s.mode === 'approach' || s.mode === 'talk' ? -2.2 + Math.sin(t * 8) * .3 : 0;
+    updateCone(s);
   }
-  bagMesh.rotation.y += dt; bagGlow.material.opacity = .5 + Math.sin(t * 6) * .3;
-  doorMat.color.setHex(bag.held ? 0x8ce99a : 0xa5d8ff); exitSign.material.color.setHex(bag.held ? 0x2f9e44 : 0xe03131);
-  for (const m of pellets.values()) if (m.userData.phone) { m.rotation.y += dt * 2; m.position.y = .3 + Math.sin(t * 4) * .06; }
+  for (const c of crowd) { c.p.root.position.set(W(c.x), 0, Z(c.y)); walk(c.p, c.moving, 9); if (c.dir) face(c.p, c, yawOf(c.dir)); }
+  bagMesh.rotation.y += dt; bagGlow.material.opacity = .5 + Math.sin(t * 6) * .3; sbMesh.rotation.y -= dt * 1.5;
+  if (doorMat) { doorMat.color.setHex(bag.held ? 0x8ce99a : 0xa5d8ff); exitSign.material.color.setHex(bag.held ? 0x2f9e44 : 0xe03131); }
 
   Arcade.applyShake(camera, dt);
   renderer.render(scene, camera);

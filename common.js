@@ -23,8 +23,8 @@
       desc: '집사가 등 돌렸을 때 책상 위 물건 툭툭. 노트북은 대박 점수' },
     { id: 'soccer', file: 'soccer.html', name: '슛 말고!', emoji: '⚽', unit: '점', bestKey: 'soccer-best',
       desc: '캐스터가 "슛!!" 할 때 차면 키퍼가 막아요. 가끔 마법사·호우맨 같은 스타가 등장' },
-    { id: 'inventory', file: 'inventory.html', name: '전리품 가방', emoji: '⚔️', unit: '점', bestKey: 'inventory-best',
-      desc: '던전 탈출까지 60초! 검과 갑옷을 돌려 가방을 빈틈없이 채우세요' },
+    { id: 'inventory', file: 'inventory.html', name: '전리품 가방', emoji: '⚔️', unit: '점', bestKey: 'inventory-fit-best',
+      desc: '주어진 전리품을 전부 넣으면 딱! 60초 안에 돌리고 맞춰 가방 정리' },
     { id: 'dialect', file: 'dialect.html', name: '사투리 통역사', emoji: '🗣️', unit: '개', bestKey: 'dialect-best',
       desc: '전국 길거리 인터뷰! 사투리를 낱말 카드로 표준어 번역' },
   ];

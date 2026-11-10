@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>스카이다이빙 착지</title>
-<script src="common.js?v=10"></script>
+<script src="common.js?v=11"></script>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#8fcfff;
     user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
@@ -20,6 +20,15 @@
   #hint{position:fixed;bottom:max(13vh,80px);left:0;right:0;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
   #hint .pill{font-size:15px;padding:10px 18px}
   #hint .pill.hot{background:#2b2438;color:#fff}
+  /* virtual joystick shown while dragging */
+  #stick{position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:4;opacity:0;transition:opacity .12s}
+  #stick.on{opacity:1}
+  #stick .base{position:absolute;left:-62px;top:-62px;width:124px;height:124px;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,255,255,.12) 55%,rgba(255,255,255,.35));border:3px solid rgba(255,255,255,.85);box-shadow:0 6px 20px rgba(0,0,0,.18)}
+  #stick .base::before,#stick .base::after{content:"";position:absolute;left:50%;top:50%;background:rgba(255,255,255,.55);transform:translate(-50%,-50%)}
+  #stick .base::before{width:2px;height:80%} #stick .base::after{width:80%;height:2px}
+  #stick .knob{position:absolute;left:-30px;top:-30px;width:60px;height:60px;border-radius:50%;background:#ffd43b;
+    border:3px solid #fff;box-shadow:0 5px 0 #e8a400,0 8px 18px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;font-size:26px}
 </style>
 </head>
 <body>
@@ -39,6 +48,7 @@
   <div id="mark"></div>
 </div>
 <div id="aim"><div><span></span></div></div>
+<div id="stick" class="hud-ctl"><div class="base"></div><div class="knob">🪂</div></div>
 <div id="hint"><span class="pill" id="hintp"></span></div>
 <div class="screen" id="center"></div>
 
@@ -645,9 +655,18 @@ const keys = {};
 addEventListener('keydown', e => { keys[e.code] = true; if ((e.code === 'Space' || e.code === 'Enter') && !e.repeat) { e.preventDefault(); action(); } });
 addEventListener('keyup', e => { keys[e.code] = false; });
 let ptr = null;
+const $stick = document.getElementById('stick'), $knob = $stick.querySelector('.knob'), STICK_R = 60;
+function drawStick() {
+  if (!ptr || !ptr.moved) { $stick.classList.remove('on'); return; }
+  let dx = ptr.x - ptr.x0, dy = ptr.y - ptr.y0; const l = Math.hypot(dx, dy);
+  if (l > STICK_R) { dx *= STICK_R / l; dy *= STICK_R / l; }
+  $stick.style.transform = `translate(${ptr.x0}px,${ptr.y0}px)`;
+  $knob.style.transform = `translate(${dx}px,${dy}px)`;
+  $stick.classList.add('on');
+}
 addEventListener('pointerdown', e => { ptr = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: performance.now(), moved: false }; });
-addEventListener('pointermove', e => { if (ptr && e.pointerId === ptr.id) { ptr.x = e.clientX; ptr.y = e.clientY; if (Math.hypot(ptr.x - ptr.x0, ptr.y - ptr.y0) > 12) ptr.moved = true; } });
-const endPtr = e => { if (ptr && e.pointerId === ptr.id) { if (!ptr.moved && performance.now() - ptr.t0 < 350) action(); ptr = null; } };
+addEventListener('pointermove', e => { if (ptr && e.pointerId === ptr.id) { ptr.x = e.clientX; ptr.y = e.clientY; if (Math.hypot(ptr.x - ptr.x0, ptr.y - ptr.y0) > 12) ptr.moved = true; drawStick(); } });
+const endPtr = e => { if (ptr && e.pointerId === ptr.id) { if (!ptr.moved && performance.now() - ptr.t0 < 350) action(); ptr = null; drawStick(); } };
 addEventListener('pointerup', endPtr); addEventListener('pointercancel', endPtr);
 function steer() {
   let x = 0, z = 0;

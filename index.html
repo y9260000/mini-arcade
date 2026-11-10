@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>미니 아케이드</title>
-<script src="common.js?v=10"></script>
+<script src="common.js?v=11"></script>
 <style>
   *{box-sizing:border-box}
   body{margin:0;min-height:100vh;background:linear-gradient(170deg,#ff8fb1 0%,#ffb88c 45%,#ffe3a3 100%);color:var(--ink);display:flex;justify-content:center}
@@ -38,7 +38,7 @@
 <button class="run" id="run">▶ 연속 플레이 (전부 한 판씩)</button>
 <script>
   const { GAMES } = Arcade;
-  const TILE = { softserve: '#ffe3ec', skydive: '#d0ebff', stock: '#1b2240', moktak: '#f3d9c4' };
+  const TILE = { softserve: '#ffe3ec', skydive: '#d0ebff', stock: '#1b2240', moktak: '#f3d9c4', door: '#ffe8cc', elevator: '#dbe4ff', halo: '#fff3bf' };
   const best = k => { try { return +localStorage.getItem(k) || 0; } catch { return 0; } };
   document.getElementById('list').innerHTML = GAMES.map(g => `
     <a class="card" href="${g.file}">

@@ -4,12 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>소프트콘 쌓기</title>
-<script src="common.js?v=10"></script>
+<script src="common.js?v=11"></script>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#ffe3ec;
     user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
   canvas{display:block}
   #wobwrap{width:72px;height:8px;border-radius:4px;background:#eee;overflow:hidden}
+  /* touch grip: finger holds the cone "handle", the tower top follows a bit above it */
+  #grip{position:fixed;left:0;top:0;pointer-events:none;z-index:4;opacity:0;transition:opacity .12s}
+  #grip.on{opacity:1}
+  #grip .ring{position:absolute;left:-30px;top:-30px;width:60px;height:60px;border-radius:50%;border:3px solid #fff;
+    background:rgba(255,93,143,.35);box-shadow:0 4px 14px rgba(0,0,0,.18);display:flex;align-items:center;justify-content:center;font-size:24px}
+  #grip .line{position:absolute;left:-1.5px;width:3px;bottom:30px;border-radius:2px;background:repeating-linear-gradient(#fff 0 6px,transparent 6px 11px)}
   #wob{display:block;height:100%;width:0;border-radius:4px;background:#51cf66;transition:background .2s}
 </style>
 </head>
@@ -22,6 +28,7 @@
   </div>
 </div>
 <div class="screen" id="center"></div>
+<div id="grip" class="hud-ctl"><div class="line"></div><div class="ring">✊</div></div>
 
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -300,11 +307,20 @@ function gameOver() {
 
 // ---------- input ----------
 const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2(), hit = new THREE.Vector3(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-let pointer = null;
+let pointer = null, touching = false;
+const $grip = document.getElementById('grip'), $gripLine = $grip.querySelector('.line');
+const gripOffset = () => Math.min(170, innerHeight * .2);
+function drawGrip() {
+  $grip.classList.toggle('on', touching && !!pointer);
+  if (!pointer) return;
+  $grip.style.transform = `translate(${pointer.x}px,${pointer.y}px)`;
+  $gripLine.style.height = `${gripOffset() - 30}px`;
+}
 function sumR() { let x = 0, z = 0; for (const L of stack) { x += L.r.x; z += L.r.z; } return { x, z }; }
 function aimFromPointer() {
   if (!pointer) return;
-  ndc.set(pointer.x / innerWidth * 2 - 1, -(pointer.y / innerHeight) * 2 + 1);
+  const py = pointer.touch ? pointer.y - gripOffset() : pointer.y;
+  ndc.set(pointer.x / innerWidth * 2 - 1, -(py / innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   plane.constant = -topY();
   if (raycaster.ray.intersectPlane(plane, hit)) {
@@ -318,8 +334,17 @@ function tapAction() {
   if (state === 'ready') start();
   else if (state === 'over' && performance.now() - overAt > 800 && !Arcade.inRun()) { reset(); start(); }
 }
-addEventListener('pointermove', e => { pointer = { x: e.clientX, y: e.clientY }; });
-addEventListener('pointerdown', e => { pointer = { x: e.clientX, y: e.clientY }; tapAction(); });
+const ptrOf = e => ({ x: e.clientX, y: e.clientY, touch: e.pointerType !== 'mouse' });
+addEventListener('pointermove', e => { if (e.pointerType !== 'mouse' && !touching) return; pointer = ptrOf(e); drawGrip(); });
+addEventListener('pointerdown', e => {
+  const wasPlaying = state === 'playing';
+  if (e.pointerType !== 'mouse') touching = true;
+  // a fresh touch shouldn't yank the cone: only aim once the game is running
+  if (wasPlaying || e.pointerType === 'mouse') pointer = ptrOf(e);
+  drawGrip(); tapAction();
+});
+const endTouch = e => { if (e.pointerType !== 'mouse') { touching = false; drawGrip(); } };
+addEventListener('pointerup', endTouch); addEventListener('pointercancel', endTouch);
 const keys = {};
 addEventListener('keydown', e => {
   keys[e.code] = true;

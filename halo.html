@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>천사 만들기</title>
+<script src="common.js?v=11"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#cfe6ff;
+    user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  #halos{letter-spacing:1px}
+  #hint{position:fixed;bottom:max(13vh,80px);left:0;right:0;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
+  #hint .pill{font-size:15px;padding:10px 18px}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>명</small></div>
+  <div class="hud-row"><span class="pill" id="halos"></span><span class="pill dark" id="combo" style="display:none"></span></div>
+</div>
+<div id="hint"><span class="pill">👇 아래로 당겼다 놓기 = 던지기</span></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const $ = id => document.getElementById(id);
+
+// ---------- three ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xcfe6ff);
+scene.fog = new THREE.Fog(0xe9f3ff, 16, 40);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, .1, 200);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd8c8ff, 1.8));
+const sun = new THREE.DirectionalLight(0xfff4d6, 1.4);
+sun.position.set(5, 14, 6); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -14, near: 1, far: 40 });
+scene.add(sun);
+function fitCamera() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.fov = camera.aspect < 1 ? 64 : 50; camera.updateProjectionMatrix();
+  const portrait = camera.aspect < 1;
+  camera.position.set(0, portrait ? 4.2 : 3.4, portrait ? 10.5 : 9);
+  camera.lookAt(0, .8, -6);
+}
+fitCamera();
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); fitCamera(); });
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, flatShading: true, ...extra });
+const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); parent.add(m); return m; };
+
+// sea of clouds + heaven gate far away
+const cloudMat = flat(0xffffff, { roughness: 1 });
+const SEA = -.6;
+{
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.MeshStandardMaterial({ color: 0xf3f0ff, roughness: 1 }));
+  sea.rotation.x = -Math.PI / 2; sea.position.y = SEA - .3; scene.add(sea);
+  for (let i = 0; i < 70; i++) {
+    const c = new THREE.Mesh(new THREE.IcosahedronGeometry(.8 + Math.random() * 1.6, 0), cloudMat);
+    c.position.set((Math.random() - .5) * 50, SEA - .6 + Math.random() * .4, 4 - Math.random() * 40); c.scale.y = .45; scene.add(c);
+  }
+  const gold = flat(0xffd43b, { metalness: .4, roughness: .4, emissive: 0x6b4e00, emissiveIntensity: .3 });
+  for (const s of [-1, 1]) box(.6, 7, .6, flat(0xfffaf0), s * 3.4, 3, -30);
+  const arch = new THREE.Mesh(new THREE.TorusGeometry(3.4, .3, 6, 18, Math.PI), gold); arch.position.set(0, 6.5, -30); scene.add(arch);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 3.2, 40, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xfff3bf, transparent: true, opacity: .18, side: THREE.DoubleSide, depthWrite: false }));
+  beam.position.set(0, 20, -30); scene.add(beam);
+}
+
+// ---------- people on little clouds ----------
+const KINDS = [
+  { name: '회사원', suit: 0x37415a, hair: 0x2b2b2b },
+  { name: '할머니', suit: 0xc2255c, hair: 0xdee2e6, scale: .85 },
+  { name: '학생', suit: 0x2f9e44, hair: 0x3b2a1a, scale: .78 },
+  { name: '아저씨', suit: 0x845ef7, hair: 0x2b2b2b, bald: true },
+  { name: '힙스터', suit: 0xf76707, hair: 0xffd43b },
+  { name: '악마', suit: 0xc92a2a, skin: 0xff6b6b, hair: 0x2b0a0a, devil: true },
+];
+function makePerson(k) {
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  const S = flat(k.suit), K = flat(k.skin || 0xffd2a8), H = flat(k.hair), D = flat(0x222222);
+  for (const s of [-1, 1]) { box(.24, .9, .26, flat(0x2b2f3a), s * .16, .45, 0, body); box(.26, .12, .36, D, s * .16, .04, .05, body); }
+  box(.7, .85, .4, S, 0, 1.32, 0, body);
+  const arms = [-1, 1].map(s => { const p = new THREE.Group(); p.position.set(s * .44, 1.68, 0); box(.18, .75, .2, S, 0, -.37, 0, p); body.add(p); return p; });
+  const head = new THREE.Group(); head.position.y = 1.75; body.add(head);
+  box(.46, .5, .44, K, 0, .27, 0, head);
+  for (const s of [-1, 1]) box(.07, .08, .02, D, s * .11, .3, .225, head);
+  const mouth = box(.14, .04, .02, D, 0, .14, .225, head);
+  if (k.bald) for (const s of [-1, 1]) box(.06, .2, .3, H, s * .25, .34, -.04, head);
+  else { box(.5, .15, .48, H, 0, .56, 0, head); box(.5, .34, .14, H, 0, .4, -.2, head); }
+  if (k.devil) {
+    for (const s of [-1, 1]) { const h = new THREE.Mesh(new THREE.ConeGeometry(.07, .26, 5), flat(0x2b0a0a)); h.position.set(s * .16, .72, 0); h.rotation.z = -s * .3; head.add(h); }
+    const tail = box(.05, .05, .6, flat(0x2b0a0a), 0, .95, -.45, body); tail.rotation.x = -.6;
+  }
+  // wings (hidden until converted)
+  const wings = [-1, 1].map(s => {
+    const p = new THREE.Group(); p.position.set(s * .2, 1.55, -.22);
+    const w = new THREE.Mesh(new THREE.BoxGeometry(.9, .55, .05), flat(0xffffff, { emissive: 0xfff3bf, emissiveIntensity: .4 }));
+    w.position.x = s * .45; w.rotation.z = s * .35; p.add(w); p.visible = false; body.add(p); return p;
+  });
+  // cloud platform
+  const cloud = new THREE.Group();
+  for (const [x, z, r] of [[0, 0, .7], [-.55, .1, .5], [.55, -.05, .52], [0, .45, .45]]) {
+    const c = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), cloudMat); c.position.set(x, -.1, z); c.scale.y = .5; cloud.add(c);
+  }
+  root.add(cloud);
+  const sc = k.scale || 1; body.scale.setScalar(sc);
+  root.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return { root, body, head, arms, wings, mouth, cloud, topY: (1.75 + .63) * sc };
+}
+
+let targets = [];
+const SLOTS = [[-2.6, -4.5], [2.4, -6], [-.6, -8.5], [2.8, -11], [-3, -12.5], [.4, -15]];
+function spawn(slotIdx, delay = 0) {
+  const lvl = Math.min(1, angels / 25);
+  const devil = angels >= 3 && Math.random() < .14 + lvl * .1;
+  const k = devil ? KINDS[5] : KINDS[(Math.random() * 5) | 0];
+  const per = makePerson(k);
+  const [sx, sz] = SLOTS[slotIdx];
+  const t = { ...per, k, slot: slotIdx, x0: sx + (Math.random() - .5), z: sz, y0: .15 + Math.random() * .5,
+    amp: Math.random() < .25 + lvl * .6 ? .8 + Math.random() * (1 + lvl * 1.5) : 0, spd: .6 + Math.random() * (.8 + lvl), ph: Math.random() * 6,
+    state: 'idle', t: -delay, cool: 0 };
+  per.root.position.set(t.x0, t.y0, t.z); per.root.scale.setScalar(.01);
+  scene.add(per.root); targets.push(t);
+}
+const headPos = (t, out) => out.set(t.root.position.x, t.root.position.y + t.topY, t.root.position.z);
+
+// ---------- halo ----------
+const HALO_R = .3;
+const haloMat = flat(0xffd43b, { metalness: .3, roughness: .35, emissive: 0xffc400, emissiveIntensity: .55 });
+const makeHalo = () => { const m = new THREE.Mesh(new THREE.TorusGeometry(HALO_R, .055, 6, 18), haloMat); m.rotation.x = Math.PI / 2; m.castShadow = true; scene.add(m); return m; };
+const held = makeHalo();
+const ORIGIN = new THREE.Vector3(0, 1.9, 6);
+const G = 11;
+let flying = null;   // { mesh, p, v, prevY, spin }
+// trajectory preview
+const PREV_N = 26;
+const prevGeo = new THREE.BufferGeometry(); prevGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PREV_N * 3), 3));
+const preview = new THREE.Points(prevGeo, new THREE.PointsMaterial({ color: 0xffffff, size: .14, transparent: true, opacity: .9, depthWrite: false }));
+preview.visible = false; scene.add(preview);
+const landMark = new THREE.Mesh(new THREE.RingGeometry(.22, .3, 20), new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: .8, side: THREE.DoubleSide, depthWrite: false }));
+landMark.rotation.x = -Math.PI / 2; landMark.visible = false; scene.add(landMark);
+
+// ---------- state ----------
+const START_HALOS = 12;
+let state = 'ready', angels = 0, halos = START_HALOS, thrown = 0, perfects = 0, combo = 0, overAt = 0, aim = null;
+let best = 0; try { best = +localStorage.getItem('halo-best') || 0; } catch {}
+const $score = $('score'), $halos = $('halos'), $combo = $('combo'), $center = $('center'), $hint = $('hint');
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '😇', title: '천사 만들기', how: [
+  ['👇', '화면을 <b>아래로 당겼다 놓으면</b> 헤일로 발사'],
+  ['↔️', '좌우로 당겨서 방향 조절, 길게 당길수록 멀리'],
+  ['😇', '머리에 쏙 들어가면 <b>천사 되어 승천</b>! 정중앙은 고리 +1'],
+  ['😈', '악마한테 씌우면 고리가 녹아요 (-1)'],
+] }));
+function updateHud() {
+  $score.innerHTML = `${angels}<small>명</small>`;
+  $halos.textContent = halos <= 0 ? '고리 없음' : halos > 12 ? `⭕ × ${halos}` : '⭕'.repeat(halos);
+  $combo.style.display = combo >= 2 ? '' : 'none'; $combo.textContent = `🔥 ${combo}연속`;
+}
+function reset() {
+  for (const t of targets) scene.remove(t.root);
+  targets = []; angels = 0; halos = START_HALOS; thrown = 0; perfects = 0; combo = 0; aim = null;
+  if (flying) { scene.remove(flying.mesh); flying = null; }
+  [0, 1, 2, 3].forEach((s, i) => spawn(s, i * .12));
+  updateHud();
+}
+function start() { state = 'playing'; $center.style.display = 'none'; $hint.style.display = ''; Arcade.sfx.go(); }
+
+// launch velocity from the drag (pull back like a slingshot)
+function launchVel(a) {
+  const dx = a.x - a.x0, dy = a.y - a.y0;
+  const pow = THREE.MathUtils.clamp(dy / (innerHeight * .38), 0, 1);
+  const side = THREE.MathUtils.clamp(-dx / (innerWidth * .32), -1, 1);
+  const fwd = 4.2 + pow * 9.5;
+  return { v: new THREE.Vector3(side * (2 + pow * 3.2), 4.6 + pow * 3.4, -fwd), pow };
+}
+function updatePreview() {
+  if (!aim) { preview.visible = landMark.visible = false; return; }
+  const { v, pow } = launchVel(aim);
+  preview.visible = pow > .05;
+  const arr = prevGeo.attributes.position.array, p = ORIGIN.clone(), vv = v.clone();
+  let landed = null;
+  for (let i = 0; i < PREV_N; i++) {
+    arr[i * 3] = p.x; arr[i * 3 + 1] = p.y; arr[i * 3 + 2] = p.z;
+    for (let s = 0; s < 4; s++) { vv.y -= G * .02; p.addScaledVector(vv, .02); if (!landed && p.y < .5 && vv.y < 0) landed = p.clone(); }
+  }
+  prevGeo.attributes.position.needsUpdate = true; prevGeo.computeBoundingSphere();
+  landMark.visible = false;
+}
+function throwHalo() {
+  const { v, pow } = launchVel(aim); aim = null; updatePreview();
+  if (pow < .06) return;
+  halos--; thrown++; updateHud();
+  const mesh = makeHalo(); mesh.position.copy(ORIGIN);
+  flying = { mesh, p: ORIGIN.clone(), v, prevY: ORIGIN.y, spin: 9 + pow * 8, hitCool: new Set() };
+  held.visible = false;
+  Arcade.sfx.whoosh(true); Arcade.vibrate(10);
+  $hint.style.display = 'none';
+}
+function endHalo() {
+  if (!flying) return;
+  scene.remove(flying.mesh); flying = null;
+  if (halos <= 0 && state === 'playing') finish();
+  else held.visible = true;
+}
+function convert(t, perfect) {
+  t.state = 'angel'; t.t = 0;
+  flying.mesh.removeFromParent(); t.head.add(flying.mesh);
+  flying.mesh.position.set(0, .82, 0); flying.mesh.rotation.set(Math.PI / 2, 0, 0); flying.mesh.scale.setScalar(1 / (t.k.scale || 1));
+  flying = null; held.visible = halos > 0;
+  angels++; combo++;
+  if (perfect) { perfects++; halos++; }
+  updateHud();
+  t.wings.forEach(w => w.visible = true);
+  t.mouth.scale.set(1.4, 2.5, 1);
+  t.root.traverse(o => { if (o.isMesh && o.material.emissive && o.material !== haloMat) { o.material = o.material.clone(); o.material.emissive.setHex(0xfff3bf); o.material.emissiveIntensity = .35; } });
+  const sp = headPos(t, new THREE.Vector3()).project(camera);
+  const sx = (sp.x * .5 + .5) * innerWidth, sy = (-sp.y * .5 + .5) * innerHeight;
+  Arcade.confetti({ x: sx, y: sy, count: perfect ? 70 : 40, colors: ['#ffd43b', '#fff3bf', '#ffffff', '#ffc9de'], emoji: ['✨', '😇', '🪽'], power: .8 });
+  Arcade.sfx.perfect(Math.min(combo, 12)); setTimeout(() => Arcade.sfx.ding(), 120);
+  Arcade.shake(perfect ? .25 : .12); Arcade.vibrate(perfect ? [20, 30, 50] : 30);
+  Arcade.toast(perfect ? '✨ PERFECT 천사! 고리 +1' : combo >= 3 ? `😇 ${combo}연속 승천!` : '😇 천사 탄생!', perfect ? '#e8590c' : '#f59f00');
+  if (halos <= 0) setTimeout(() => state === 'playing' && finish(), 1400);
+  setTimeout(() => { if (state !== 'ready') spawn(t.slot); }, 1600);
+}
+function devilBurn(t) {
+  scene.remove(flying.mesh); flying = null; held.visible = halos > 0;
+  halos = Math.max(0, halos - 1); combo = 0; updateHud();
+  t.state = 'laugh'; t.t = 0;
+  Arcade.sfx.crash(); Arcade.shake(.35); Arcade.vibrate([40, 30, 80]);
+  Arcade.toast('😈 크크큭… 고리가 녹았다! -1', '#c92a2a');
+  if (halos <= 0) setTimeout(() => state === 'playing' && finish(), 900);
+}
+function finish() {
+  if (state !== 'playing') return;
+  state = 'over'; overAt = performance.now(); aim = null; updatePreview();
+  const isBest = angels > best;
+  if (isBest) { best = angels; try { localStorage.setItem('halo-best', best); } catch {} }
+  isBest && angels > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  const acc = thrown ? Math.round(angels / thrown * 100) : 0;
+  const msg = angels >= 15 ? '천국 인사팀에서 스카우트 제의가 왔어요' : angels >= 8 ? '하늘나라 인구가 늘었습니다' : angels >= 3 ? '몇 명은 구원받았어요' : '다들 아직 속세가 좋대요';
+  setTimeout(() => {
+    showScreen(Arcade.resultScreen({ emoji: '😇', label: '천사로 만든 사람', score: angels, unit: '명', msg,
+      rows: [['던진 고리', `${thrown}개`], ['명중률', `${acc}%`], ['퍼펙트', `${perfects}번`]], isBest: isBest && angels > 0, best }));
+    Arcade.gameOver(angels);
+  }, 500);
+}
+
+// ---------- input ----------
+addEventListener('pointerdown', e => {
+  if (state === 'ready') { start(); return; }
+  if (state === 'over') { if (performance.now() - overAt > 1200 && !Arcade.inRun()) { reset(); start(); } return; }
+  if (flying || halos <= 0) return;
+  aim = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY };
+});
+addEventListener('pointermove', e => { if (aim && e.pointerId === aim.id) { aim.x = e.clientX; aim.y = e.clientY; updatePreview(); } });
+addEventListener('pointerup', e => { if (aim && e.pointerId === aim.id && state === 'playing') throwHalo(); });
+addEventListener('pointercancel', () => { aim = null; updatePreview(); });
+addEventListener('keydown', e => { if ((e.code === 'Space' || e.code === 'Enter') && state !== 'playing') { e.preventDefault(); if (state === 'ready') start(); else if (performance.now() - overAt > 1200 && !Arcade.inRun()) { reset(); start(); } } });
+
+// ---------- loop ----------
+const hp = new THREE.Vector3();
+let last = performance.now();
+reset(); showIntro();
+window.__halo = { get state() { return state; }, get targets() { return targets; }, get angels() { return angels; }, get halos() { return halos; },
+  shootAt(i) { // test helper: solve a launch that lands on target i
+    const t = targets[i]; headPos(t, hp);
+    flying = null; aim = null; halos--; thrown++; updateHud();
+    const T = 1.1, v = new THREE.Vector3((hp.x - ORIGIN.x) / T, (hp.y - ORIGIN.y + .5 * G * T * T) / T, (hp.z - ORIGIN.z) / T);
+    const mesh = makeHalo(); mesh.position.copy(ORIGIN); flying = { mesh, p: ORIGIN.clone(), v, prevY: ORIGIN.y, spin: 10, hitCool: new Set() }; held.visible = false;
+  } };
+
+function frame(now) {
+  const dt = Math.min(.04, (now - last) / 1000); last = now; const time = now / 1000;
+  held.position.set(ORIGIN.x, ORIGIN.y + Math.sin(time * 3) * .05, ORIGIN.z); held.rotation.z += dt * 2;
+  if (aim) { const { pow } = launchVel(aim); held.position.y -= pow * .25; held.position.z += pow * .35; }
+
+  // targets
+  for (let i = targets.length - 1; i >= 0; i--) {
+    const t = targets[i]; t.t += dt;
+    if (t.t < 0) continue;
+    if (t.state === 'idle' || t.state === 'laugh') {
+      const s = Math.min(1, t.t * 4); t.root.scale.setScalar(s < 1 ? s * (1.2 - .2 * s) : 1);
+      t.root.position.x = t.x0 + Math.sin(time * t.spd + t.ph) * t.amp;
+      t.root.position.y = t.y0 + Math.sin(time * 1.6 + t.ph) * .12;
+      t.arms[0].rotation.z = Math.sin(time * 2 + t.ph) * .15; t.arms[1].rotation.z = -t.arms[0].rotation.z;
+      if (t.state === 'laugh') { t.body.rotation.z = Math.sin(t.t * 30) * .08 * Math.max(0, 1 - t.t); if (t.t > 1.2) t.state = 'idle'; }
+    } else if (t.state === 'angel') {
+      t.root.position.y += dt * (1 + t.t * 2.2);
+      t.body.rotation.y += dt * 2.5;
+      t.cloud.position.y -= dt * 1.5; t.cloud.scale.multiplyScalar(1 - dt * 1.5);
+      t.wings.forEach((w, j) => w.rotation.y = (j ? -1 : 1) * Math.sin(time * 14) * .5);
+      t.arms.forEach((a, j) => a.rotation.z = (j ? 1 : -1) * 2.6);
+      if (t.root.position.y > 16) { scene.remove(t.root); targets.splice(i, 1); }
+    }
+  }
+
+  // flying halo
+  if (flying) {
+    const f = flying;
+    f.prevY = f.p.y;
+    f.v.y -= G * dt; f.p.addScaledVector(f.v, dt);
+    f.mesh.position.copy(f.p); f.mesh.rotation.z += f.spin * dt;
+    for (const t of targets) {
+      if (t.state === 'angel' || t.t < 0 || f.hitCool.has(t)) continue;
+      headPos(t, hp);
+      const lip = hp.y + .05;
+      if (f.prevY >= lip && f.p.y < lip && f.v.y < 0) {
+        const d = Math.hypot(f.p.x - hp.x, f.p.z - hp.z);
+        if (d < HALO_R + .02) { t.k.devil ? devilBurn(t) : convert(t, d < .1); break; }
+        if (d < HALO_R + .32) {             // clipped the head: bounce off with a "ting"
+          f.hitCool.add(t); combo = 0; updateHud();
+          const nx = (f.p.x - hp.x) / (d || 1), nz = (f.p.z - hp.z) / (d || 1);
+          f.v.set(nx * 2.5, Math.abs(f.v.y) * .45, nz * 2.5); f.spin *= -1.4;
+          Arcade.sfx.tick(); Arcade.shake(.08); Arcade.toast('팅! 아깝다', '#495057');
+        }
+      }
+    }
+    if (flying && (f.p.y < SEA || f.p.z < -30)) {
+      combo = 0; updateHud(); Arcade.sfx.splat();
+      if (halos > 0 || targets.length) Arcade.toast(['구름 속으로 쏙…', '빗나감!', '하늘이 삼켰다'][(Math.random() * 3) | 0], '#868e96');
+      endHalo();
+    }
+  }
+
+  Arcade.applyShake(camera, dt);
+  renderer.render(scene, camera);
+  fitCameraLite();
+  requestAnimationFrame(frame);
+}
+// restore camera after shake jitter
+const camBase = camera.position.clone();
+function fitCameraLite() { camera.position.lerp(camBase.copy(camera.aspect < 1 ? new THREE.Vector3(0, 4.2, 10.5) : new THREE.Vector3(0, 3.4, 9)), .5); }
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

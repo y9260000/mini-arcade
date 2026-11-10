@@ -11,6 +11,12 @@
       desc: '3D 캔들 차트! 팔고 나면 빨리감기로 진짜 고점 공개' },
     { id: 'moktak', file: 'moktak.html', name: '목탁 합주', emoji: '🪘', unit: '%', bestKey: 'moktak-best',
       desc: '스님들과 박자 맞춰 똑똑! 엇박이면 째려봄 주의' },
+    { id: 'door', file: 'door.html', name: '밀당 도어', emoji: '🚪', unit: '개', bestKey: 'door-best',
+      desc: '당기세요? 미세요? 문 보고 0.5초 안에 판단! 출근 시간이 줄어든다' },
+    { id: 'elevator', file: 'elevator.html', name: '닫힘 버튼', emoji: '🛗', unit: '명', bestKey: 'elevator-best',
+      desc: '부장님이 폰 볼 때만 닫힘 버튼 꾹. 눈 마주치면 끝장' },
+    { id: 'halo', file: 'halo.html', name: '천사 만들기', emoji: '😇', unit: '명', bestKey: 'halo-best',
+      desc: '고리 던지기! 머리 위에 헤일로를 씌우면 천사가 되어 승천' },
   ];
 
   const q = new URLSearchParams(location.search);
@@ -73,7 +79,7 @@
       box-shadow:0 8px 24px rgba(0,0,0,.25)}
     .toast.show{animation:toast 1.3s ease-out}
     @keyframes toast{0%{opacity:0;transform:translate(-50%,10px) scale(.8)}15%{opacity:1;transform:translate(-50%,0) scale(1.05)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-14px)}}
-    body:has(.screen:not([style*="none"])) :is(.hud,#meter,#hint,#aim,#chat){visibility:hidden}
+    body:has(.screen:not([style*="none"])) :is(.hud,.hud-ctl,#meter,#hint,#aim,#chat){visibility:hidden}
     /* ---- countdown ---- */
     .count{position:fixed;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;pointer-events:none;z-index:7;opacity:0;
       font-family:"Jua",sans-serif;font-size:min(42vw,200px);line-height:1;color:#fff;
@@ -156,6 +162,8 @@
     boing() { tone('sine', 140, 520, .35, .5, { vib: 25 }); tone('triangle', 280, 900, .25, .12); },
     coin() { tone('square', 988, 988, .07, .09, { wet: .4 }); tone('square', 1319, 1319, .28, .09, { when: .07, wet: .4 }); },
     kaching() { tone('sine', 90, 60, .09, .5, { wet: .2 }); noise(.08, .3, { type: 'highpass', f0: 3000, when: .02 }); tone('triangle', 1568, 1568, .5, .14, { when: .05 }); tone('triangle', 2093, 2093, .6, .12, { when: .1 }); noise(.4, .08, { type: 'highpass', f0: 7000, when: .1 }); },
+    ding() { tone('sine', 1175, 1175, 1.6, .28); tone('sine', 2350, 2350, .9, .05); tone('sine', 932, 932, 1.8, .2, { when: .32 }); },
+    hmm() { tone('triangle', 190, 240, .16, .22, { vib: 14, wet: .3 }); tone('triangle', 240, 300, .2, .2, { when: .17, vib: 14, wet: .3 }); },
     thud() { tone('sine', 120, 45, .22, .7, { wet: .3 }); noise(.08, .35, { type: 'lowpass', f0: 500 }); },
     flap() { [0, .07, .14].forEach((w, i) => noise(.12, .45 - i * .1, { f0: 350 + i * 200, f1: 900, q: .7, when: w })); tone('sine', 90, 50, .3, .5, { when: .05 }); },
     splash() { noise(.6, .5, { type: 'lowpass', f0: 3000, f1: 300 }); for (let i = 0; i < 6; i++) tone('sine', 400 + Math.random() * 300, 900 + Math.random() * 600, .08, .12, { when: .1 + i * .06 }); },

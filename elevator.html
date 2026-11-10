@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>닫힘 버튼</title>
+<script src="common.js?v=11"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#2b2438;
+    user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  #floor{font-family:"Jua",sans-serif;font-size:20px;background:#111;color:#ff8f3d;letter-spacing:2px;text-shadow:0 0 8px #ff6a00}
+  #closebtn{position:fixed;left:50%;bottom:max(70px,calc(env(safe-area-inset-bottom) + 62px));transform:translateX(-50%);z-index:3;pointer-events:none;
+    width:118px;height:118px;border-radius:50%;padding:7px;box-sizing:border-box;
+    background:conic-gradient(#ffd43b calc(var(--p,0)*1turn),rgba(255,255,255,.25) 0);box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  #closebtn .face{width:100%;height:100%;border-radius:50%;background:linear-gradient(#dee2e6,#adb5bd);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;font-family:"Jua",sans-serif;color:#343a40;box-shadow:inset 0 -6px 0 rgba(0,0,0,.18);transition:transform .06s}
+  #closebtn .face b{font-size:34px;line-height:1;letter-spacing:-6px;margin-right:6px}
+  #closebtn .face small{font:700 12px "Noto Sans KR",sans-serif;margin-top:4px}
+  #closebtn.on .face{transform:scale(.92);background:linear-gradient(#fff3bf,#ffd43b);box-shadow:inset 0 0 18px #fab005,0 0 24px #ffd43b}
+  #bubble{position:fixed;left:0;top:0;z-index:2;pointer-events:none;transform-origin:50% 100%}
+  #bubble div{position:absolute;bottom:0;left:0;transform:translateX(-50%);white-space:nowrap;background:#fff;color:#2b2438;border-radius:18px;
+    padding:6px 12px;font-family:"Jua",sans-serif;font-size:26px;box-shadow:0 6px 16px rgba(0,0,0,.25)}
+  #bubble div::after{content:"";position:absolute;left:50%;bottom:-9px;margin-left:-9px;border:9px solid transparent;border-bottom:0;border-top-color:inherit}
+  #bubble div{border-color:#fff}
+  #bubble.warn div{background:#ffe066;border-color:#ffe066;animation:wob .12s linear infinite}
+  #bubble.look div{background:#ff6b6b;border-color:#ff6b6b;color:#fff;font-size:30px}
+  #bubble.talk div{font-size:18px;white-space:pre;text-align:center;line-height:1.3}
+  #bubble.talk.look div{font-size:20px}
+  @keyframes wob{25%{transform:translateX(-52%) rotate(-4deg)}75%{transform:translateX(-48%) rotate(4deg)}}
+  #flash{position:fixed;inset:0;background:#ff2d2d;opacity:0;pointer-events:none;z-index:2}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>명</small></div>
+  <div class="hud-row"><span class="pill dark" id="floor">▲ 1F</span><span class="pill" id="who"></span></div>
+</div>
+<div id="bubble" class="hud-ctl"><div>📱</div></div>
+<div id="closebtn" class="hud-ctl"><div class="face"><b>▶◀</b><small>꾹 누르기</small></div></div>
+<div id="flash"></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const $ = id => document.getElementById(id);
+
+// ---------- three ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xe7ecf2);
+scene.fog = new THREE.Fog(0xe7ecf2, 20, 45);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, .1, 200);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xbfb6a8, 1.5));
+const sun = new THREE.DirectionalLight(0xfff6e8, 1.4);
+sun.position.set(4, 10, -8); sun.target.position.set(0, 0, -14); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 20, bottom: -20, near: 1, far: 40 });
+scene.add(sun, sun.target);
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, flatShading: true, ...extra });
+const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); parent.add(m); return m; };
+
+// ---------- hallway (z < 0) ----------
+const HALL = 34;
+{
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = '#c9ccd4'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#b8bcc6'; g.fillRect(0, 0, 32, 32); g.fillRect(32, 32, 32, 32);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, HALL / 2); t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(4.4, HALL), new THREE.MeshStandardMaterial({ map: t, roughness: .9 }));
+  floor.rotation.x = -Math.PI / 2; floor.position.z = -HALL / 2; floor.receiveShadow = true; scene.add(floor);
+  const wallM = flat(0xf1ece4), trim = flat(0x8d7b68);
+  for (const s of [-1, 1]) {
+    box(.2, 3.2, HALL, wallM, s * 2.3, 1.6, -HALL / 2).receiveShadow = true;
+    box(.24, .2, HALL, trim, s * 2.3, .1, -HALL / 2);
+    for (let z = -5; z > -HALL + 2; z -= 6.5) {                // office doors + name plates
+      const side = s, dz = z + (s > 0 ? -2.5 : 0);
+      box(.08, 2.3, 1.1, flat(s > 0 ? 0x8d5a3b : 0x5c7cfa), side * 2.19, 1.15, dz);
+      box(.06, .22, .5, flat(0xffffff), side * 2.17, 2.55, dz);
+    }
+  }
+  box(4.4, .1, HALL, flat(0xfafafa), 0, 3.2, -HALL / 2);
+  for (let z = -3; z > -HALL; z -= 4) box(1.2, .04, .6, new THREE.MeshBasicMaterial({ color: 0xffffff }), 0, 3.14, z);
+  box(4.4, 3.2, .2, new THREE.MeshBasicMaterial({ color: 0xcfe8ff }), 0, 1.6, -HALL);                    // bright window at the end
+  for (let x = -1.5; x <= 1.5; x += 1) box(.08, 3.2, .1, flat(0x868e96), x, 1.6, -HALL + .15);
+  // plants + water cooler
+  for (const [x, z] of [[-1.85, -9], [1.85, -17], [-1.85, -25]]) {
+    box(.4, .45, .4, flat(0xd9480f), x, .22, z);
+    const l = new THREE.Mesh(new THREE.IcosahedronGeometry(.42, 0), flat(0x40c057)); l.position.set(x, .85, z); scene.add(l);
+  }
+  box(.45, 1.1, .45, flat(0xf8f9fa), 1.9, .55, -12); box(.32, .45, .32, new THREE.MeshStandardMaterial({ color: 0x74c0fc, transparent: true, opacity: .7 }), 1.9, 1.32, -12);
+}
+
+// ---------- elevator (z >= 0) ----------
+const OPEN_W = 1.9, DOOR_H = 2.35;
+const panelL = new THREE.Group(), panelR = new THREE.Group();
+{
+  const steel = flat(0xc8ced6, { metalness: .5, roughness: .35 }), inner = flat(0xd9c3a3, { roughness: .6 });
+  // front wall with the doorway (seen from inside)
+  box(3, 3.2, .16, steel, -(OPEN_W / 2 + 1.5), 1.6, .08);
+  box(3, 3.2, .16, steel, OPEN_W / 2 + 1.5, 1.6, .08);
+  box(OPEN_W, 3.2 - DOOR_H, .16, steel, 0, DOOR_H + (3.2 - DOOR_H) / 2, .08);
+  // cabin
+  for (const s of [-1, 1]) box(.1, 3.2, 8, inner, s * 1.5, 1.6, 4);
+  box(3, .1, 8, flat(0x6b5b4b), 0, 0, 4);
+  box(3, .1, 8, flat(0xf8f9fa), 0, 3.2, 4);
+  box(1.6, .04, 1.6, new THREE.MeshBasicMaterial({ color: 0xfff9db }), 0, 3.14, 1.6);
+  box(.06, .08, 6, flat(0xadb5bd, { metalness: .6 }), 1.43, 1, 4);   // handrail
+  box(.06, .08, 6, flat(0xadb5bd, { metalness: .6 }), -1.43, 1, 4);
+  // button panel on the right wall
+  box(.04, .9, .32, flat(0x343a40), 1.44, 1.35, .7);
+  // door panels slide in front of the wall on the hallway side
+  for (const [g, s] of [[panelL, -1], [panelR, 1]]) {
+    box(OPEN_W / 2 + .04, DOOR_H, .06, steel, 0, DOOR_H / 2, 0, g);
+    box(.02, DOOR_H, .07, flat(0x868e96), -s * (OPEN_W / 4), DOOR_H / 2, 0, g);
+    g.position.z = -.06; scene.add(g);
+  }
+}
+const btnLight = new THREE.Mesh(new THREE.CircleGeometry(.045, 12), new THREE.MeshBasicMaterial({ color: 0x555555 }));
+btnLight.position.set(1.415, 1.2, .7); btnLight.rotation.y = -Math.PI / 2; scene.add(btnLight);
+function setDoor(p) {
+  panelL.position.x = -(OPEN_W / 4) - (1 - p) * (OPEN_W / 2 + .05);
+  panelR.position.x = (OPEN_W / 4) + (1 - p) * (OPEN_W / 2 + .05);
+}
+
+// ---------- people ----------
+function makePerson({ suit = 0x37415a, skin = 0xffd2a8, hair = 0x2b2b2b, bald = false, gray = false, glasses = false, mustache = false, tie = 0xe03131 } = {}) {
+  const root = new THREE.Group();
+  const S = flat(suit), K = flat(skin), H = flat(gray ? 0xced4da : hair), D = flat(0x222222);
+  const legs = [-1, 1].map(s => {
+    const p = new THREE.Group(); p.position.set(s * .16, .9, 0);
+    box(.24, .9, .26, flat(0x2b2f3a), 0, -.45, 0, p); box(.26, .12, .36, D, 0, -.88, .05, p);
+    root.add(p); return p;
+  });
+  box(.7, .85, .4, S, 0, 1.32, 0, root);
+  box(.22, .6, .02, flat(0xffffff), 0, 1.42, .205, root);
+  box(.09, .5, .02, flat(tie), 0, 1.38, .215, root);
+  const arms = [-1, 1].map(s => {
+    const p = new THREE.Group(); p.position.set(s * .44, 1.68, 0);
+    box(.18, .75, .2, S, 0, -.37, 0, p);
+    const h = new THREE.Mesh(new THREE.DodecahedronGeometry(.11, 0), K); h.position.y = -.78; p.add(h);
+    root.add(p); return p;
+  });
+  const phone = box(.03, .26, .14, flat(0x212529), 0, -.8, .1, arms[1]);
+  box(.005, .22, .11, new THREE.MeshBasicMaterial({ color: 0x74c0fc }), -.02, -.8, .1, arms[1]);
+  const head = new THREE.Group(); head.position.y = 1.75; root.add(head);
+  box(.46, .5, .44, K, 0, .27, 0, head);
+  for (const s of [-1, 1]) box(.07, .08, .02, D, s * .11, .3, .225, head);
+  const brows = [-1, 1].map(s => box(.12, .03, .02, flat(gray ? 0x868e96 : 0x222222), s * .11, .38, .226, head));
+  if (bald) { for (const s of [-1, 1]) box(.06, .2, .3, H, s * .25, .34, -.04, head); }
+  else { box(.5, .15, .48, H, 0, .56, 0, head); box(.5, .34, .14, H, 0, .4, -.2, head); }
+  if (glasses) { for (const s of [-1, 1]) box(.14, .12, .02, flat(0x111111), s * .11, .3, .235, head); }
+  if (mustache) box(.24, .06, .03, H, 0, .17, .23, head);
+  root.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  root.scale.setScalar(.92);
+  return { root, legs, arms, head, phone, brows };
+}
+
+// ---------- boss roster (gets nastier) ----------
+const BOSSES = [
+  { name: '박 부장', suit: 0x37415a, v: 1.8, phone: [2.2, 3.4], look: [1.0, 1.5], warn: .75, fake: 0, sprint: 0 },
+  { name: '이 과장', suit: 0x6b4f3a, hair: 0x4a2c16, v: 2.0, phone: [1.4, 2.4], look: [.8, 1.3], warn: .62, fake: .1, sprint: 0 },
+  { name: '최 상무', suit: 0x1f1f24, gray: true, glasses: true, v: 2.5, phone: [1.8, 3], look: [.9, 1.4], warn: .55, fake: .15, sprint: .15 },
+  { name: '인사팀 정 차장', suit: 0x5f3dc4, glasses: true, v: 2.1, phone: [1.1, 2.0], look: [.7, 1.2], warn: .5, fake: .45, sprint: 0 },
+  { name: '사장님', suit: 0x7a1f2b, bald: true, mustache: true, tie: 0xfab005, v: 2.5, phone: [1.2, 2.2], look: [.9, 1.5], warn: .45, fake: .35, sprint: .3 },
+  { name: '회장님', suit: 0x111111, bald: true, gray: true, mustache: true, glasses: true, tie: 0xffd43b, v: 2.8, phone: [1.1, 2.0], look: [.9, 1.6], warn: .4, fake: .4, sprint: .35 },
+];
+function bossCfg(n) {
+  const base = BOSSES[n % BOSSES.length], lap = Math.floor(n / BOSSES.length);
+  if (!lap) return base;
+  return { ...base, name: `${base.name} ${'Ⅱ Ⅲ Ⅳ Ⅴ'.split(' ')[Math.min(3, lap - 1)]}`, v: base.v * (1 + .1 * lap), warn: Math.max(.3, base.warn * Math.pow(.88, lap)), fake: Math.min(.55, base.fake + .1 * lap), sprint: Math.min(.5, base.sprint + .15 * lap) };
+}
+const SHOUTS = ['잡아줘요~!', '어어 잠깐!', '같이 가~', '나도 타!', '김 대리~?'];
+const closeRate = () => .21 + Math.min(.1, round * .015);   // ~4.8s of holding at first
+const CLOSE_RATE_UNUSED = 0, DRIFT = .07, START_Z = -27, ARRIVE_Z = -.9;
+
+// ---------- state ----------
+let state = 'ready', round = 0, floorN = 1, p = 0, holding = false, overAt = 0, boss = null, fail = null, endT = 0;
+let best = 0; try { best = +localStorage.getItem('elevator-best') || 0; } catch {}
+const $center = $('center'), $score = $('score'), $floor = $('floor'), $who = $('who'), $btn = $('closebtn'), $bubble = $('bubble'), $bt = $bubble.firstElementChild, $flash = $('flash');
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🛗', title: '닫힘 버튼', how: [
+  ['📱', '부장님이 <b>폰 볼 때</b> 화면을 꾹 → 문이 닫혀요'],
+  ['👀', '고개 들면 <b>바로 손 떼기</b>! 누르다 걸리면 끝'],
+  ['💬', '<b>…?</b> 말풍선은 고개 들기 직전 신호 (가끔 페이크)'],
+  ['🏃', '문 닫히기 전에 도착하면 같이 타게 됨…'],
+] }));
+const rand = ([a, b]) => a + Math.random() * (b - a);
+
+function spawnBoss() {
+  if (boss) scene.remove(boss.p.root);
+  const cfg = bossCfg(round);
+  const per = makePerson(cfg);
+  per.root.position.set(0, 0, START_Z); scene.add(per.root);
+  boss = { cfg, p: per, z: START_Z, mode: 'phone', t: rand(cfg.phone) + .6, sprintT: 0, shout: '', walkPh: 0, inside: false };
+  $who.textContent = `${cfg.name} 접근 중`;
+}
+function updateHud() { $score.innerHTML = `${round}<small>명</small>`; $floor.textContent = `▲ ${floorN}F`; }
+function reset() { round = 0; floorN = 1; p = 0; fail = null; holding = false; spawnBoss(); updateHud(); setDoor(0); }
+function start() {
+  state = 'count'; $center.style.display = 'none';
+  Arcade.countdown({ final: '눌러!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { state = 'playing'; Arcade.toast(`${boss.cfg.name} 등장`, '#2b2438'); } });
+}
+function setMode(m, t) {
+  boss.mode = m; boss.t = t;
+  if (m === 'warn') Arcade.sfx.hmm();
+  if (m === 'look') { boss.shout = SHOUTS[(Math.random() * SHOUTS.length) | 0]; boss.grace = .12; }
+}
+function caught() {
+  state = 'over'; fail = 'caught'; overAt = performance.now(); endT = 0;
+  Arcade.sfx.crash(); Arcade.shake(.35); Arcade.vibrate([80, 50, 160]);
+  Arcade.toast('🚨 들켰다!', '#e03131');
+  $flash.animate([{ opacity: .45 }, { opacity: 0 }], { duration: 500 });
+  setTimeout(showResult, 1700);
+}
+function boarded() {
+  state = 'over'; fail = 'ride'; overAt = performance.now(); endT = 0;
+  Arcade.sfx.miss(); Arcade.shake(.2); Arcade.toast('😅 같이 타버렸다…', '#495057');
+  setTimeout(showResult, 2000);
+}
+function escaped() {
+  state = 'win'; endT = 0;
+  round++; updateHud();
+  Arcade.sfx.thud(); Arcade.shake(.3); Arcade.vibrate([30, 30, 60]);
+  setTimeout(() => { if (state === 'win') { Arcade.sfx.thud(); Arcade.shake(.15); } }, 380);   // boss bonks the door
+  Arcade.toast(round % 3 ? '탈출 성공! 🛗' : `🔥 ${round}명 연속 탈출!`, '#2b8a3e');
+  Arcade.confetti({ y: innerHeight * .4, count: 50 });
+  setTimeout(() => { if (state === 'win') { Arcade.sfx.coin(); floorN += 3 + ((Math.random() * 9) | 0); updateHud(); } }, 900);
+  setTimeout(nextRound, 2200);
+}
+function nextRound() {
+  if (state !== 'win') return;
+  p = 0; Arcade.sfx.ding(); spawnBoss();
+  state = 'playing'; Arcade.toast(`${floorN}층 · ${boss.cfg.name} 등장`, '#2b2438');
+}
+function showResult() {
+  const isBest = round > best;
+  if (isBest) { best = round; try { localStorage.setItem('elevator-best', best); } catch {} }
+  isBest && round > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  const msg = fail === 'caught' ? `${boss.cfg.name}: "자네… 방금 닫힘 눌렀나?"<br>내일 아침 면담 잡혔어요` : `${boss.cfg.name}와 단둘이 ${floorN + 20}층까지…<br>어색한 침묵이 흐릅니다`;
+  showScreen(Arcade.resultScreen({ emoji: fail === 'caught' ? '🚨' : '😶', label: '따돌린 상사', score: round, unit: '명', msg,
+    rows: [['도착 층', `${floorN}F`], ['마지막 상대', boss.cfg.name]], isBest: isBest && round > 0, best }));
+  Arcade.gameOver(round);
+}
+function tapAction() {
+  if (state === 'ready') start();
+  else if (state === 'over' && performance.now() - overAt > 2400 && !Arcade.inRun()) { reset(); start(); }
+}
+
+// ---------- input: hold anywhere / space ----------
+const setHold = v => { holding = v; $btn.classList.toggle('on', v); };
+addEventListener('pointerdown', e => { if (state === 'playing') setHold(true); else tapAction(); });
+addEventListener('pointerup', () => setHold(false));
+addEventListener('pointercancel', () => setHold(false));
+addEventListener('blur', () => setHold(false));
+addEventListener('keydown', e => {
+  if (e.code !== 'Space' && e.code !== 'Enter') return; e.preventDefault();
+  if (state === 'playing') setHold(true); else if (!e.repeat) tapAction();
+});
+addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'Enter') setHold(false); });
+
+// ---------- loop ----------
+const tmpV = new THREE.Vector3();
+function placeCamera() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.fov = camera.aspect < 1 ? 68 : 52;
+  camera.updateProjectionMatrix();
+  const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
+  baseZ = Math.min(7.5, Math.max(2.4, 1.35 / Math.tan(half)));
+}
+let baseZ = 3;
+placeCamera();
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
+let last = performance.now(), zoom = 0;
+reset(); showIntro();
+window.__elev = { get state() { return state; }, get boss() { return boss; }, get p() { return p; }, get round() { return round; }, setHold };
+
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  const b = boss, per = b.p;
+
+  if (state === 'playing') {
+    // door
+    if (holding) p = Math.min(1, p + closeRate() * dt); else p = Math.max(0, p - DRIFT * dt);
+    // boss brain
+    b.t -= dt;
+    if (b.mode === 'phone' && b.t <= 0) setMode('warn', b.cfg.warn);
+    else if (b.mode === 'warn' && b.t <= 0) Math.random() < b.cfg.fake ? setMode('phone', rand(b.cfg.phone) * .6) : setMode('look', rand(b.cfg.look));
+    else if (b.mode === 'look' && b.t <= 0) setMode('phone', rand(b.cfg.phone));
+    if (b.mode === 'look') { b.grace -= dt; if (holding && b.grace <= 0) caught(); }
+    if (b.sprintT <= 0 && b.mode === 'phone' && Math.random() < b.cfg.sprint * dt * .5) { b.sprintT = 1.3; Arcade.toast('🏃 뛰어온다!', '#e8590c'); }
+    b.sprintT -= dt;
+    const v = b.cfg.v * (b.mode === 'look' ? 1.25 : 1) * (b.sprintT > 0 ? 1.9 : 1);
+    b.z += v * dt; b.walkPh += v * dt * 3.2;
+    if (p >= 1) escaped();
+    else if (b.z >= ARRIVE_Z) { b.z = ARRIVE_Z; boarded(); }
+  } else if (state === 'win') {
+    endT += dt; p = 1;
+    // boss notices and runs into the closed door
+    b.mode = 'look'; b.shout = '잠깐만!!'; b.z = Math.min(-.75, b.z + 7 * dt); b.walkPh += dt * 18;
+  } else if (state === 'over') {
+    endT += dt;
+    if (fail === 'ride') {      // boss walks in and stands next to you
+      p = Math.max(0, p - dt * 2);
+      b.mode = 'phone'; b.shout = ''; b.z = Math.min(1.6, b.z + dt * 1.6); b.walkPh += b.z < 1.6 ? dt * 6 : 0;
+      per.root.position.x = Math.min(.75, per.root.position.x + dt * .6);
+      if (b.z >= 1.6) per.root.rotation.y = Math.min(Math.PI, per.root.rotation.y + dt * 5);
+    }
+  }
+  setDoor(p);
+  $btn.style.setProperty('--p', p.toFixed(3));
+  btnLight.material.color.setHex(holding ? 0xffd43b : 0x555555);
+  Arcade.sfx.wind(state === 'playing' && holding ? .35 : 0);
+
+  // boss pose
+  per.root.position.z = b.z;
+  const sw = Math.sin(b.walkPh) * (state === 'over' && fail === 'caught' ? 0 : 1);
+  per.legs[0].rotation.x = sw * .6; per.legs[1].rotation.x = -sw * .6; per.arms[0].rotation.x = -sw * .45;
+  const looking = b.mode === 'look' || fail === 'caught';
+  per.head.rotation.x += ((looking ? -.12 : b.mode === 'warn' ? .25 : .55) - per.head.rotation.x) * Math.min(1, dt * 14);
+  per.arms[1].rotation.x += ((looking ? -.2 : -1.25) - per.arms[1].rotation.x) * Math.min(1, dt * 12);   // phone up vs down
+  if (b.mode === 'warn') per.head.rotation.z = Math.sin(now * .05) * .06; else per.head.rotation.z *= .8;
+  if (looking && state !== 'over') per.arms[0].rotation.set(-2.6 + Math.sin(now * .02) * .3, 0, -.3);      // waving "hold it!"
+  else if (fail === 'caught') per.arms[0].rotation.set(-1.5, 0, 0);                                         // pointing at you
+  per.brows.forEach((br, i) => { br.rotation.z = fail === 'caught' ? (i ? .45 : -.45) : 0; });
+
+  // speech bubble
+  tmpV.set(per.root.position.x, 2.45, b.z).project(camera);
+  const sx = (tmpV.x * .5 + .5) * innerWidth, sy = (-tmpV.y * .5 + .5) * innerHeight;
+  const vis = state !== 'ready' && tmpV.z < 1 && !(fail === 'ride' && b.z > .2);
+  $bubble.style.display = vis ? '' : 'none';
+  if (vis) {
+    $bubble.style.transform = `translate(${sx}px,${sy}px)`;
+    let cls = '', txt = '📱';
+    if (fail === 'caught') { cls = 'look talk'; txt = '자네…\n지금 닫힘 눌렀나?'; }
+    else if (b.mode === 'look') { cls = 'look talk'; txt = `👀 ${b.shout}`; }
+    else if (b.mode === 'warn') { cls = 'warn'; txt = '…?'; }
+    else if (b.sprintT > 0) txt = '📱🏃';
+    $bubble.className = `hud-ctl ${cls}`; if ($bt.textContent !== txt) $bt.textContent = txt;
+  }
+
+  // camera: inside the cabin; zoom onto the boss when caught, rumble when going up
+  zoom += ((fail === 'caught' ? 1 : 0) - zoom) * Math.min(1, dt * 3);
+  const cz = baseZ - zoom * (baseZ - (b.z + 2.6));
+  camera.position.set(0, 1.62 + zoom * .4, Math.max(b.z + 2.4, cz));
+  if (state === 'win' && endT > .9) camera.position.y += Math.sin(now * .09) * .012;
+  Arcade.applyShake(camera, dt);
+  camera.lookAt(0, 1.45 + zoom * .6, b.z - 6 * (1 - zoom) - .5);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>사투리 통역사</title>
+<script src="common.js?v=16"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#cfe6ff;
+    user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  .hud-score{font-size:52px}
+  #lower{position:fixed;left:max(12px,env(safe-area-inset-left));top:34vh;z-index:3;pointer-events:none;display:flex;align-items:stretch;font-family:"Jua",sans-serif;
+    border-radius:6px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+  #lower .tag{background:#e03131;color:#fff;font-size:13px;padding:5px 9px;display:flex;align-items:center;letter-spacing:1px}
+  #lower .place{background:#1b1f3a;color:#fff;font-size:17px;padding:5px 12px}
+  #panel{position:fixed;left:0;right:0;bottom:0;z-index:3;background:#fff;border-radius:26px 26px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.18);
+    padding:16px max(16px,env(safe-area-inset-left)) max(16px,env(safe-area-inset-bottom));box-sizing:border-box;display:flex;flex-direction:column;gap:12px;
+    max-width:620px;margin:0 auto}
+  #say{display:flex;gap:10px;align-items:flex-start}
+  #say .face{font-size:34px;line-height:1;flex:none}
+  #say .bub{position:relative;background:#fff4e6;border:2px solid #ffd8a8;border-radius:16px;padding:8px 14px;flex:1;min-width:0}
+  #say .who{font:700 12px "Noto Sans KR",sans-serif;color:#e8590c}
+  #say .txt{font-family:"Jua",sans-serif;font-size:clamp(22px,6vw,30px);line-height:1.3;color:var(--ink);word-break:keep-all}
+  #q{font:700 13px "Noto Sans KR",sans-serif;color:var(--ink-soft);display:flex;justify-content:space-between;align-items:center}
+  #tbar{height:6px;border-radius:3px;background:#f1f3f5;overflow:hidden;flex:1;margin-left:10px;max-width:180px}
+  #tbar i{display:block;height:100%;background:#7048e8;transform-origin:left}
+  #tbar.low i{background:#fa5252}
+  #ans{min-height:52px;border-bottom:2px solid #dee2e6;display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;padding-bottom:8px}
+  #bank{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;min-height:46px}
+  .tile{border:2px solid #dee2e6;border-bottom-width:4px;background:#fff;color:var(--ink);border-radius:12px;padding:8px 14px;font:700 clamp(16px,4.4vw,19px) "Noto Sans KR",sans-serif;
+    cursor:pointer;transition:transform .06s}
+  .tile:active{transform:translateY(2px)}
+  .tile.used{visibility:hidden}
+  #check{border:0;border-radius:16px;padding:14px;font:24px "Jua",sans-serif;color:#fff;background:#adb5bd;box-shadow:0 5px 0 #868e96;cursor:pointer}
+  #check.ready{background:#51cf66;box-shadow:0 5px 0 #2b8a3e}
+  #check:active{transform:translateY(3px)}
+  #fb{position:fixed;left:0;right:0;bottom:0;z-index:4;padding:18px max(16px,env(safe-area-inset-left)) max(18px,env(safe-area-inset-bottom));border-radius:26px 26px 0 0;
+    font-family:"Jua",sans-serif;transform:translateY(110%);transition:transform .22s cubic-bezier(.2,1.2,.4,1);max-width:620px;margin:0 auto;box-sizing:border-box}
+  #fb.show{transform:none}
+  #fb.ok{background:#d3f9d8;color:#2b8a3e} #fb.no{background:#ffe3e3;color:#c92a2a}
+  #fb .h{font-size:26px} #fb .a{font:700 16px "Noto Sans KR",sans-serif;margin-top:4px;color:var(--ink)}
+  #fb .m{font:700 13px "Noto Sans KR",sans-serif;margin-top:4px;opacity:.8}
+  .arcade-home{bottom:auto!important;top:max(14px,env(safe-area-inset-top))}
+  .hud{top:max(10px,env(safe-area-inset-top))!important;left:auto!important;right:max(14px,env(safe-area-inset-right))!important;align-items:flex-end!important}
+  .hud-score{font-size:40px!important}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>개</small></div>
+  <div class="hud-row"><span class="pill" id="lives"></span><span class="pill dark" id="combo" style="display:none"></span></div>
+</div>
+<div id="lower" class="hud-ctl"><span class="tag">● LIVE 현장</span><span class="place" id="place">길거리 인터뷰</span></div>
+<div id="panel" class="hud-ctl">
+  <div id="say"><div class="face" id="face">👵</div><div class="bub"><div class="who" id="who">시민</div><div class="txt" id="txt"></div></div></div>
+  <div id="q"><span>🎤 리포터: 표준어로 통역하면?</span><div id="tbar"><i id="tfill"></i></div></div>
+  <div id="ans"></div>
+  <div id="bank"></div>
+  <button id="check">확인</button>
+</div>
+<div id="fb"><div class="h" id="fbh"></div><div class="a" id="fba"></div><div class="m" id="fbm"></div></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const $ = id => document.getElementById(id);
+
+// ---------- content ----------
+// region: [display place, background, who-list]
+const REGIONS = {
+  gs: { name: '경상도', place: '부산 해운대', sky: 0x9fd3ff, ground: 0xf3d9a4, prop: 'sea', who: [['👴', '해운대 할배'], ['🧔', '자갈치 아재'], ['👩', '대구 이모']] },
+  jl: { name: '전라도', place: '전주 한옥마을', sky: 0xd0ebff, ground: 0xd8c3a5, prop: 'hanok', who: [['👵', '한옥마을 할매'], ['👨', '목포 삼촌'], ['👩‍🦱', '광주 언니']] },
+  cc: { name: '충청도', place: '충남 논산', sky: 0xe7f5ff, ground: 0xc9e3a1, prop: 'field', who: [['👴', '논산 할아버지'], ['👨‍🌾', '딸기농장 사장님'], ['👵', '공주 할머니']] },
+  gw: { name: '강원도', place: '강원 평창', sky: 0xdbe4ff, ground: 0xb2d39b, prop: 'mountain', who: [['👨‍🦳', '평창 어르신'], ['👩‍🌾', '감자밭 이모'], ['🧑', '정선 청년']] },
+  jj: { name: '제주도', place: '제주 서귀포', sky: 0xa5d8ff, ground: 0x7a6a5a, prop: 'jeju', who: [['👵', '해녀 삼춘'], ['👴', '귤밭 하르방'], ['👩', '서귀포 삼춘']] },
+};
+// [region, dialect line, correct tiles (in order), distractor tiles, short note]
+const QS = [
+  ['gs', '니 밥 뭇나?', ['너', '밥', '먹었니?'], ['샀니?', '줄까?'], '뭇나 = 먹었니'],
+  ['gs', '와 이래 덥노', ['왜', '이렇게', '덥니'], ['춥니', '저렇게'], '-노 = 의문형 어미'],
+  ['gs', '단디 해라', ['제대로', '해라'], ['천천히', '하지 마'], '단디 = 단단히, 제대로'],
+  ['gs', '억수로 좋다', ['엄청', '좋다'], ['조금', '싫다'], '억수로 = 엄청, 매우'],
+  ['gs', '뭐라카노?', ['뭐라고', '하니?'], ['어디', '먹니?'], '카노 = 하니'],
+  ['gs', '가가 가가?', ['그 애가', '그 애야?'], ['가게가', '가수야?'], '전설의 경상도 문장'],
+  ['gs', '고마 해라', ['그만', '해라'], ['고맙게', '먹어라'], '고마 = 그만'],
+  ['gs', '정구지 찌짐 무라', ['부추전', '먹어라'], ['정자', '버려라'], '정구지 = 부추, 찌짐 = 전'],
+  ['jl', '밥 묵었당가?', ['밥', '먹었니?'], ['묶었니?', '샀니?'], '묵다 = 먹다'],
+  ['jl', '겁나게 맛있네잉', ['엄청', '맛있네'], ['무섭게', '맛없네'], '겁나게 = 엄청'],
+  ['jl', '뭣 허요?', ['뭐', '해요?'], ['어디', '가요?'], '허요 = 해요'],
+  ['jl', '싸게 와야', ['빨리', '와'], ['싸게', '천천히'], '싸게 = 빨리 (싸다 아님!)'],
+  ['jl', '허벌나게 많네', ['엄청나게', '많네'], ['허전하게', '적네'], '허벌나게 = 엄청나게'],
+  ['jl', '오메 깜짝이야', ['어머', '깜짝이야'], ['오매불망', '반갑다'], '오메 = 어머'],
+  ['jl', '거기 있응께 기다려', ['거기', '있으니까', '기다려'], ['없으니까', '가'], '-응께 = -니까'],
+  ['cc', '괜찮아유', ['괜찮아요'], ['안 돼요', '괜히요'], '-유 = -요'],
+  ['cc', '워디 가유?', ['어디', '가요?'], ['언제', '와요?'], '워디 = 어디'],
+  ['cc', '냅둬유', ['내버려', '둬요'], ['내놔', '줘요'], '냅두다 = 내버려 두다'],
+  ['cc', '천천히 혀유', ['천천히', '해요'], ['빨리', '혀요'], '혀유 = 해요'],
+  ['cc', '아버지 돌 굴러가유', ['아버지', '돌', '굴러가요'], ['날아가요', '어머니'], '느긋한 충청도 경고'],
+  ['cc', '기여?', ['그래?'], ['기어?', '아니?'], '기여 = 그래? 맞아?'],
+  ['gw', '감자 마이 먹었드래요', ['감자', '많이', '먹었대요'], ['조금', '팔았대요'], '-드래요 = -대요'],
+  ['gw', '어여 와서 앉으래요', ['어서', '와서', '앉아요'], ['가서', '누워요'], '어여 = 어서'],
+  ['gw', '그랬드래요', ['그랬대요'], ['그만해요', '안 했대요'], '강원도 대표 어미 -드래요'],
+  ['gw', '옥수수 쪄 먹으래요', ['옥수수', '쪄서', '먹어요'], ['구워서', '버려요'], '강원 옥수수!'],
+  ['jj', '혼저 옵서예', ['어서', '오세요'], ['혼자', '가세요'], '혼저 = 어서 (혼자 아님!)'],
+  ['jj', '하영 먹읍서', ['많이', '드세요'], ['하얗게', '주세요'], '하영 = 많이'],
+  ['jj', '폭삭 속았수다', ['수고', '많으셨습니다'], ['폭삭', '속았습니다'], '속았수다 = 수고하셨습니다'],
+  ['jj', '어디 감수광?', ['어디', '가세요?'], ['언제', '감사해요?'], '감수광 = 가십니까'],
+  ['jj', '무사 경 햄수과?', ['왜', '그렇게', '하세요?'], ['무사히', '드세요?'], '무사 = 왜, 경 = 그렇게'],
+  ['jj', '고맙수다', ['고맙습니다'], ['고마워요?', '죄송합니다'], '-수다 = -습니다'],
+  ['jj', '놀멍 쉬멍 갑서', ['놀면서', '쉬면서', '가세요'], ['일하면서', '오세요'], '-멍 = -면서'],
+];
+const OK_LINES = ['리포터: 아~ 그런 뜻이었군요!', '리포터: 완벽한 통역입니다!', '주민: 하모하모 / 맞당께 / 기여!', '리포터: 시청자 여러분 이해되셨죠?'];
+const NO_LINES = ['주민: 아이고 그게 아니라~', '리포터: …다시 한번 여쭤볼게요', '주민: 뭐라카노 / 뭔 소리여'];
+
+// ---------- three: street interview ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xcfe6ff);
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, .1, 100);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb0a090, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(3, 8, 6); sun.castShadow = true; scene.add(sun);
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .85, flatShading: true, ...extra });
+const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
+const groundMat = flat(0xf3d9a4);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), groundMat); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+let propGroup = new THREE.Group(); scene.add(propGroup);
+function buildProps(kind) {
+  scene.remove(propGroup); propGroup = new THREE.Group(); scene.add(propGroup);
+  const P = propGroup;
+  if (kind === 'sea') {
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(60, 20), flat(0x339af0)); sea.rotation.x = -Math.PI / 2; sea.position.set(0, .02, -14); P.add(sea);
+    for (let i = 0; i < 5; i++) { const b = box(.5, .12, .12, flat(0xffffff), -4 + i * 2, 3 + Math.random(), -6 - Math.random() * 3, P); b.userData.gull = Math.random() * 6; }
+    for (let i = 0; i < 6; i++) box(1.2, 3 + Math.random() * 5, 1.2, flat([0xdee2e6, 0xadb5bd, 0xced4da][i % 3]), -9 + i * 3.4, 3, -20, P);
+  } else if (kind === 'hanok') {
+    for (const x of [-4, 0, 4]) {
+      box(3, 1.6, 2, flat(0xf8f0e3), x, .8, -5, P); box(3.2, .2, 2.2, flat(0x6b4f3a), x, 1.7, -5, P);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(2.6, 1.1, 4), flat(0x343a40)); roof.rotation.y = Math.PI / 4; roof.scale.set(1.3, 1, .9); roof.position.set(x, 2.3, -5); P.add(roof);
+    }
+  } else if (kind === 'field') {
+    for (let r = 0; r < 6; r++) box(20, .25, .6, flat(r % 2 ? 0x8ce99a : 0xc0eb75), 0, .12, -3 - r * 1.2, P);
+    box(.6, 1.4, .3, flat(0x8d5a3b), 3.5, .7, -4, P); const hat = new THREE.Mesh(new THREE.ConeGeometry(.5, .3, 8), flat(0xffd43b)); hat.position.set(3.5, 1.6, -4); P.add(hat);   // scarecrow
+  } else if (kind === 'mountain') {
+    for (let i = 0; i < 5; i++) { const m = new THREE.Mesh(new THREE.ConeGeometry(3 + Math.random() * 2, 5 + Math.random() * 3, 5), flat([0x2f9e44, 0x37b24d, 0x2b8a3e][i % 3])); m.position.set(-10 + i * 5, 2.5, -14); P.add(m); }
+    for (let i = 0; i < 6; i++) { const p = new THREE.Mesh(new THREE.DodecahedronGeometry(.25, 0), flat(0xc69c6d)); p.position.set(-2.5 + i * .5, .2, -1.8); P.add(p); }   // potatoes
+  } else if (kind === 'jeju') {
+    const stone = flat(0x495057);
+    for (const x of [-3.2, 3.4]) { box(.9, 1.4, .8, stone, x, .7, -3, P); const h = box(.8, .8, .75, stone, x, 1.8, -3, P); const cap = new THREE.Mesh(new THREE.CylinderGeometry(.35, .5, .4, 7), stone); cap.position.set(x, 2.4, -3); P.add(cap); }   // dol hareubang
+    for (let i = 0; i < 4; i++) { box(.2, 1, .2, flat(0x6b4f3a), -6 + i * 4, .5, -7, P); const t = new THREE.Mesh(new THREE.IcosahedronGeometry(.9, 0), flat(0x2f9e44)); t.position.set(-6 + i * 4, 1.5, -7); P.add(t);
+      for (let k = 0; k < 4; k++) { const o = new THREE.Mesh(new THREE.IcosahedronGeometry(.13, 0), flat(0xfd7e14)); o.position.set(-6 + i * 4 + Math.cos(k * 1.6) * .8, 1.4 + Math.sin(k) * .4, -7 + Math.sin(k * 1.6) * .8); P.add(o); } }
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(60, 14), flat(0x1c7ed6)); sea.rotation.x = -Math.PI / 2; sea.position.set(0, .02, -16); P.add(sea);
+  }
+}
+function makePerson({ top = 0x37415a, bottom = 0x2b2f3a, skin = 0xffd2a8, hair = 0x2b2b2b, gray = false, hat = null } = {}) {
+  const root = new THREE.Group();
+  for (const s of [-1, 1]) { box(.22, .85, .24, flat(bottom), s * .15, .43, 0, root); box(.24, .1, .32, flat(0x222222), s * .15, .04, .05, root); }
+  box(.62, .78, .38, flat(top), 0, 1.25, 0, root);
+  const arms = [-1, 1].map(s => { const p = new THREE.Group(); p.position.set(s * .4, 1.58, 0); box(.16, .62, .18, flat(top), 0, -.3, 0, p); const h = new THREE.Mesh(new THREE.DodecahedronGeometry(.1, 0), flat(skin)); h.position.y = -.66; p.add(h); root.add(p); return p; });
+  const head = new THREE.Group(); head.position.y = 1.66; root.add(head);
+  box(.42, .44, .4, flat(skin), 0, .22, 0, head);
+  box(.46, .16, .44, flat(gray ? 0xdee2e6 : hair), 0, .48, -.02, head); box(.46, .26, .1, flat(gray ? 0xdee2e6 : hair), 0, .34, -.18, head);
+  for (const s of [-1, 1]) box(.06, .07, .02, flat(0x222222), s * .1, .26, .205, head);
+  const mouth = box(.12, .03, .02, flat(0x7a2a2a), 0, .12, .205, head);
+  if (hat === 'cap') { box(.48, .14, .48, flat(0xe03131), 0, .55, 0, head); box(.4, .03, .25, flat(0xe03131), 0, .49, .3, head); }
+  if (hat === 'scarf') box(.5, .3, .46, flat(0xf783ac), 0, .45, -.02, head);
+  if (hat === 'haenyeo') { box(.48, .28, .46, flat(0x212529), 0, .42, 0, head); const m = new THREE.Mesh(new THREE.TorusGeometry(.12, .03, 4, 10), flat(0x74c0fc)); m.position.set(0, .3, .24); head.add(m); }
+  if (hat === 'straw') { const h = new THREE.Mesh(new THREE.CylinderGeometry(.42, .42, .05, 10), flat(0xe9c46a)); h.position.y = .56; head.add(h); box(.3, .14, .3, flat(0xe9c46a), 0, .64, 0, head); }
+  root.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return { root, arms, head, mouth };
+}
+// reporter (static) with a mic
+const reporter = makePerson({ top: 0x1b1f3a, bottom: 0x1b1f3a, hair: 0x3b2a1a });
+reporter.root.position.set(-.9, 0, 0); reporter.root.rotation.y = .7; scene.add(reporter.root);
+const mic = new THREE.Group(); box(.05, .35, .05, flat(0x212529), 0, -.1, 0, mic); const mh = new THREE.Mesh(new THREE.IcosahedronGeometry(.08, 0), flat(0x495057)); mh.position.y = .1; mic.add(mh);
+const micFlag = box(.12, .1, .12, flat(0xe03131), 0, -.02, 0, mic);
+mic.position.set(0, -.6, .15); reporter.arms[1].add(mic);
+let resident = null;
+const STYLES = { gs: [{ top: 0x868e96, hat: 'cap' }, { top: 0x1971c2, hat: 'cap' }, { top: 0xe64980 }], jl: [{ top: 0xae3ec9, gray: true, hat: 'scarf' }, { top: 0x2f9e44 }, { top: 0xf76707 }],
+  cc: [{ top: 0x8d5a3b, gray: true, hat: 'straw' }, { top: 0xe03131, hat: 'straw' }, { top: 0xf783ac, gray: true, hat: 'scarf' }], gw: [{ top: 0x495057, gray: true }, { top: 0x5c940d, hat: 'scarf' }, { top: 0x1c7ed6 }],
+  jj: [{ top: 0x212529, hat: 'haenyeo' }, { top: 0xfd7e14, gray: true, hat: 'straw' }, { top: 0x0ca678, hat: 'scarf' }] };
+function setResident(region, wi) {
+  if (resident) scene.remove(resident.root);
+  resident = makePerson(STYLES[region][wi]);
+  resident.root.position.set(.9, 0, 0); resident.root.rotation.y = -.7; scene.add(resident.root);
+}
+// frame the two people inside the strip above the answer panel (view offset shifts the image up)
+let camBase = new THREE.Vector3(0, 1.4, 6);
+function placeCamera() {
+  camera.aspect = innerWidth / innerHeight; camera.fov = 40;
+  const panelH = $('panel').getBoundingClientRect().height || innerHeight * .5;
+  const hr = Math.max(120, innerHeight - panelH);
+  const visH = Math.max(2.9 / (hr / innerHeight), 3.4 / camera.aspect);      // 2.9 units tall must fit in the strip, 3.4 wide in the screen
+  const d = visH / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  camBase.set(0, 1.25, d);
+  camera.position.copy(camBase); camera.lookAt(0, 1.1, 0);
+  camera.setViewOffset(innerWidth, innerHeight, 0, (innerHeight - hr) / 2 - hr * .04, innerWidth, innerHeight);
+  camera.updateProjectionMatrix();
+  $('lower').style.top = 'auto'; $('lower').style.bottom = `${panelH + 10}px`;
+}
+placeCamera();
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
+
+// ---------- state ----------
+const LIVES = 3;
+let state = 'ready', score = 0, lives = LIVES, combo = 0, maxCombo = 0, order = [], qi = 0, q = null, tLeft = 0, tMax = 1, overAt = 0, talkT = 0, react = null;
+let best = 0; try { best = +localStorage.getItem('dialect-best') || 0; } catch {}
+const $score = $('score'), $lives = $('lives'), $combo = $('combo'), $center = $('center'), $ans = $('ans'), $bank = $('bank'), $check = $('check'), $fb = $('fb');
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🗣️', title: '사투리 통역사', how: [
+  ['🎤', '전국 길거리 인터뷰! 주민이 <b>사투리</b>로 대답해요'],
+  ['🧩', '낱말 카드를 <b>순서대로</b> 눌러서 표준어 문장 완성'],
+  ['✅', '<b>확인</b>을 누르면 채점. 카드를 다시 누르면 빠져요'],
+  ['⏱️', '시간 초과나 오답 3번이면 방송 사고!'],
+] }));
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const rnd = a => a[(Math.random() * a.length) | 0];
+function updateHud() {
+  $score.innerHTML = `${score}<small>개</small>`;
+  $lives.textContent = '🎙️'.repeat(lives) + '🔇'.repeat(LIVES - lives);
+  $combo.style.display = combo >= 3 ? '' : 'none'; $combo.textContent = `🔥 ${combo}연속`;
+}
+function reset() { score = 0; lives = LIVES; combo = 0; maxCombo = 0; order = shuffle(QS.map((_, i) => i)); qi = 0; updateHud(); }
+function nextQ() {
+  if (state !== 'playing') return;
+  $fb.className = '';
+  if (qi >= order.length) { order = shuffle(order); qi = 0; }
+  const [rg, line, correct, wrong, note] = QS[order[qi++]];
+  const R = REGIONS[rg], wi = (Math.random() * R.who.length) | 0;
+  q = { rg, line, correct, note, picked: [], tiles: shuffle([...correct, ...wrong].map((t, i) => ({ t, i }))), done: false };
+  // more distractors later on
+  if (score >= 8) q.tiles.push(...shuffle(['진짜', '그냥', '빨리', '많이', '안', '좀'].filter(w => !correct.includes(w))).slice(0, 2).map((t, k) => ({ t, i: 100 + k })));
+  shuffle(q.tiles);
+  $('place').textContent = `${R.place} · ${R.name}`;
+  $('face').textContent = R.who[wi][0]; $('who').textContent = R.who[wi][1];
+  $('txt').textContent = `“${line}”`;
+  scene.background.setHex(R.sky); groundMat.color.setHex(R.ground); buildProps(R.prop); setResident(rg, wi);
+  tMax = Math.max(9, 18 - score * .5); tLeft = tMax; talkT = 1.2; react = null;
+  renderTiles(); Arcade.sfx.tap(); placeCamera();
+}
+function renderTiles() {
+  $ans.innerHTML = q.picked.map((ti, k) => `<button class="tile" data-a="${k}">${q.tiles[ti].t}</button>`).join('');
+  $bank.innerHTML = q.tiles.map((o, k) => `<button class="tile ${q.picked.includes(k) ? 'used' : ''}" data-b="${k}">${o.t}</button>`).join('');
+  $check.classList.toggle('ready', q.picked.length > 0);
+}
+$bank.addEventListener('click', e => { const b = e.target.closest('[data-b]'); if (!b || !q || q.done || state !== 'playing') return; const k = +b.dataset.b; if (q.picked.includes(k)) return; q.picked.push(k); Arcade.sfx.pop(1.2); renderTiles(); });
+$ans.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (!b || !q || q.done) return; q.picked.splice(+b.dataset.a, 1); Arcade.sfx.tap(); renderTiles(); });
+$check.addEventListener('click', () => { if (q && !q.done && q.picked.length && state === 'playing') judge(false); });
+function judge(timeout) {
+  q.done = true;
+  const said = q.picked.map(k => q.tiles[k].t).join(' ');
+  const ok = !timeout && said === q.correct.join(' ');
+  $fb.className = `show ${ok ? 'ok' : 'no'}`;
+  $('fbh').textContent = ok ? `✅ ${rnd(['정확해요!', '완벽한 통역!', '현지인 인증!'])}` : timeout ? '⏰ 시간 초과! 방송 사고' : `❌ ${rnd(['아쉬워요!', '오역이에요!'])}`;
+  $('fba').textContent = `표준어: ${q.correct.join(' ')}`;
+  $('fbm').textContent = `💡 ${q.note} · ${ok ? rnd(OK_LINES) : rnd(NO_LINES)}`;
+  if (ok) {
+    score++; combo++; maxCombo = Math.max(maxCombo, combo); react = { k: 'ok', t: 0 };
+    Arcade.sfx.perfect(Math.min(combo, 12)); Arcade.vibrate(20);
+    if (combo % 5 === 0) { Arcade.confetti({ y: innerHeight * .3, count: 70, emoji: ['🗣️', '🎤', '⭐'] }); Arcade.sfx.coin(); }
+  } else {
+    lives--; combo = 0; react = { k: 'no', t: 0 };
+    Arcade.sfx.miss(); Arcade.shake(.1); Arcade.vibrate([40, 30, 60]);
+  }
+  updateHud();
+  setTimeout(() => { if (lives <= 0) finish(); else nextQ(); }, ok ? 1500 : 2300);
+}
+function finish() {
+  state = 'over'; overAt = performance.now(); $fb.className = '';
+  const isBest = score > best;
+  if (isBest) { best = score; try { localStorage.setItem('dialect-best', best); } catch {} }
+  isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  const rank = score < 3 ? '🔇 통역 연습생' : score < 8 ? '🎤 신입 리포터' : score < 15 ? '📺 지역 방송 에이스' : score < 25 ? '🗺️ 팔도 통역사' : '👑 사투리 국가대표';
+  showScreen(Arcade.resultScreen({ emoji: '🗣️', label: '통역 성공', score, unit: '개', msg: rank, rows: [['최대 연속', `${maxCombo}개`]], isBest: isBest && score > 0, best }));
+  Arcade.gameOver(score);
+}
+function start() {
+  state = 'count'; $center.style.display = 'none';
+  Arcade.countdown({ final: '방송 시작!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { state = 'playing'; nextQ(); } });
+}
+function tapStart() {
+  if (state === 'ready') start();
+  else if (state === 'over' && performance.now() - overAt > 900 && !Arcade.inRun()) { reset(); start(); }
+}
+addEventListener('pointerdown', e => { if (!e.target.closest('#panel, .arcade-btn')) tapStart(); });
+addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); if (state === 'playing' && q && !q.done && q.picked.length) judge(false); else tapStart(); }
+  if (e.code === 'Backspace' && q && !q.done && q.picked.length) { q.picked.pop(); renderTiles(); }
+  const n = +e.key; if (n >= 1 && n <= 9 && q && !q.done && state === 'playing') { const k = n - 1; if (k < q.tiles.length && !q.picked.includes(k)) { q.picked.push(k); renderTiles(); } }
+});
+
+// ---------- loop ----------
+let last = performance.now();
+reset(); buildProps('sea'); setResident('gs', 0); showIntro();
+window.__dia = { get state() { return state; }, get q() { return q; }, judge, get score() { return score; }, get lives() { return lives; },
+  solve() { q.picked = q.correct.map(w => q.tiles.findIndex((o, k) => o.t === w && !q.picked.includes(k))); renderTiles(); } };
+
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
+  if (state === 'playing' && q && !q.done) {
+    tLeft -= dt;
+    if (tLeft <= 0) { tLeft = 0; judge(true); }
+  }
+  $('tfill').style.transform = `scaleX(${q && state === 'playing' ? tLeft / tMax : 0})`;
+  $('tbar').classList.toggle('low', tLeft / tMax < .3);
+  talkT -= dt;
+  if (resident) {
+    resident.mouth.scale.y = talkT > 0 ? 1 + Math.abs(Math.sin(t * 20)) * 3 : 1;
+    resident.arms[0].rotation.x = talkT > 0 ? -.6 + Math.sin(t * 6) * .3 : 0;
+    resident.root.position.y = 0;
+    if (react) {
+      react.t += dt;
+      if (react.k === 'ok') { resident.head.rotation.x = Math.sin(react.t * 14) * .2 * Math.max(0, 1 - react.t); resident.arms[1].rotation.x = -2.6 * Math.max(0, 1 - react.t); }
+      else { resident.head.rotation.y = Math.sin(react.t * 12) * .35 * Math.max(0, 1 - react.t * .6); }
+    } else { resident.head.rotation.set(0, 0, 0); resident.arms[1].rotation.x = 0; }
+  }
+  reporter.arms[1].rotation.x = -1.2 + Math.sin(t * 1.5) * .05;   // holding the mic out
+  reporter.arms[1].rotation.z = .5;
+  propGroup.children.forEach(o => { if (o.userData.gull !== undefined) { o.position.x += dt * .8; o.position.y += Math.sin(t * 3 + o.userData.gull) * .005; if (o.position.x > 8) o.position.x = -8; } });
+  Arcade.applyShake(camera, dt);
+  renderer.render(scene, camera);
+  placeCameraSoft();
+  requestAnimationFrame(frame);
+}
+function placeCameraSoft() { camera.position.lerp(camBase, .3); }
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

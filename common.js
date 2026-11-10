@@ -31,6 +31,10 @@
       desc: '여친이 영화 볼 때 카라멜 팝콘만 쏙쏙. 쳐다보면 일반 팝콘인 척' },
     { id: 'shop', file: 'shop.html', name: '도와드릴까요?', emoji: '🛍️', unit: '점', bestKey: 'shop-best',
       desc: '내성적인 나, 직원을 피해 가방 찾아 옷가게 탈출! 폰 주우면 통화하는 척' },
+    { id: 'sake', file: 'sake.html', name: '찰랑찰랑 사케', emoji: '🍶', unit: '점', bestKey: 'sake-best',
+      desc: '도레미파솔라시도~ 넘치기 직전까지 꽉! 표면장력의 한계에 도전' },
+    { id: 'radio', file: 'radio.html', name: '지구 반대편 전파', emoji: '📡', unit: '점', bestKey: 'radio-best',
+      desc: '반사판 위성을 돌려 전파를 튕겨서 지구 반대편까지 메시지 배달' },
   ];
 
   const q = new URLSearchParams(location.search);
@@ -189,6 +193,23 @@
     shout() { tone('sawtooth', 300, 230, .32, .1, { vib: 35, wet: .5 }); tone('square', 600, 470, .3, .04, { vib: 35, wet: .5 }); noise(.3, .18, { f0: 1300, q: 3, wet: .5 }); },
     crowd(level = 1) { noise(1.6, .28 * level, { type: 'bandpass', f0: 700, f1: 500, q: .5, attack: .15 }); noise(1.2, .12 * level, { type: 'highpass', f0: 3000, attack: .1 }); },
     kick() { tone('sine', 160, 50, .12, .7, { wet: .2 }); noise(.05, .4, { type: 'lowpass', f0: 2000 }); },
+    // major-scale note: 0 = 도 … 7 = 높은 도 (keeps climbing past 7)
+    note(i, vol = .22) { const SC = [0, 2, 4, 5, 7, 9, 11]; const n = SC[((i % 7) + 7) % 7] + 12 * Math.floor(i / 7), f = 523.25 * semi(n);
+      tone('triangle', f, f, .45, vol, { wet: .6 }); tone('sine', f * 2, f * 2, .25, vol * .25, { wet: .6 }); },
+    // continuous pouring gurgle; level 0..1 = flow, pitch 0..1 rises as the cup fills
+    pour(level, pitch = 0) {
+      if (!A()) return;
+      if (!sfx._pour) {
+        if (!noiseBuf) noise(.01, 0);
+        const s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain(), lfo = actx.createOscillator(), lg = actx.createGain();
+        s.buffer = noiseBuf; s.loop = true; f.type = 'bandpass'; f.Q.value = 6; g.gain.value = 0;
+        lfo.frequency.value = 14; lg.gain.value = 0; lfo.connect(lg).connect(g.gain); lfo.start();
+        s.connect(f).connect(g).connect(out); s.start(); sfx._pour = { f, g, lg };
+      }
+      const P = sfx._pour, now = actx.currentTime;
+      P.g.gain.setTargetAtTime(level * .22, now, .04); P.lg.gain.setTargetAtTime(level * .1, now, .04);
+      P.f.frequency.setTargetAtTime(500 + pitch * 1800, now, .08);
+    },
     thud() { tone('sine', 120, 45, .22, .7, { wet: .3 }); noise(.08, .35, { type: 'lowpass', f0: 500 }); },
     flap() { [0, .07, .14].forEach((w, i) => noise(.12, .45 - i * .1, { f0: 350 + i * 200, f1: 900, q: .7, when: w })); tone('sine', 90, 50, .3, .5, { when: .05 }); },
     splash() { noise(.6, .5, { type: 'lowpass', f0: 3000, f1: 300 }); for (let i = 0; i < 6; i++) tone('sine', 400 + Math.random() * 300, 900 + Math.random() * 600, .08, .12, { when: .1 + i * .06 }); },

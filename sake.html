@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>찰랑찰랑 사케</title>
+<script src="common.js?v=17"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#2a1a12;
+    user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  #pct{position:fixed;left:72%;top:46%;transform:translate(-50%,-50%);z-index:3;pointer-events:none;font-family:"Jua",sans-serif;font-size:clamp(46px,13vw,80px);
+    color:#fff;text-shadow:0 4px 0 rgba(0,0,0,.35),0 0 20px rgba(0,0,0,.3);opacity:0;transition:opacity .15s}
+  #pct.on{opacity:1}
+  #pct.tension{color:#ffe066;animation:tr .08s linear infinite}
+  #pct.spill{color:#ff6b6b}
+  @keyframes tr{25%{margin-left:-2px}75%{margin-left:2px}}
+  #cupname{font-family:"Jua",sans-serif}
+  #hint{position:fixed;bottom:max(12vh,76px);left:0;right:0;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
+  #hint .pill{font-size:15px;padding:10px 18px}
+  .toast{top:22%}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>점</small></div>
+  <div class="hud-row"><span class="pill" id="lives"></span><span class="pill dark" id="cupname">1잔째</span></div>
+</div>
+<div id="pct" class="hud-ctl">0%</div>
+<div id="hint" class="hud-ctl"><span class="pill">👆 꾹 누르면 따르고, 떼면 멈춰요</span></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const $ = id => document.getElementById(id);
+
+// ---------- three: izakaya counter ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x2a1a12);
+scene.fog = new THREE.Fog(0x2a1a12, 8, 18);
+const camera = new THREE.PerspectiveCamera(36, innerWidth / innerHeight, .05, 50);
+scene.add(new THREE.HemisphereLight(0xffe2b8, 0x3a2414, 1.1));
+const lamp = new THREE.PointLight(0xffb86b, 22, 10, 1.6); lamp.position.set(-1.2, 3.2, 1.6); lamp.castShadow = true; scene.add(lamp);
+const rim = new THREE.DirectionalLight(0xbfd7ff, .6); rim.position.set(3, 2, -3); scene.add(rim);
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .75, flatShading: true, ...extra });
+const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
+{
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = '#b07a48'; g.fillRect(0, 0, 256, 64); g.strokeStyle = 'rgba(80,40,10,.35)'; g.lineWidth = 2;
+  for (let i = 0; i < 14; i++) { g.beginPath(); g.moveTo(0, 4 + i * 4.5); for (let x = 0; x <= 256; x += 32) g.lineTo(x, 4 + i * 4.5 + Math.sin(x * .05 + i) * 1.5); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 1); t.colorSpace = THREE.SRGBColorSpace;
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(12, .3, 3), new THREE.MeshStandardMaterial({ map: t, roughness: .6 })); counter.position.y = -.15; counter.receiveShadow = true; scene.add(counter);
+  // back wall: noren curtain + lanterns + bottle shelf
+  box(14, 6, .2, flat(0x3b2416), 0, 2.6, -2.5);
+  for (let i = -2; i <= 2; i++) { const n = box(1.05, 1.4, .05, flat(0x1c3d6e), i * 1.1, 3.6, -2.35); }
+  const shelf = box(5, .08, .4, flat(0x6b4226), 0, 1.6, -2.2);
+  const BOTTLE = [0x2f9e44, 0x1c7ed6, 0x5c3d2e, 0xf8f9fa, 0x2f9e44, 0xae3ec9];
+  for (let i = 0; i < 9; i++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(.09, .12, .6, 8), flat(BOTTLE[i % BOTTLE.length], { roughness: .3 })); b.position.set(-2 + i * .5, 1.95, -2.2); scene.add(b); }
+  for (const x of [-3, 3]) { const l = new THREE.Mesh(new THREE.SphereGeometry(.4, 10, 8), new THREE.MeshStandardMaterial({ color: 0xff6b3d, emissive: 0xff4d1a, emissiveIntensity: .8 })); l.scale.y = 1.25; l.position.set(x, 3, -1.6); scene.add(l);
+    const lp = new THREE.PointLight(0xff7a3d, 4, 4); lp.position.copy(l.position); scene.add(lp); }
+}
+
+// ---------- the cup (glass standing in a wooden masu) ----------
+const CUPS = [
+  { name: '유리 오쵸코', rt: .3, rb: .24, h: .62, speed: 1, masu: true },
+  { name: '키 큰 유리잔', rt: .27, rb: .22, h: 1.0, speed: .7, masu: true },
+  { name: '넓은 사카즈키', rt: .55, rb: .2, h: .26, speed: 1.55, masu: false },
+  { name: '네모 마스잔', rt: .42, rb: .42, h: .5, speed: 1.1, masu: false, square: true },
+  { name: '미니 샷잔', rt: .2, rb: .16, h: .38, speed: 1.9, masu: true },
+  { name: '와인잔(?!)', rt: .36, rb: .1, h: .55, speed: 1.15, masu: false, stem: true },
+];
+const cupGroup = new THREE.Group(); scene.add(cupGroup);
+const sakeMat = new THREE.MeshStandardMaterial({ color: 0xfff4d6, transparent: true, opacity: .78, roughness: .05, metalness: .1 });
+const glassMat = new THREE.MeshStandardMaterial({ color: 0xdff4ff, transparent: true, opacity: .28, roughness: .05, metalness: .2, side: THREE.DoubleSide, depthWrite: false });
+let liquid, dome, spillSheet, cupBaseY = 0, cup = CUPS[0];
+function buildCup(def) {
+  scene.remove(cupGroup); cupGroup.clear(); scene.add(cupGroup);
+  cup = def; cupBaseY = 0;
+  if (def.masu) { // wooden box under the glass
+    const wood = flat(0xd9b27a);
+    const M = new THREE.Group(); cupGroup.add(M);
+    box(.95, .05, .95, wood, 0, .025, 0, M);
+    for (const [x, z, w, d] of [[0, .45, .95, .05], [0, -.45, .95, .05], [.45, 0, .05, .95], [-.45, 0, .05, .95]]) box(w, .16, d, wood, x, .08, z, M);   // low masu so the glass level stays visible
+    cupBaseY = .05;
+  }
+  if (def.stem) { const st = new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, .45, 8), glassMat); st.position.y = .25; cupGroup.add(st); const ft = new THREE.Mesh(new THREE.CylinderGeometry(.22, .24, .03, 16), glassMat); ft.position.y = .02; cupGroup.add(ft); cupBaseY = .48; }
+  const seg = def.square ? 4 : 24;
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(def.rt, def.rb, def.h, seg, 1, true), def.square ? flat(0xe6c48f) : glassMat);
+  if (def.square) wall.material = new THREE.MeshStandardMaterial({ color: 0xe6c48f, roughness: .7, side: THREE.DoubleSide });
+  wall.rotation.y = def.square ? Math.PI / 4 : 0; wall.position.y = cupBaseY + def.h / 2; cupGroup.add(wall);
+  const rimRing = new THREE.Mesh(new THREE.TorusGeometry(def.rt, .012, 6, seg), new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: .7 }));
+  rimRing.rotation.x = Math.PI / 2; if (def.square) rimRing.rotation.z = Math.PI / 4; rimRing.position.y = cupBaseY + def.h; cupGroup.add(rimRing);
+  const bottom = new THREE.Mesh(new THREE.CylinderGeometry(def.rb, def.rb, .03, seg), def.square ? wall.material : glassMat); bottom.rotation.y = wall.rotation.y; bottom.position.y = cupBaseY + .015; cupGroup.add(bottom);
+  liquid = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, seg), sakeMat); liquid.rotation.y = wall.rotation.y; cupGroup.add(liquid);
+  dome = new THREE.Mesh(new THREE.SphereGeometry(1, seg, 8, 0, Math.PI * 2, 0, Math.PI / 2), sakeMat); dome.rotation.y = wall.rotation.y; cupGroup.add(dome);
+  spillSheet = new THREE.Mesh(new THREE.CylinderGeometry(def.rt + .02, def.rt + .06, 1, seg, 1, true), new THREE.MeshStandardMaterial({ color: 0xfff4d6, transparent: true, opacity: .55, side: THREE.DoubleSide })); spillSheet.rotation.y = wall.rotation.y; spillSheet.visible = false; cupGroup.add(spillSheet);
+}
+function drawLiquid() {
+  const f = Math.min(level, 1), h = cup.h * f;
+  const r = cup.rb + (cup.rt - cup.rb) * f;   // radius at the surface
+  liquid.visible = level > .002;
+  liquid.geometry.dispose(); liquid.geometry = new THREE.CylinderGeometry(r * .97, cup.rb * .97, Math.max(.001, h), cup.square ? 4 : 24);
+  liquid.position.y = cupBaseY + h / 2 + .01;
+  liquid.rotation.z = slosh * .25; liquid.rotation.x = slosh2 * .2;
+  const over = Math.max(0, level - 1);
+  dome.visible = over > 0 && !spilled;
+  dome.scale.set(cup.rt * .98, Math.max(.001, over * cup.h * 1.6), cup.rt * .98);
+  dome.position.y = cupBaseY + cup.h;
+}
+
+// ---------- the tokkuri (bottle) and the stream ----------
+const bottle = new THREE.Group(); scene.add(bottle);
+{
+  const ceramic = flat(0xf3efe6, { roughness: .4 }), blue = flat(0x1c3d6e, { roughness: .4 });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(.42, 14, 10), ceramic); body.scale.y = 1.25; body.position.y = -.35; bottle.add(body);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(.1, .18, .55, 12), ceramic); neck.position.y = .3; bottle.add(neck);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(.1, .03, 6, 12), ceramic); lip.rotation.x = Math.PI / 2; lip.position.y = .58; bottle.add(lip);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(.43, .43, .16, 14, 1, true), blue); band.position.y = -.3; bottle.add(band);
+  bottle.traverse(o => { if (o.isMesh) o.castShadow = true; });
+}
+const BOTTLE_PIVOT = new THREE.Vector3(-.75, 1.55, 0);
+bottle.position.copy(BOTTLE_PIVOT); bottle.scale.setScalar(.62);
+const spout = new THREE.Vector3();
+const streamMat = new THREE.MeshStandardMaterial({ color: 0xfff4d6, transparent: true, opacity: .75, roughness: .05 });
+const stream = new THREE.Mesh(new THREE.CylinderGeometry(.025, .02, 1, 8), streamMat); stream.visible = false; scene.add(stream);
+const drops = [];
+
+// ---------- state ----------
+const LIVES = 3, FALL_T = .2;
+let state = 'ready', score = 0, lives = LIVES, cupNo = 0, overAt = 0;
+let level = 0, slosh = 0, sloshV = 0, slosh2 = 0, slosh2V = 0, tilt = 0, holding = false, holdT = 0, inAir = [], limit = 1.04, judgeT = 0, spilled = false, lastNote = -1, cupState = 'pour', pourT = 0;
+let best = 0; try { best = +localStorage.getItem('sake-best') || 0; } catch {}
+const $score = $('score'), $lives = $('lives'), $pct = $('pct'), $center = $('center'), $hint = $('hint');
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🍶', title: '찰랑찰랑 사케', how: [
+  ['👆', '꾹 누르면 졸졸 따르고, 떼면 멈춰요'],
+  ['🎵', '찰수록 <b>도레미파솔라시도</b>! 가득 채울수록 고득점'],
+  ['💧', '100%를 넘으면 <b>표면장력</b>으로 볼록… 한계는 잔마다 달라요'],
+  ['⚠️', '손을 떼도 <b>공중의 술</b>은 마저 떨어져요. 넘치면 -1잔'],
+] }));
+function updateHud() {
+  $score.innerHTML = `${score}<small>점</small>`;
+  $lives.textContent = '🍶'.repeat(lives) + '💦'.repeat(LIVES - lives);
+  $('cupname').textContent = `${cupNo + 1}잔째 · ${cup.name}`;
+}
+function nextCup() {
+  const pool = cupNo < 2 ? CUPS.slice(0, 2) : CUPS;
+  buildCup(cupNo === 0 ? CUPS[0] : pool[(Math.random() * pool.length) | 0]);
+  level = 0; slosh = sloshV = slosh2 = slosh2V = 0; inAir = []; spilled = false; lastNote = -1; cupState = 'slide'; judgeT = 0; pourT = 0;
+  limit = 1 + .012 + Math.random() * (.05 - Math.min(.03, cupNo * .002));   // hidden surface-tension limit: 101~106%
+  cupGroup.position.x = 3.5;
+  $pct.className = 'hud-ctl'; updateHud();
+}
+function reset() { score = 0; lives = LIVES; cupNo = 0; nextCup(); }
+function start() {
+  state = 'count'; $center.style.display = 'none'; $hint.style.display = '';
+  Arcade.countdown({ final: '칸파이!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { state = 'playing'; } });
+}
+function spill() {
+  spilled = true; cupState = 'judged'; holding = false;
+  lives--; updateHud();
+  $pct.className = 'hud-ctl on spill'; $pct.textContent = '넘침!';
+  Arcade.sfx.splash(); Arcade.shake(.25); Arcade.vibrate([60, 40, 100]);
+  Arcade.toast(['💦 아까워라!!', '😱 넘쳤다… 마스에 다 흘렀어', '🙈 손님: "괜찮아요… 닦을게요"'][(Math.random() * 3) | 0], '#e03131');
+  spillSheet.visible = true;
+  setTimeout(() => { if (lives <= 0) finish(); else { cupNo++; nextCup(); } }, 1600);
+}
+function judge() {
+  cupState = 'judged';
+  const pct = Math.round(level * 100);
+  let pts = Math.round(Math.pow(Math.min(level, 1), 3) * 100), msg, col = '#2b8a3e';
+  if (level > 1) { pts += 30 + Math.round((level - 1) * 1000); msg = `✨ 표면장력 마스터! ${pct}%`; col = '#e8590c'; Arcade.sfx.fanfare(); Arcade.confetti({ y: innerHeight * .35, count: 80, emoji: ['🍶', '✨', '🎉'] }); Arcade.vibrate([20, 30, 20, 30, 60]); }
+  else if (level >= .95) { msg = `🍶 캬~ 꽉 찼다! ${pct}%`; Arcade.sfx.perfect(6); Arcade.vibrate([20, 30, 50]); }
+  else if (level >= .8) { msg = `👍 좋아요 ${pct}%`; Arcade.sfx.coin(); }
+  else if (level >= .5) { msg = `😐 손님: "조금만 더…" ${pct}%`; col = '#868e96'; Arcade.sfx.tap(); }
+  else { msg = `😒 손님: "인색하시네…" ${pct}%`; col = '#868e96'; Arcade.sfx.miss(); pts = Math.round(pts / 2); }
+  score += pts; updateHud();
+  Arcade.toast(`${msg} +${pts}`, col);
+  setTimeout(() => { cupNo++; nextCup(); }, 1300);
+}
+function finish() {
+  state = 'over'; overAt = performance.now(); holding = false; Arcade.sfx.pour(0);
+  const isBest = score > best;
+  if (isBest) { best = score; try { localStorage.setItem('sake-best', best); } catch {} }
+  isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  showScreen(Arcade.resultScreen({ emoji: '🍶', label: '사케 점수', score, unit: '점', msg: cupNo >= 15 ? '이자카야 사장님이 스카우트하러 왔어요' : cupNo >= 7 ? '단골들이 당신만 찾아요' : '행주가 바쁜 하루였습니다',
+    rows: [['따른 잔', `${cupNo}잔`]], isBest: isBest && score > 0, best }));
+  Arcade.gameOver(score);
+}
+function tapStart() {
+  if (state === 'ready') start();
+  else if (state === 'over' && performance.now() - overAt > 1200 && !Arcade.inRun()) { reset(); start(); }
+}
+
+// ---------- input: hold to pour ----------
+const down = () => { if (state === 'playing' && cupState === 'pour') { holding = true; $hint.style.display = 'none'; } else tapStart(); };
+const up = () => { holding = false; };
+addEventListener('pointerdown', down); addEventListener('pointerup', up); addEventListener('pointercancel', up); addEventListener('blur', up);
+addEventListener('keydown', e => { if ((e.code === 'Space' || e.code === 'Enter') && !e.repeat) { e.preventDefault(); down(); } });
+addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'Enter') up(); });
+
+function placeCamera() {
+  camera.aspect = innerWidth / innerHeight; camera.fov = camera.aspect < 1 ? 52 : 36; camera.updateProjectionMatrix();
+  const d = camera.aspect < 1 ? 5.6 : 4.4;
+  camera.position.set(.1, 1.45, d * .85); camera.lookAt(-.15, .62, 0);
+}
+placeCamera();
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
+
+// ---------- loop ----------
+let last = performance.now();
+reset(); showIntro();
+window.__sake = { get wave() { return (Math.abs(slosh) + Math.abs(slosh2)) * .045 * (cup.rt / .3); }, get state() { return state; }, get level() { return level; }, get limit() { return limit; }, get cupState() { return cupState; }, get score() { return score; }, get lives() { return lives; },
+  hold(v) { holding = v; } };
+
+function frame(now) {
+  const dt = Math.min(.04, (now - last) / 1000); last = now; const t = now / 1000;
+  if (state === 'playing') {
+    if (cupState === 'slide') { cupGroup.position.x += (0 - cupGroup.position.x) * Math.min(1, dt * 9); if (Math.abs(cupGroup.position.x) < .01) { cupGroup.position.x = 0; cupState = 'pour'; } }
+    // bottle tilt follows the hold; flow ramps with tilt and how long you've held
+    const want = holding && cupState === 'pour' ? 1 : 0;
+    tilt += (want - tilt) * Math.min(1, dt * (want ? 5 : 9));
+    if (holding && cupState === 'pour') holdT += dt; else holdT = 0;
+    const flow = tilt > .35 ? (tilt - .35) / .65 * (.24 + Math.min(.16, holdT * .1) + Math.min(.16, cupNo * .012)) * cup.speed : 0;   // cup-fulls per second
+    if (flow > 0) inAir.push({ amt: flow * dt, t: FALL_T });
+    let arrived = 0;
+    for (const p of inAir) p.t -= dt;
+    while (inAir.length && inAir[0].t <= 0) arrived += inAir.shift().amt;
+    if (arrived > 0 && !spilled) {
+      level += arrived;
+      sloshV += (Math.random() - .5) * arrived * 25; slosh2V += (Math.random() - .5) * arrived * 25;   // impact makes waves
+      pourT += dt;
+      const n = Math.floor(level * 8);   // 도레미파솔라시도
+      if (n > lastNote && n <= 7) { lastNote = n; Arcade.sfx.note(n); }
+      if (level > 1 && Math.random() < dt * 9) Arcade.sfx.note(8 + ((Math.random() * 3) | 0), .1);   // trembling high notes on the dome
+    }
+    Arcade.sfx.pour(inAir.length ? Math.min(1, flow * 2 + .3) : 0, Math.min(1, level));
+    // sloshing (damped springs)
+    sloshV += -slosh * 60 * dt - sloshV * 3 * dt; slosh += sloshV * dt;
+    slosh2V += -slosh2 * 55 * dt - slosh2V * 3 * dt; slosh2 += slosh2V * dt;
+    const wave = (Math.abs(slosh) + Math.abs(slosh2)) * .045 * (cup.rt / .3);
+    if (!spilled && cupState !== 'judged' && level + wave > limit) spill();
+    if (cupState === 'pour' && !holding && !inAir.length && level > 0) { judgeT += dt; if (judgeT > .6) judge(); } else judgeT = 0;
+    // HUD percentage
+    if (level > 0 && !spilled) { $pct.textContent = `${Math.round(level * 100)}%`; $pct.className = `hud-ctl on ${level > 1 ? 'tension' : ''}`; }
+  } else Arcade.sfx.pour(0);
+
+  // bottle pose + stream
+  bottle.rotation.z = -.5 - tilt * 1.75;
+  bottle.position.set(BOTTLE_PIVOT.x + tilt * .3, BOTTLE_PIVOT.y - tilt * .12, 0);
+  bottle.updateMatrixWorld(); spout.set(0, .6, 0); bottle.localToWorld(spout);
+  const surfaceY = cupBaseY + cup.h * Math.min(level, 1) + .02;
+  const flowing = state === 'playing' && inAir.length > 0;
+  stream.visible = flowing;
+  if (flowing) {
+    const top = holding && tilt > .35 ? spout.clone() : new THREE.Vector3(spout.x, spout.y - (FALL_T - (inAir[inAir.length - 1]?.t || 0)) / FALL_T * (spout.y - surfaceY), spout.z);
+    const bot = new THREE.Vector3(cupGroup.position.x + Math.sin(t * 20) * .01, surfaceY, 0);
+    const lowest = inAir[0]; const arrivedFrac = lowest ? 1 - lowest.t / FALL_T : 1;
+    if (!(holding && tilt > .35) && inAir.length) bot.y = surfaceY;
+    const mid = top.clone().add(bot).multiplyScalar(.5), len = top.distanceTo(bot);
+    stream.position.copy(mid); stream.scale.set(1 + Math.sin(t * 40) * .1, len, 1);
+    stream.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), top.clone().sub(bot).normalize());
+    if (Math.random() < .5) { const d = new THREE.Mesh(new THREE.SphereGeometry(.02, 6, 4), streamMat); d.position.set(bot.x + (Math.random() - .5) * .1, bot.y, (Math.random() - .5) * .1); scene.add(d); drops.push({ m: d, v: new THREE.Vector3((Math.random() - .5) * .8, .8 + Math.random(), (Math.random() - .5) * .8), t: 0 }); }
+  }
+  for (let i = drops.length - 1; i >= 0; i--) { const d = drops[i]; d.t += dt; d.v.y -= 9 * dt; d.m.position.addScaledVector(d.v, dt); if (d.t > .35) { scene.remove(d.m); d.m.geometry.dispose(); drops.splice(i, 1); } }
+  if (liquid) drawLiquid();
+  if (spilled && spillSheet) { spillSheet.visible = true; spillSheet.scale.y = Math.min(1, spillSheet.scale.y + dt * 3); spillSheet.position.y = cupBaseY + cup.h - spillSheet.scale.y * cup.h / 2; }
+  else if (spillSheet) spillSheet.scale.y = .01;
+
+  Arcade.applyShake(camera, dt);
+  renderer.render(scene, camera);
+  placeCamera();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

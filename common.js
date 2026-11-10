@@ -21,8 +21,8 @@
       desc: '옆자리 영화 고인물의 어려운 말, 쉬운 말로 빨리 번역하기' },
     { id: 'cat', file: 'cat.html', name: '냥 떨구기', emoji: '🐱', unit: '점', bestKey: 'cat-best',
       desc: '집사가 등 돌렸을 때 책상 위 물건 툭툭. 노트북은 대박 점수' },
-    { id: 'soccer', file: 'soccer.html', name: '슛 말고!', emoji: '⚽', unit: '골', bestKey: 'soccer-best',
-      desc: '캐스터가 "슛!!" 할 때 차면 키퍼가 막아요. 엇박으로 차야 골' },
+    { id: 'soccer', file: 'soccer.html', name: '슛 말고!', emoji: '⚽', unit: '점', bestKey: 'soccer-best',
+      desc: '캐스터가 "슛!!" 할 때 차면 키퍼가 막아요. 가끔 마법사·호우맨 같은 스타가 등장' },
   ];
 
   const q = new URLSearchParams(location.search);

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>슛 말고!</title>
-<script src="common.js?v=13"></script>
+<script src="common.js?v=14"></script>
 <script src="sounds/shout-samples.js?v=3"></script>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#3a8f3e;
@@ -24,12 +24,33 @@
   #chan{position:fixed;right:max(14px,env(safe-area-inset-right));top:max(14px,env(safe-area-inset-top));z-index:3;pointer-events:none;
     font-family:"Jua",sans-serif;color:#fff;font-size:15px;opacity:.85;text-shadow:0 2px 6px rgba(0,0,0,.4);text-align:right;line-height:1.1}
   #chan small{display:block;font:700 10px "Noto Sans KR",sans-serif;opacity:.8}
-  #replay{position:fixed;right:16px;top:58px;z-index:3;pointer-events:none;font-family:"Jua",sans-serif;font-size:18px;color:#fff;background:#e03131;
+  #replay{position:fixed;left:max(12px,env(safe-area-inset-left));top:max(84px,calc(env(safe-area-inset-top) + 78px));z-index:3;pointer-events:none;font-family:"Jua",sans-serif;font-size:18px;color:#fff;background:#e03131;
     padding:3px 10px;border-radius:4px;display:none}
+  #var{position:fixed;inset:0;z-index:6;display:none;align-items:center;justify-content:center;pointer-events:none;background:rgba(5,8,20,.55)}
+  #var .box{background:#0b0e1e;color:#fff;border:3px solid #fff;border-radius:10px;padding:18px 26px;text-align:center;min-width:240px;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+  #var .t{font-family:"Jua",sans-serif;font-size:44px;letter-spacing:4px}
+  #var .s{font:700 15px "Noto Sans KR",sans-serif;opacity:.85;margin-top:6px}
+  #var .scan{height:6px;margin-top:12px;border-radius:3px;background:linear-gradient(90deg,transparent,#4dabf7,transparent);background-size:50% 100%;background-repeat:no-repeat;animation:scan 1s linear infinite}
+  @keyframes scan{from{background-position:-50% 0}to{background-position:150% 0}}
+  #var.ok .box{border-color:#51cf66} #var.no .box{border-color:#ff6b6b}
+  #var.ok .t{color:#51cf66} #var.no .t{color:#ff6b6b}
+  #var.ok .scan,#var.no .scan{display:none}
   #cast{position:fixed;left:50%;bottom:max(118px,19vh);transform:translateX(-50%);z-index:3;pointer-events:none;
     display:flex;align-items:center;gap:10px;background:rgba(20,24,40,.9);color:#fff;border-radius:10px;border-left:6px solid #ffd43b;padding:8px 16px 8px 10px;max-width:calc(100% - 32px);box-sizing:border-box;
     box-shadow:0 8px 24px rgba(0,0,0,.35);transition:background .1s}
   #cast .mic{font-size:30px;flex:none}
+  #pip{position:fixed;right:max(12px,env(safe-area-inset-right));top:max(52px,calc(env(safe-area-inset-top) + 46px));width:min(36vw,230px);aspect-ratio:4/3;z-index:3;pointer-events:none;
+    border:3px solid #fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);box-sizing:border-box}
+  #pip span{position:absolute;left:6px;top:5px;font:700 10px "Noto Sans KR",sans-serif;color:#fff;background:#e03131;border-radius:3px;padding:1px 5px}
+  #pip b{position:absolute;left:0;right:0;bottom:4px;display:flex;justify-content:space-around;font:700 10px "Noto Sans KR",sans-serif;color:#fff;text-shadow:0 1px 3px #000}
+  #ana{position:fixed;left:50%;bottom:calc(max(118px,19vh) + 74px);transform:translateX(-50%);z-index:3;pointer-events:none;display:flex;align-items:center;gap:8px;
+    background:rgba(20,24,40,.85);color:#fff;border-radius:10px;border-left:6px solid #4dabf7;padding:6px 14px 6px 10px;max-width:calc(100% - 32px);box-sizing:border-box;
+    opacity:0;transition:opacity .15s}
+  #ana.on{opacity:1}
+  #ana .who{font:700 10px "Noto Sans KR",sans-serif;opacity:.7}
+  #ana .line{font-family:"Jua",sans-serif;font-size:clamp(16px,4.2vw,21px);white-space:nowrap}
+  #ana.shout{background:#1864ab}
+  #ana.shout .line{font-size:clamp(22px,6vw,30px)}
   #cast .who{font:700 11px "Noto Sans KR",sans-serif;opacity:.7}
   #cast .line{font-family:"Jua",sans-serif;font-size:clamp(20px,5.4vw,28px);line-height:1.15;white-space:nowrap}
   #cast.warn{background:#f59f00;animation:shk .1s linear infinite}
@@ -47,8 +68,11 @@
   <div class="bug"><span class="live">● LIVE</span><span class="team"><i style="background:#e03131"></i>나</span><b id="score">0</b><b id="kscore">0</b><span class="team"><i style="background:#fcc419"></i>키퍼</span><span class="clock" id="clock">0'</span></div>
   <div class="bug2"><span id="bug">1번째 공격</span> · <span id="lives"></span></div>
 </div>
-<div id="chan" class="hud-ctl">⚽ 아케이드 스포츠<small>결승전 생중계</small></div>
+<div id="chan" class="hud-ctl" style="display:none">⚽ 아케이드 스포츠<small>결승전 생중계</small></div>
 <div id="replay">● REPLAY</div>
+<div id="var"><div class="box"><div class="t" id="vart">📺 VAR</div><div class="s" id="vars">판독 중…</div><div class="scan"></div></div></div>
+<div id="pip" class="hud-ctl"><span>● 중계석</span></div>
+<div id="ana" class="hud-ctl"><div style="font-size:22px">🎧</div><div><div class="who">해설위원 (키퍼는 안 들어요)</div><div class="line" id="aline"></div></div></div>
 <div id="cast" class="hud-ctl"><div class="mic">🎙️</div><div><div class="who">캐스터 · 생중계</div><div class="line" id="line">자 경기 시작합니다!</div></div></div>
 <div id="hint" class="hud-ctl"><span class="pill">🎯 노란 박스 안에서, 캐스터가 <b>"슛!" 안 할 때</b> 탭</span></div>
 <div class="screen" id="center"></div>
@@ -152,8 +176,46 @@ function makePlayer(shirt, shorts, skin = 0xffd2a8, hair = 0x2b2b2b) {
   root.traverse(o => { if (o.isMesh) o.castShadow = true; });
   return { root, legs, arms, head, body };
 }
-const me = makePlayer(0xe03131, 0xffffff); me.root.rotation.y = Math.PI; scene.add(me.root);   // runs toward -z
-const num = box(.3, .3, .01, flat(0xffffff), 0, 1.3, -.19, me.root);
+// ---------- random strikers (parody archetypes, no real names) ----------
+const STRIKERS = [
+  { id: 'ace', name: '우리 팀 에이스', emoji: '⚽', shirt: 0xe03131, shorts: 0xffffff, num: '9', speed: 1, pts: 1, w: 3 },
+  { id: 'wizard', name: '꼬마 마법사', emoji: '🐐', shirt: 0x74c0fc, stripe: 0xffffff, shorts: 0x1b1f3a, hair: 0x3b2a1a, beard: true, scale: .84, num: '10', speed: 1.6, pts: 3, zig: true, w: 1.2,
+    intro: '볼이 발에 붙어 다닙니다!', cele: '🐐 GOAT!' },
+  { id: 'siu', name: '호우맨', emoji: '😤', shirt: 0xffffff, shorts: 0xffffff, hair: 0x111111, num: '7', speed: 1.3, pts: 2, power: true, w: 1.2,
+    intro: '자신감 하나는 월드클래스!', cele: '호우우우!!!' },
+  { id: 'giant', name: '북유럽 괴물', emoji: '🤖', shirt: 0x74c0fc, shorts: 0xffffff, hair: 0xfff3bf, scale: 1.25, num: '9', speed: 1.2, pts: 2, power: true, w: 1,
+    intro: '피지컬이 사람이 아니에요!', cele: '🧘 명상 세리머니' },
+  { id: 'snap', name: '찰칵 7번', emoji: '📸', shirt: 0xffffff, shorts: 0x1b1f3a, num: '7', speed: 1.4, pts: 2, w: 1.2,
+    intro: '양발을 다 씁니다!', cele: '📸 찰칵!' },
+  { id: 'uncle', name: '조기축구 아저씨', emoji: '🍺', shirt: 0x868e96, shorts: 0x2b2b2b, hair: 0x2b2b2b, bald: true, belly: true, num: '55', speed: .72, pts: 1, w: 1.5,
+    intro: '무릎이 시큰합니다…', cele: '아이고 허리야…' },
+];
+function numTex(n, color) {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  g.font = '44px Jua, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = color; g.fillText(n, 32, 36);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function buildStriker(d) {
+  const p = makePlayer(d.shirt, d.shorts, 0xffd2a8, d.hair || 0x2b2b2b);
+  if (d.stripe) for (const x of [-.18, 0, .18]) box(.07, .73, .37, flat(d.stripe), x, 1.25, 0, p.root);
+  if (d.beard) box(.4, .14, .06, flat(d.hair), 0, .08, .19, p.head);
+  if (d.bald) p.head.children[1].visible = false;
+  if (d.belly) box(.5, .4, .25, flat(d.shirt), 0, 1.12, .2, p.root);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(.36, .36), new THREE.MeshBasicMaterial({ map: numTex(d.num, d.shirt === 0xffffff ? '#1b1f3a' : '#ffffff'), transparent: true }));
+  back.position.set(0, 1.3, -.185); back.rotation.y = Math.PI; p.root.add(back);
+  p.root.scale.setScalar(d.scale || 1);
+  p.root.rotation.y = Math.PI;   // runs toward -z
+  scene.add(p.root);
+  return p;
+}
+let striker = STRIKERS[0];
+let me = buildStriker(striker);
+function pickStriker() {
+  if (attack === 0) return STRIKERS[0];
+  let r = Math.random() * STRIKERS.reduce((a, d) => a + d.w, 0);
+  for (const d of STRIKERS) { r -= d.w; if (r <= 0) return d; }
+  return STRIKERS[0];
+}
 const keeper = makePlayer(0xfcc419, 0x212529); scene.add(keeper.root);
 for (const a of keeper.arms) { const glove = new THREE.Mesh(new THREE.DodecahedronGeometry(.13, 0), flat(0x51cf66)); glove.position.y = -.68; a.add(glove); }
 const defender = makePlayer(0x1971c2, 0x1971c2); scene.add(defender.root);
@@ -163,29 +225,89 @@ const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(.17, 0), flat(0xffffff
 // ---------- caster lines ----------
 const SHOUTS = ['슛!!!', '슛!!!!!', '때려요!!', '지금!! 슛!!', '슈우우웃!!', '차요 차!!'];
 const FAKES = ['…슈퍼 플레이네요~', '…슈크림 먹고 싶네요', '…슈퍼스타 등장!', '…슈렉 닮았네요', '…슈팅 각 재는 중!'];
+// ---------- commentary booth (rendered into the PIP window) ----------
+const booth = new THREE.Scene(); booth.background = new THREE.Color(0x1b2140);
+booth.add(new THREE.HemisphereLight(0xffffff, 0x334, 1.4));
+const bl = new THREE.DirectionalLight(0xffffff, 1.4); bl.position.set(1, 3, 4); booth.add(bl);
+const boothCam = new THREE.PerspectiveCamera(36, 4 / 3, .1, 50); boothCam.position.set(0, 1.85, 3.7); boothCam.lookAt(0, 1.45, 0);
+{
+  const b = (w, h, d, c, x, y, z) => box(w, h, d, flat(c), x, y, z, booth);
+  b(3.6, .8, .8, 0x0b0e1e, 0, .7, .6);                         // desk
+  b(3.62, .06, .82, 0xe03131, 0, 1.12, .6);
+  b(5, 3, .1, 0x2b3466, 0, 1.6, -1);                           // back wall
+  const win = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.1), new THREE.MeshBasicMaterial({ color: 0x47a84b })); win.position.set(0, 2.25, -.94); booth.add(win);
+  for (let i = 0; i < 14; i++) { const f = new THREE.Mesh(new THREE.PlaneGeometry(.14, .14), new THREE.MeshBasicMaterial({ color: [0xff6b6b, 0xffd43b, 0xffffff, 0x4dabf7][i % 4] })); f.position.set(-1.6 + i * .25, 2.7, -.93); booth.add(f); }
+  const plate = (txt, x, col) => { const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d'); g.fillStyle = col; g.fillRect(0, 0, 256, 64); g.fillStyle = '#fff'; g.font = '40px Jua, sans-serif'; g.textAlign = 'center'; g.fillText(txt, 128, 46);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const m = new THREE.Mesh(new THREE.PlaneGeometry(.9, .22), new THREE.MeshBasicMaterial({ map: t })); m.position.set(x, .86, 1.01); booth.add(m); };
+  plate('캐스터', -.62, '#e03131'); plate('해설위원', .62, '#1971c2');
+
+}
+function makeAnchor(suit, hair, x, glasses) {
+  const p = makePlayer(suit, 0x222222, 0xffd2a8, hair);
+  p.root.position.set(x, 0, 0); p.root.scale.setScalar(.95); booth.add(p.root);
+  const mouth = box(.13, .03, .02, flat(0x6a2a2a), 0, .12, .205, p.head);
+  const hs = new THREE.Mesh(new THREE.TorusGeometry(.25, .025, 4, 12, Math.PI), flat(0x111111)); hs.position.y = .32; p.head.add(hs);
+  for (const s2 of [-1, 1]) box(.06, .14, .1, 0x111111 && flat(0x111111), s2 * .24, .24, 0, p.head);
+  const mic = box(.02, .02, .22, flat(0x111111), .18, .16, .14, p.head); mic.rotation.y = .6;
+  if (glasses) for (const s2 of [-1, 1]) box(.12, .08, .02, flat(0x111111), s2 * .1, .27, .215, p.head);
+  box(.08, .3, .02, flat(0xe03131), 0, 1.35, .19, p.root);   // tie
+  return { ...p, mouth, talk: 0, hype: 0 };
+}
+const casterA = makeAnchor(0x343a40, 0x2b2b2b, -.62, false);
+const analystA = makeAnchor(0x364fc7, 0xced4da, .62, true);
+casterA.root.rotation.y = .18; analystA.root.rotation.y = -.18;
+function animAnchor(a, t, dt, i) {
+  a.talk = Math.max(0, a.talk - dt); a.hype = Math.max(0, a.hype - dt);
+  const talking = a.talk > 0;
+  a.mouth.scale.y = talking ? 1 + Math.abs(Math.sin(t * (a.hype > 0 ? 30 : 18) + i)) * (a.hype > 0 ? 5 : 2.5) : 1;
+  a.head.rotation.x = talking ? Math.sin(t * 7 + i) * .06 : 0;
+  a.head.rotation.y = talking ? Math.sin(t * 2 + i) * .15 : (i ? -.3 : .3);
+  a.root.position.y = 0 + (a.hype > 0 ? Math.abs(Math.sin(t * 12)) * .12 + .15 : 0);
+  a.arms.forEach((ar, j) => { ar.rotation.x = a.hype > 0 ? -2.4 + Math.sin(t * 14 + j) * .3 : talking ? -.5 + Math.sin(t * 5 + j * 2) * .25 : -.35; });
+}
+const ANALYST = ['지금 공간이 열려요', '키퍼가 캐스터 목소리만 들어요', '이 선수 왼발 좋죠', '침착해야 합니다', '전술적으로 훌륭해요', '저라면 여기서 찹니다', '아 저 각도는…', '라인 컨트롤 좋네요', '집중력 싸움이에요', '체력이 떨어졌어요'];
+const ANALYST_SHOUT = ['슛!!', '때려!!', '지금이야!!', '차!!!'];
+let anaT = 2, anaMode = 'idle';
+function analystTick(dt) {
+  anaT -= dt;
+  if (anaT > 0) return;
+  const $a = $('ana');
+  if (anaMode !== 'idle') { anaMode = 'idle'; anaT = .6 + Math.random() * 1.2; $a.className = 'hud-ctl'; return; }
+  if (attack >= 1 && Math.random() < .35 + lvl() * .15) {
+    anaMode = 'shout'; anaT = .7 + Math.random() * .4;
+    $('aline').textContent = rnd(ANALYST_SHOUT); $a.className = 'hud-ctl on shout';
+    analystA.talk = anaT; analystA.hype = anaT;
+    if (!playShouts(1, 0, .78)) Arcade.sfx.shout();       // deeper voice so you can tell them apart
+  } else {
+    anaMode = 'talk'; anaT = 1.3 + Math.random();
+    $('aline').textContent = rnd(ANALYST); $a.className = 'hud-ctl on';
+    analystA.talk = anaT;
+    Arcade.sfx.hmm();
+  }
+}
 const FILLER = ['드리블~ 드리블~', '아 좋습니다', '침착하게…', '수비 하나 제칩니다!', '관중들 일어섭니다!', '숨 막히는 순간…', '아 이거…', '스피드 좋네요!'];
 
 // ---------- state ----------
 const LIVES = 3, START_Z = 17, TACKLE_Z = 3.2, ZONE_Z = 8.6;   // only shots from inside the box can beat the keeper
 let state = 'ready', goals = 0, lives = LIVES, attack = 0, overAt = 0;
 let pz = START_Z, px = 0, runV = 3, phase = 'run', phaseT = 0, castMode = 'filler', castT = 0, castLine = '', fakeNext = false;
-let matchMin = 0;
+let matchMin = 0, score = 0;
 let shot = null, keeperDive = 0, keeperTarget = 0, netShake = 0, streak = 0;
 let best = 0; try { best = +localStorage.getItem('soccer-best') || 0; } catch {}
 const $score = $('score'), $lives = $('lives'), $bug = $('bug'), $cast = $('cast'), $line = $('line'), $center = $('center'), $hint = $('hint');
 const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
 const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '⚽', title: '슛 말고!', how: [
-  ['🎙️', '캐스터가 쉴 새 없이 <b>"슛!!"</b>을 외쳐요'],
-  ['🧤', '키퍼는 캐스터 말을 듣고 막아요. <b>"슛!" 할 때 차면 선방</b>'],
+  ['🎙️', '캐스터(빨간 자막)가 <b>"슛!!"</b> 할 때 차면 키퍼가 막아요'],
   ['⚽', '캐스터가 <b>딴소리할 때</b> 탭해서 슛 → 골!'],
-  ['🎯', '<b>노란 슈팅 존(박스)</b> 안에서만 골! 멀리서 차면 키퍼 정면'],
-  ['🟨', '"슈…"는 페이크일 수도. 너무 오래 끌면 태클당해요'],
+  ['🎯', '<b>노란 슈팅 존</b> 안에서만 골. "슈…" 중 골은 <b>VAR</b> 주의'],
+  ['🎧', '<b>해설위원</b>(파란 자막)의 "슛!"은 키퍼가 안 들어요'],
+  ['🐐', '가끔 <b>스타 선수</b> 등장! 빠르지만 골 점수 UP'],
 ] }));
 const rnd = a => a[(Math.random() * a.length) | 0];
 function updateHud() {
-  $score.textContent = goals; $('kscore').textContent = LIVES - lives;
+  $score.textContent = score; $('kscore').textContent = LIVES - lives;
   $lives.textContent = '❤️'.repeat(lives) + '🤍'.repeat(LIVES - lives);
-  $bug.textContent = `${attack + 1}번째 공격`;
+  $bug.textContent = `${attack + 1}번째 공격 · ${striker.emoji} ${striker.name}`;
 }
 // real "슛!" samples (decoded on the first tap)
 let sac = null, shoutBufs = [];
@@ -207,13 +329,13 @@ function unlockShouts() {
   if (!sac._primed) { try { const s = sac.createBufferSource(); s.buffer = sac.createBuffer(1, 1, 22050); s.connect(sac.destination); s.start(0); sac._primed = true; } catch {} }
 }
 for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) addEventListener(ev, unlockShouts, { capture: true, passive: true });
-function playShouts(times, gap) {
+function playShouts(times, gap, rate = 1) {
   if (!sac || !shoutBufs.length) return false;
   if (sac.state === 'suspended') sac.resume();
   for (let k = 0; k < times; k++) {
     const src = sac.createBufferSource(), g = sac.createGain();
     src.buffer = shoutBufs[(Math.random() * shoutBufs.length) | 0];
-    src.playbackRate.value = .95 + Math.random() * .12 + k * .03;
+    src.playbackRate.value = (.95 + Math.random() * .12 + k * .03) * rate;
     g.gain.value = 1.6;
     src.connect(g).connect(sac._out); src.start(sac.currentTime + k * gap);
   }
@@ -221,6 +343,7 @@ function playShouts(times, gap) {
 }
 function setCast(mode, line, t) {
   castMode = mode; castLine = line; castT = t;
+  casterA.talk = mode === 'filler' || mode === 'fake' ? Math.min(t, 1.2) : t; casterA.hype = mode === 'shout' || mode === 'goal' ? t : 0;
   $line.textContent = line;
   $cast.className = `hud-ctl ${mode === 'shout' ? 'shout' : mode === 'warn' ? 'warn' : mode === 'goal' ? 'goal' : ''}`;
   if (mode === 'shout') { if (!playShouts(t > 1.15 ? 2 : 1, .6)) Arcade.sfx.shout(); Arcade.vibrate(15); }
@@ -235,14 +358,20 @@ function nextCast() {
   return setCast('shout', rnd(SHOUTS), .55 + Math.random() * (.35 + lvl() * .45));
 }
 function newAttack() {
-  inZone = false;
-  pz = START_Z; px = (Math.random() - .5) * 4; runV = 2.6 + lvl() * 1.6; phase = 'run'; phaseT = 0; shot = null; keeperDive = 0;
+  inZone = false; anaMode = 'idle'; anaT = 1 + Math.random(); $('ana').className = 'hud-ctl';
+  const next = pickStriker();
+  if (next !== striker || !me.root.parent) { scene.remove(me.root); striker = next; me = buildStriker(striker); }
+  pz = START_Z; px = (Math.random() - .5) * 4; runV = (2.6 + lvl() * 1.6) * striker.speed; phase = 'run'; phaseT = 0; shot = null; keeperDive = 0;
   keeper.root.position.set(0, 0, .6); keeper.root.rotation.set(0, 0, 0);
   defender.root.position.set(px * .5 + 1.5, 0, 6.5); defender.root.rotation.set(0, 0, 0);
-  setCast('filler', attack === 0 ? '자 공격 들어갑니다!' : rnd(['다시 공격!', '역습입니다!', '볼 잡았어요!']), .9);
+  setCast('filler', attack === 0 ? '자 공격 들어갑니다!' : striker.intro ? `${striker.name}! ${striker.intro}` : rnd(['다시 공격!', '역습입니다!', '볼 잡았어요!']), .9);
+  if (striker.id !== 'ace' && state === 'playing') {
+    Arcade.toast(`${striker.emoji} ${striker.name} 등장! ${striker.speed > 1 ? '⚡' : '🐢'}×${striker.speed} · 골 ${striker.pts}점`, striker.speed > 1 ? '#7048e8' : '#495057');
+    Arcade.sfx.crowd(.5);
+  }
   updateHud();
 }
-function reset() { matchMin = 0; goals = 0; lives = LIVES; attack = 0; streak = 0; newAttack(); }
+function reset() { matchMin = 0; score = 0; goals = 0; lives = LIVES; attack = 0; streak = 0; newAttack(); }
 function start() {
   state = 'count'; $center.style.display = 'none'; $hint.style.display = '';
   Arcade.countdown({ final: '킥오프!', onTick: n => n ? Arcade.sfx.tick() : (Arcade.sfx.go(), Arcade.sfx.crowd(.6)), onDone: () => { state = 'playing'; newAttack(); } });
@@ -253,7 +382,7 @@ function shoot() {
   const far = pz > ZONE_Z;
   const saved = far || castMode === 'shout';     // keeper reacts to the caster's "슛!" — and eats long shots
   const tx = (Math.random() < .5 ? -1 : 1) * (1 + Math.random() * 1.4), ty = .4 + Math.random() * 1.4;
-  shot = { from: new THREE.Vector3(px + .2, .17, pz - .4), to: far ? new THREE.Vector3(tx * .35, ty * .7, -.2) : new THREE.Vector3(tx, ty, -.2), t: 0, dur: far ? .8 : .5 - lvl() * .08, saved, far, castWas: castLine };
+  shot = { from: new THREE.Vector3(px + .2, .17, pz - .4), to: far ? new THREE.Vector3(tx * .35, ty * .7, -.2) : new THREE.Vector3(tx, ty, -.2), t: 0, dur: far ? .8 : striker.power ? .3 : .5 - lvl() * .08, saved, far, castWas: castLine, mode: castMode };
   phase = 'shot'; phaseT = 0;
   keeperTarget = far ? tx * .35 : saved ? tx : -tx * .8;  // reads it perfectly on a shout, guesses wrong otherwise
   keeperDive = 0;
@@ -262,11 +391,11 @@ function shoot() {
 function resolve(goal) {
   phase = 'after'; phaseT = 0;
   if (goal) {
-    goals++; streak++; netShake = 1;
+    goals++; streak++; netShake = 1; score += striker.pts;
     setCast('goal', rnd(['…어? 골!!! 골이에요!!!', '아 슛… 아니 골이네요!?', '고오오오올!!!', '이걸 넣네요!!!']), 1.6);
     Arcade.sfx.crowd(1.2); Arcade.sfx.fanfare(); Arcade.shake(.3); Arcade.vibrate([30, 30, 90]);
     Arcade.confetti({ y: innerHeight * .4, count: 90, emoji: ['⚽', '🎉', '🔥'] });
-    Arcade.toast(streak >= 3 ? `🔥 ${streak}연속 골!` : '⚽ GOAL!', '#2b8a3e');
+    Arcade.toast(striker.cele ? `${striker.cele} +${striker.pts}` : streak >= 3 ? `🔥 ${streak}연속 골!` : '⚽ GOAL!', '#2b8a3e');
   } else {
     lives--; streak = 0;
     setCast('filler', shot?.far ? '아~ 거기서요? 키퍼 정면이죠~' : shot && shot.saved ? '아~ 선방! 제가 슛이라 했잖아요~' : '아 뺏겼어요…', 1.4);
@@ -274,20 +403,46 @@ function resolve(goal) {
     Arcade.toast(shot?.far ? '🧤 너무 멀어요! 박스 안에서 차기' : shot && shot.saved ? '🧤 선방! (캐스터 따라 찼다)' : '🦵 태클! 너무 끌었어요', '#e03131');
   }
   updateHud();
+  let extra = 0;
+  if (goal) {
+    // shots taken during the caster's "슈…" get reviewed (often overturned); clean goals get the occasional dramatic check
+    const v = shot.mode === 'warn' ? (Math.random() < .6 ? 'no' : 'ok') : attack >= 2 && Math.random() < .15 ? 'ok' : null;
+    if (v) { extra = 2400; setTimeout(() => runVar(v), 1100); }
+  }
   setTimeout(() => {
     if (state !== 'playing') return;
     if (lives <= 0) return finish();
     attack++; newAttack();
-  }, 1700);
+  }, 1700 + extra);
+}
+function runVar(verdict) {
+  if (state !== 'playing') return;
+  const el = $('var'); el.className = ''; el.style.display = 'flex';
+  $('vart').textContent = '📺 VAR'; $('vars').textContent = '판독 중… 캐스터 음성 확인';
+  setCast('filler', '아… 잠시만요, VAR 들어갑니다', 2.5);
+  Arcade.sfx.hmm();
+  setTimeout(() => {
+    if (verdict === 'no') {
+      goals--; score -= striker.pts; streak = 0; updateHud();
+      el.className = 'no'; $('vart').textContent = '❌ 노골'; $('vars').textContent = '캐스터가 "슈…" 하던 중 슈팅!';
+      setCast('filler', '아~ 취소됩니다! 제가 슈… 하고 있었거든요', 1.5);
+      Arcade.sfx.fail(); Arcade.shake(.25); Arcade.vibrate([60, 40, 60]);
+    } else {
+      el.className = 'ok'; $('vart').textContent = '✅ 골 인정'; $('vars').textContent = '캐스터 딴소리 중 슈팅 확인';
+      setCast('goal', '골 인정!!! 다시 한번 고오올!!', 1.5);
+      Arcade.sfx.crowd(1); Arcade.sfx.coin(); Arcade.confetti({ y: innerHeight * .45, count: 60, emoji: ['✅', '⚽'] });
+    }
+    setTimeout(() => { el.style.display = 'none'; }, 1000);
+  }, 1300);
 }
 function finish() {
   state = 'over'; overAt = performance.now();
-  const isBest = goals > best;
-  if (isBest) { best = goals; try { localStorage.setItem('soccer-best', best); } catch {} }
-  isBest && goals > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  const isBest = score > best;
+  if (isBest) { best = score; try { localStorage.setItem('soccer-best', best); } catch {} }
+  isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
   const msg = goals >= 10 ? '캐스터: "저 이제 조용히 할게요…"' : goals >= 5 ? '엇박의 신. 해외 진출 각' : goals >= 2 ? '캐스터 목소리에 흔들리지 마세요' : '캐스터 말 너무 잘 들음';
-  showScreen(Arcade.resultScreen({ emoji: '⚽', label: '넣은 골', score: goals, unit: '골', msg, rows: [['공격 횟수', `${attack + 1}번`]], isBest: isBest && goals > 0, best }));
-  Arcade.gameOver(goals);
+  showScreen(Arcade.resultScreen({ emoji: '⚽', label: '득점 포인트', score, unit: '점', msg, rows: [['넣은 골', `${goals}골`], ['공격 횟수', `${attack + 1}번`]], isBest: isBest && score > 0, best }));
+  Arcade.gameOver(score);
 }
 function tapStart() {
   if (state === 'ready') start();
@@ -299,7 +454,7 @@ addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'Enter')
 // ---------- loop ----------
 let last = performance.now();
 reset(); showIntro();
-window.__soc = { get audio() { return { ctx: sac && sac.state, bufs: shoutBufs.length, durs: shoutBufs.map(b => +b.duration.toFixed(2)) }; }, get pz() { return pz; }, get shotInfo() { return shot && { far: shot.far, saved: shot.saved }; }, get state() { return state; }, get cast() { return castMode; }, shoot, get goals() { return goals; }, get lives() { return lives; }, get phase() { return phase; } };
+window.__soc = { runVar, get striker() { return striker.id; }, get score() { return score; }, get audio() { return { ctx: sac && sac.state, bufs: shoutBufs.length, durs: shoutBufs.map(b => +b.duration.toFixed(2)) }; }, get pz() { return pz; }, get shotInfo() { return shot && { far: shot.far, saved: shot.saved }; }, get state() { return state; }, get cast() { return castMode; }, shoot, get goals() { return goals; }, get lives() { return lives; }, get phase() { return phase; } };
 const camPos = new THREE.Vector3(24, 13, 10), camLook = new THREE.Vector3(0, .6, 8);
 
 function frame(now) {
@@ -307,11 +462,12 @@ function frame(now) {
   if (state === 'playing') {
     phaseT += dt;
     castT -= dt;
+    if (phase === 'run') analystTick(dt);
     if (castT <= 0 && phase === 'run') nextCast();
     else if (castT <= 0 && castMode !== 'goal' && castMode !== 'filler') setCast('filler', rnd(FILLER), 2);
     if (phase === 'run') {
       pz -= runV * dt;
-      px += Math.sin(t * 2.3) * dt * .8;
+      px += Math.sin(t * (striker.zig ? 7 : 2.3)) * dt * (striker.zig ? 3.2 : .8);
       if (pz <= TACKLE_Z) resolve(false);
       if (!inZone && pz <= ZONE_Z) { inZone = true; Arcade.sfx.tick(); Arcade.toast('🎯 슈팅 존!', '#f59f00'); }
     }
@@ -334,6 +490,17 @@ function frame(now) {
   me.legs[0].rotation.x = running ? Math.sin(ph) * .8 : 0; me.legs[1].rotation.x = running ? -Math.sin(ph) * .8 : 0;
   me.arms[0].rotation.x = running ? -Math.sin(ph) * .6 : 0; me.arms[1].rotation.x = running ? Math.sin(ph) * .6 : 0;
   if (phase === 'shot' && phaseT < .25) me.legs[1].rotation.x = -1.4 * Math.sin(phaseT / .25 * Math.PI);
+  me.root.position.y = 0; me.root.rotation.y = Math.PI; me.root.rotation.z = 0;
+  me.arms.forEach(a => a.rotation.z = 0); me.legs.forEach(l => l.rotation.z = 0);
+  if (phase === 'after' && shot && !shot.saved) {          // goal celebration per character
+    const c = Math.min(1, phaseT / 1.2);
+    if (striker.id === 'siu') { me.root.position.y = Math.sin(Math.min(1, phaseT / .7) * Math.PI) * 1.1; me.root.rotation.y = Math.PI + Math.min(1, phaseT / .7) * Math.PI; me.arms.forEach((a, i) => a.rotation.z = (i ? -1 : 1) * 1.2); }
+    else if (striker.id === 'snap') { me.root.rotation.y = 0; me.arms.forEach(a => { a.rotation.x = -2.6; }); }
+    else if (striker.id === 'wizard') { me.root.rotation.y = 0; me.arms.forEach(a => a.rotation.x = -3); me.root.position.y = Math.abs(Math.sin(phaseT * 8)) * .2; }
+    else if (striker.id === 'giant') { me.root.rotation.y = 0; me.legs.forEach((l, i) => l.rotation.z = (i ? -1 : 1) * .9); me.root.position.y = -.35 * c; }
+    else if (striker.id === 'uncle') { me.root.rotation.z = .5 * c; }
+    else { me.arms.forEach(a => a.rotation.x = -2.8); me.root.position.y = Math.abs(Math.sin(phaseT * 7)) * .25; }
+  }
   if (phase === 'run' || state !== 'playing') { ball.position.set(px + .2, .17, pz - .45 - Math.abs(Math.sin(ph * .5)) * .15); ball.rotation.x -= dt * runV * 6; }
   // keeper: bouncing ready stance during a shout, relaxed (looking at the booth) otherwise, dives on shots
   const kr = keeper.root;
@@ -377,8 +544,19 @@ function frame(now) {
   camPos.lerp(cp, Math.min(1, dt * 2.5)); camLook.lerp(look, Math.min(1, dt * 3));
   camera.position.copy(camPos); Arcade.applyShake(camera, dt); camera.lookAt(camLook);
   if (state === 'playing') { matchMin += dt * 1.5; $('clock').textContent = `${Math.min(90, Math.floor(matchMin))}'`; }
-  $('replay').style.display = phase === 'after' && shot && !shot.saved ? 'block' : 'none';
+  $('replay').style.display = phase === 'after' && shot && !shot.saved && $('var').style.display !== 'flex' ? 'block' : 'none';
   renderer.render(scene, camera);
+  // PIP: commentary booth
+  animAnchor(casterA, t, dt, 0); animAnchor(analystA, t, dt, 1);
+  const pr = $('pip').getBoundingClientRect();
+  if (pr.width > 0 && getComputedStyle($('pip')).visibility !== 'hidden') {
+    const y = innerHeight - pr.bottom + 3;
+    renderer.setScissorTest(true);
+    renderer.setScissor(pr.left + 3, y, pr.width - 6, pr.height - 6); renderer.setViewport(pr.left + 3, y, pr.width - 6, pr.height - 6);
+    boothCam.aspect = (pr.width - 6) / (pr.height - 6); boothCam.updateProjectionMatrix();
+    renderer.render(booth, boothCam);
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

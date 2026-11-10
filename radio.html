@@ -37,11 +37,19 @@ const TAU = Math.PI * 2;
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 
 // ---------- world constants (2D in the XY plane, viewed from +Z) ----------
-const RE = 2, RO = 3.25, PLATE_W = .62, MAX_TILT = .42;
+const RE = 1.65, RO = 3.9, PLATE_W = .5, MAX_TILT = .42;   // wide gap between ground and the reflector orbit
 const MESSAGES = [
   ['밥 먹었어?', '🍚'], ['치킨 시켜줘', '🍗'], ['엄마 사랑해', '💌'], ['나 합격했어!!', '🎓'], ['월급 들어왔다', '💰'], ['보고 싶다…', '🥺'],
   ['내일 비 온대', '☔'], ['고양이 사진 보내줘', '🐱'], ['생일 축하해!', '🎂'], ['와이파이 비번 뭐야?', '📶'], ['오늘 야근이야', '😵'], ['우리 결혼해요', '💍'],
 ];
+const STAGES = [
+  { key: 'earth', upto: 4, name: '🌏 지구 반대편' },
+  { key: 'moon', upto: 6, name: '🌕 달', dist: 10, r: .9, color: 0xced4da, who: ['달 기지 대원', '월면 탐사 로봇', '토끼(?)'] },
+  { key: 'mars', upto: 9, name: '🔴 화성', dist: 15, r: 1.2, color: 0xe8590c, who: ['화성 탐사대', '감자 키우는 우주인', '화성 이주민'] },
+  { key: 'jupiter', upto: 1e9, name: '🪐 목성', dist: 21, r: 2.2, color: 0xd9a066, who: ['유로파 기지', '목성 관측선', '보이저 팬클럽'] },
+];
+const SPACE_MSG = [['지구는 잘 있어', '🌏'], ['와이파이 되나요?', '📶'], ['택배 언제 와요?', '📦'], ['거기도 월요일이야?', '😩'], ['김치 보내줄까?', '🥬'], ['외계인 만났어?', '👽'], ['생일 축하해 우주인!', '🎂']];
+const stageOf = lv => STAGES.find(st => lv <= st.upto);
 const CITIES = ['우루과이 친구', '아르헨티나 이모', '칠레 펜팔', '브라질 사촌', '남극 기지 대원', '파타고니아 여행자'];
 
 // ---------- three ----------
@@ -62,7 +70,7 @@ const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roug
   for (let i = 0; i < n; i++) { const r = 40 + Math.random() * 40, a = Math.random() * TAU, b = Math.acos(2 * Math.random() - 1); pos[i * 3] = r * Math.sin(b) * Math.cos(a); pos[i * 3 + 1] = r * Math.sin(b) * Math.sin(a); pos[i * 3 + 2] = -Math.abs(r * Math.cos(b)) - 5; }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: .12, sizeAttenuation: true })));
-  const sun = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffe8a3 })); sun.position.set(-14, 9, -25); scene.add(sun);
+  const sun = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffe8a3 })); sun.position.set(-34, 22, -70); scene.add(sun);
 }
 // earth (low-poly, continents painted onto vertices)
 const earth = new THREE.Group(); scene.add(earth);
@@ -97,6 +105,11 @@ const sender = station(0xff6b6b), receiver = station(0x69db7c);
 const recvArc = new THREE.Mesh(new THREE.RingGeometry(RE + .02, RE + .14, 24, 1, 0, 1), new THREE.MeshBasicMaterial({ color: 0x69db7c, transparent: true, opacity: .5, side: THREE.DoubleSide })); scene.add(recvArc);
 const placeOnEarth = (obj, ang, h = 0) => { obj.position.set(Math.cos(ang) * (RE + h), Math.sin(ang) * (RE + h), 0); obj.rotation.set(0, 0, ang - Math.PI / 2); };
 
+// target planet for the space stages
+const planet = new THREE.Group(); scene.add(planet); planet.visible = false;
+const planetBody = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2), new THREE.MeshStandardMaterial({ color: 0xe8590c, flatShading: true, roughness: .9 })); planet.add(planetBody);
+const planetRing = new THREE.Mesh(new THREE.RingGeometry(1.4, 1.9, 40), new THREE.MeshBasicMaterial({ color: 0xe9c46a, transparent: true, opacity: .55, side: THREE.DoubleSide })); planetRing.rotation.x = 1.1; planet.add(planetRing);
+const planetAim = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.3, 40), new THREE.MeshBasicMaterial({ color: 0x69db7c, transparent: true, opacity: .7, side: THREE.DoubleSide })); planet.add(planetAim);
 // the reflector plate (an arc on the orbit)
 const plate = new THREE.Group(); scene.add(plate);
 const plateMesh = new THREE.Mesh(new THREE.TorusGeometry(RO, .07, 6, 24, PLATE_W), new THREE.MeshStandardMaterial({ color: 0xffd43b, emissive: 0xffa94d, emissiveIntensity: .6, metalness: .6, roughness: .3 }));
@@ -127,6 +140,7 @@ function ripple(x, y, color) { const r = new THREE.Mesh(new THREE.RingGeometry(.
 // ---------- state ----------
 const LIVES = 3;
 let state = 'ready', score = 0, lives = LIVES, level = 1, overAt = 0;
+let stage = STAGES[0], target = null, targetPos = new THREE.Vector2(), camCenter = new THREE.Vector2(), camDist = 10;
 let sendAng = Math.PI / 2, recvAng = -Math.PI / 2, launchDir = 1, msg = MESSAGES[0], city = CITIES[0];
 let plateAng = Math.PI / 2 + .6, plateTarget = plateAng, sig = null, hops = 0, waitT = 0;
 let best = 0; try { best = +localStorage.getItem('radio-best') || 0; } catch {}
@@ -136,7 +150,8 @@ const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '📡', title: '�
   ['📡', '서울에서 쏜 전파를 <b>지구 반대편</b>까지 보내야 해요'],
   ['🛰️', '드래그해서 <b>반사판</b>을 궤도에서 돌려 전파를 받아 튕기기'],
   ['🎯', '판 <b>가운데</b>는 그대로, <b>끝</b>에 맞으면 비스듬히 튕겨요'],
-  ['⛈️', '보라색 <b>뇌우</b>에 떨어지거나 <b>우주 쓰레기</b>에 맞으면 실패'],
+  ['⛈️', '<b>뇌우</b>·<b>우주 쓰레기</b> 조심!'],
+  ['🚀', '지구를 정복하면 <b>달 → 화성 → 목성</b>까지! 판을 비켜줘야 우주로 날아가요'],
 ] }));
 function updateHud() {
   $score.innerHTML = `${score}<small>점</small>`;
@@ -145,14 +160,26 @@ function updateHud() {
 }
 function setupLevel() {
   clearHazards();
-  msg = MESSAGES[(level - 1) % MESSAGES.length]; city = rnd(CITIES);
+  const prevStage = stage; stage = stageOf(level);
+  const space = stage.key !== 'earth';
+  msg = space ? rnd(SPACE_MSG) : MESSAGES[(level - 1) % MESSAGES.length]; city = space ? rnd(stage.who) : rnd(CITIES);
+  if (prevStage !== stage && level > 1) Arcade.toast(`🚀 새 목표: ${stage.name}!`, '#7048e8');
   sendAng = Math.PI + (Math.random() - .5) * .3;
   recvAng = sendAng + Math.PI + (level > 2 ? (Math.random() - .5) * .9 : 0);
   launchDir = Math.random() < .5 ? 1 : -1;
   placeOnEarth(sender, sendAng); placeOnEarth(receiver, recvAng);
+  receiver.visible = recvArc.visible = !space; planet.visible = space;
+  if (space) {
+    const th = (Math.random() - .5) * 1.4;   // somewhere to the right
+    targetPos.set(Math.cos(th) * stage.dist, Math.sin(th) * stage.dist);
+    planet.position.set(targetPos.x, targetPos.y, 0); planet.scale.setScalar(stage.r);
+    planetBody.material.color.setHex(stage.color); planetRing.visible = stage.key === 'jupiter';
+    sendAng = th + Math.PI + (Math.random() - .5) * 1.2;   // the station faces away-ish: you have to bounce it round
+    placeOnEarth(sender, sendAng);
+  }
   recvArc.rotation.z = recvAng - .2; recvArc.geometry.dispose(); recvArc.geometry = new THREE.RingGeometry(RE + .02, RE + .16, 24, 1, 0, .4);
   // storms on the ground (not near either station)
-  const nStorm = Math.min(5, level - 1 + (level > 1 ? 1 : 0));
+  const nStorm = space ? 2 : Math.min(5, level - 1 + (level > 1 ? 1 : 0));
   for (let i = 0; i < nStorm; i++) {
     let a, tries = 0;
     do { a = Math.random() * TAU; tries++; } while (tries < 50 && (Math.abs(wrap(a - sendAng)) < .6 || Math.abs(wrap(a - recvAng)) < .55));
@@ -161,12 +188,19 @@ function setupLevel() {
     storms.push({ a, w, m });
   }
   // orbiting debris between earth and orbit
-  const nDeb = Math.max(0, level - 2);
+  if (space) {   // asteroids drifting across the route
+    for (let i = 0; i < 3 + STAGES.indexOf(stage) * 2; i++) {
+      const u = .3 + Math.random() * .55, base = targetPos.clone().multiplyScalar(u), perp = new THREE.Vector2(-targetPos.y, targetPos.x).normalize();
+      const m = new THREE.Mesh(new THREE.DodecahedronGeometry(.3 + Math.random() * .35, 0), flat(0x868e96)); scene.add(m);
+      debris.push({ m, base, perp, amp: 1.5 + Math.random() * 2.5, ph: Math.random() * TAU, sp: .4 + Math.random() * .6, size: .45 });
+    }
+  }
+  const nDeb = space ? 0 : Math.max(0, level - 2);
   for (let i = 0; i < Math.min(6, nDeb); i++) {
     const m = new THREE.Mesh(new THREE.DodecahedronGeometry(.13 + Math.random() * .07, 0), flat(0x868e96)); scene.add(m);
     debris.push({ m, r: RE + .5 + Math.random() * (RO - RE - .9), a: Math.random() * TAU, w: (.25 + Math.random() * .35) * (Math.random() < .5 ? 1 : -1) });
   }
-  $('mtxt').textContent = `“${msg[0]}”`; $('route').textContent = `서울 → ${city}`;
+  $('mtxt').textContent = `“${msg[0]}”`; $('route').textContent = `${stage.name} · 서울 → ${city}`;
   $('progf').style.width = '0%';
   sig = null; hops = 0; trailPts = []; head.visible = false; waitT = 1.1;
   plateAng = plateTarget = sendAng + launchDir * .55;
@@ -176,7 +210,7 @@ function launch() {
   const a = sendAng, out = new THREE.Vector2(Math.cos(a), Math.sin(a)), tan = new THREE.Vector2(-Math.sin(a), Math.cos(a)).multiplyScalar(launchDir);
   const elev = .62 + Math.random() * .25;   // angle from the horizon
   const dir = tan.clone().multiplyScalar(Math.cos(elev)).add(out.clone().multiplyScalar(Math.sin(elev))).normalize();
-  sig = { p: out.clone().multiplyScalar(RE + .02), v: dir.multiplyScalar(2.6 + Math.min(1.6, level * .14)), travelled: 0 };
+  sig = { p: out.clone().multiplyScalar(RE + .02), v: dir.multiplyScalar(3.2 + Math.min(1.8, level * .15)), travelled: 0 };
   head.visible = true; trailPts = [];
   Arcade.sfx.whoosh(true); Arcade.sfx.note(0);
   ripple(sig.p.x, sig.p.y, 0xff6b6b);
@@ -234,8 +268,12 @@ addEventListener('keyup', e => { if (['ArrowLeft', 'KeyA', 'ArrowRight', 'KeyD']
 function placeCamera() {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   const half = THREE.MathUtils.degToRad(camera.fov / 2);
-  const d = Math.max((RO + 1.6) / Math.tan(half), (RO + .5) / (Math.tan(half) * camera.aspect));   // vertical room for HUD + message box
-  camera.position.set(0, -.15, d); camera.lookAt(0, -.15, 0);
+  let minX = -RO - .4, maxX = RO + .4, minY = -RO - 1.2, maxY = RO + 1.2;
+  if (stage.key !== 'earth') { const R = stage.r * 1.9; minX = Math.min(minX, targetPos.x - R); maxX = Math.max(maxX, targetPos.x + R); minY = Math.min(minY, targetPos.y - R - 1); maxY = Math.max(maxY, targetPos.y + R + 1); }
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2 - .15, hw = (maxX - minX) / 2, hh = (maxY - minY) / 2;
+  const d = Math.max(hh / Math.tan(half), hw / (Math.tan(half) * camera.aspect));
+  camCenter.lerp(new THREE.Vector2(cx, cy), .08); camDist += (d - camDist) * .08;
+  camera.position.set(camCenter.x, camCenter.y, camDist); camera.lookAt(camCenter.x, camCenter.y, 0);
 }
 placeCamera();
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
@@ -244,10 +282,14 @@ addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); pl
 function stepSignal(h) {
   const s = sig, prev = s.p.clone();
   s.p.addScaledVector(s.v, h);
-  const r = s.p.length(), ang = Math.atan2(s.p.y, s.p.x);
+  const r = s.p.length(), ang = Math.atan2(s.p.y, s.p.x), prevR = prev.length();
+  if (stage.key !== 'earth') {
+    if (s.p.distanceTo(targetPos) < stage.r * 1.25) return delivered();
+    if (r > stage.dist + 7) return lost(['🌌 전파가 우주 저편으로…', '👽 외계인이 대신 받았습니다', '📴 행성을 빗나갔다!'][(Math.random() * 3) | 0]);
+  }
   // debris
-  for (const d of debris) { const dp = new THREE.Vector2(Math.cos(d.a) * d.r, Math.sin(d.a) * d.r); if (dp.distanceTo(s.p) < .2) return lost('🛰️💥 우주 쓰레기에 막혔다!'); }
-  if (r >= RO) {
+  for (const d of debris) { const dp = new THREE.Vector2(d.m.position.x, d.m.position.y); if (dp.distanceTo(s.p) < (d.size || .2)) return lost(d.size ? '☄️ 소행성에 부딪혔다!' : '🛰️💥 우주 쓰레기에 막혔다!'); }
+  if (r >= RO && prevR < RO) {
     const diff = wrap(ang - plateAng);
     if (Math.abs(diff) <= PLATE_W / 2 + .03) {
       // reflect off the plate; hitting off-centre tilts the bounce (paddle-style aiming)
@@ -257,11 +299,11 @@ function stepSignal(h) {
       s.p.setLength(RO - .01);
       hops++; Arcade.sfx.note(Math.min(14, hops + 1)); Arcade.vibrate(15); ripple(s.p.x, s.p.y, 0xffd43b);
       plateMesh.material.emissiveIntensity = 2;
-    } else if (r > RO + .6) return lost(['🌌 전파가 우주로 날아갔다…', '👽 외계인이 대신 받았습니다', '📴 신호 유실!'][(Math.random() * 3) | 0]);
+    } else if (stage.key === 'earth') return lost(['🌌 전파가 우주로 날아갔다…', '👽 외계인이 대신 받았습니다', '📴 신호 유실!'][(Math.random() * 3) | 0]);
   }
   if (r <= RE) {
     // landed on the ground: receiver? storm? otherwise the ground bounces it back up
-    if (Math.abs(wrap(ang - recvAng)) <= .2) return delivered();
+    if (stage.key === 'earth' && Math.abs(wrap(ang - recvAng)) <= .2) return delivered();
     for (const st of storms) if (Math.abs(wrap(ang - st.a)) <= st.w / 2) return lost('⛈️ 뇌우에 흡수됐다!');
     const n = new THREE.Vector2(Math.cos(ang), Math.sin(ang));
     s.v.sub(n.clone().multiplyScalar(2 * s.v.dot(n)));
@@ -274,7 +316,7 @@ function stepSignal(h) {
 // ---------- loop ----------
 let last = performance.now();
 reset(); showIntro();
-window.__radio = { get state() { return state; }, get sig() { return sig; }, get plateAng() { return plateAng; }, set plateTarget(v) { plateTarget = v; }, get level() { return level; }, get lives() { return lives; }, get score() { return score; } };
+window.__radio = { get stage() { return stage.key; }, get targetPos() { return targetPos; }, setLevel(v) { level = v; setupLevel(); }, get state() { return state; }, get sig() { return sig; }, get plateAng() { return plateAng; }, set plateTarget(v) { plateTarget = v; }, get level() { return level; }, get lives() { return lives; }, get score() { return score; } };
 
 function frame(now) {
   const dt = Math.min(.04, (now - last) / 1000); last = now; const t = now / 1000;
@@ -294,19 +336,19 @@ function frame(now) {
         trailPts.push(sig.p.clone()); if (trailPts.length > TRAIL_N) trailPts.shift();
         // progress = how far around the earth we've come toward the receiver
         const ang = Math.atan2(sig.p.y, sig.p.x), total = Math.abs(wrap(recvAng - sendAng)) || Math.PI;
-        const done = 1 - Math.min(1, Math.abs(wrap(recvAng - ang)) / total);
+        const done = stage.key === 'earth' ? 1 - Math.min(1, Math.abs(wrap(recvAng - ang)) / total) : 1 - Math.min(1, sig.p.distanceTo(targetPos) / stage.dist);
         $('progf').style.width = `${Math.max(0, done) * 100}%`;
       }
     }
   }
-  for (const d of debris) { d.a += d.w * dt; d.m.position.set(Math.cos(d.a) * d.r, Math.sin(d.a) * d.r, 0); d.m.rotation.x += dt; d.m.rotation.y += dt * 1.3; }
+  for (const d of debris) { if (d.base) { const o = Math.sin(t * d.sp + d.ph) * d.amp; d.m.position.set(d.base.x + d.perp.x * o, d.base.y + d.perp.y * o, 0); } else { d.a += d.w * dt; d.m.position.set(Math.cos(d.a) * d.r, Math.sin(d.a) * d.r, 0); } d.m.rotation.x += dt; d.m.rotation.y += dt * 1.3; }
   for (const st of storms) st.m.material.opacity = .4 + Math.sin(t * 6 + st.a) * .15;
   // trail line
   const arr = trailGeo.attributes.position.array;
   for (let i = 0; i < TRAIL_N; i++) { const p = trailPts[Math.max(0, trailPts.length - TRAIL_N + i)] || trailPts[0]; if (p) { arr[i * 3] = p.x; arr[i * 3 + 1] = p.y; arr[i * 3 + 2] = .06; } else { arr[i * 3] = arr[i * 3 + 1] = 0; arr[i * 3 + 2] = -50; } }
   trailGeo.attributes.position.needsUpdate = true;
   for (let i = rings.length - 1; i >= 0; i--) { const r = rings[i]; r.t += dt; r.m.scale.setScalar(1 + r.t * 6); r.m.material.opacity = .9 * (1 - r.t / .6); if (r.t > .6) { scene.remove(r.m); rings.splice(i, 1); } }
-  earth.rotation.y += dt * .05;
+  earth.rotation.y += dt * .05; planetBody.rotation.y += dt * .1; planetAim.material.opacity = .4 + Math.sin(t * 4) * .3;
   sender.userData.glow.material.opacity = .5 + Math.sin(t * 5) * .3; receiver.userData.glow.material.opacity = .5 + Math.sin(t * 5 + 2) * .3;
   headGlow.scale.setScalar(1 + Math.sin(t * 20) * .15);
 

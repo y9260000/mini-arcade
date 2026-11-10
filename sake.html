@@ -134,6 +134,7 @@ const drops = [];
 // ---------- state ----------
 const LIVES = 3, FALL_T = .2;
 let state = 'ready', score = 0, lives = LIVES, cupNo = 0, overAt = 0;
+let minFill = .85;
 let level = 0, slosh = 0, sloshV = 0, slosh2 = 0, slosh2V = 0, tilt = 0, holding = false, holdT = 0, inAir = [], limit = 1.04, judgeT = 0, spilled = false, lastNote = -1, cupState = 'pour', pourT = 0;
 let best = 0; try { best = +localStorage.getItem('sake-best') || 0; } catch {}
 const $score = $('score'), $lives = $('lives'), $pct = $('pct'), $center = $('center'), $hint = $('hint');
@@ -142,16 +143,23 @@ const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🍶', title: '�
   ['👆', '꾹 누르면 졸졸 따르고, 떼면 멈춰요'],
   ['🎵', '찰수록 <b>도레미파솔라시도</b>! 가득 채울수록 고득점'],
   ['💧', '100%를 넘으면 <b>표면장력</b>으로 볼록… 한계는 잔마다 달라요'],
-  ['⚠️', '손을 떼도 <b>공중의 술</b>은 마저 떨어져요. 넘치면 -1잔'],
+  ['⚠️', '손을 떼도 <b>공중의 술</b>은 마저 떨어져요'],
+  ['🔴', '<b>빨간 선(최소 85%~)</b>보다 적거나 넘치면 -1잔'],
 ] }));
 function updateHud() {
   $score.innerHTML = `${score}<small>점</small>`;
   $lives.textContent = '🍶'.repeat(lives) + '💦'.repeat(LIVES - lives);
-  $('cupname').textContent = `${cupNo + 1}잔째 · ${cup.name}`;
+  $('cupname').textContent = `${cupNo + 1}잔째 · ${cup.name} · 최소 ${Math.round(minFill * 100)}%`;
 }
 function nextCup() {
   const pool = cupNo < 2 ? CUPS.slice(0, 2) : CUPS;
   buildCup(cupNo === 0 ? CUPS[0] : pool[(Math.random() * pool.length) | 0]);
+  minFill = Math.min(.92, .85 + cupNo * .007);   // tight minimum: 85% → 92%
+  { // red minimum line on the glass
+    const f = minFill, r = cup.rb + (cup.rt - cup.rb) * f + .012;
+    const ml = new THREE.Mesh(new THREE.TorusGeometry(r, .012, 4, cup.square ? 4 : 32), new THREE.MeshBasicMaterial({ color: 0xff4d4d }));
+    ml.rotation.x = Math.PI / 2; if (cup.square) ml.rotation.z = Math.PI / 4; ml.position.y = cupBaseY + cup.h * f; cupGroup.add(ml);
+  }
   level = 0; slosh = sloshV = slosh2 = slosh2V = 0; inAir = []; spilled = false; lastNote = -1; cupState = 'slide'; judgeT = 0; pourT = 0;
   limit = 1 + .012 + Math.random() * (.05 - Math.min(.03, cupNo * .002));   // hidden surface-tension limit: 101~106%
   cupGroup.position.x = 3.5;
@@ -174,12 +182,18 @@ function spill() {
 function judge() {
   cupState = 'judged';
   const pct = Math.round(level * 100);
+  if (level < minFill) {   // too stingy counts as a failure
+    lives--; updateHud();
+    $pct.className = 'hud-ctl on spill'; $pct.textContent = `${pct}%`;
+    Arcade.sfx.miss(); Arcade.shake(.15); Arcade.vibrate([50, 40, 80]);
+    Arcade.toast(`😒 손님: "이게 다예요?" (최소 ${Math.round(minFill * 100)}%)`, '#e03131');
+    setTimeout(() => { if (lives <= 0) finish(); else { cupNo++; nextCup(); } }, 1500);
+    return;
+  }
   let pts = Math.round(Math.pow(Math.min(level, 1), 3) * 100), msg, col = '#2b8a3e';
   if (level > 1) { pts += 30 + Math.round((level - 1) * 1000); msg = `✨ 표면장력 마스터! ${pct}%`; col = '#e8590c'; Arcade.sfx.fanfare(); Arcade.confetti({ y: innerHeight * .35, count: 80, emoji: ['🍶', '✨', '🎉'] }); Arcade.vibrate([20, 30, 20, 30, 60]); }
-  else if (level >= .95) { msg = `🍶 캬~ 꽉 찼다! ${pct}%`; Arcade.sfx.perfect(6); Arcade.vibrate([20, 30, 50]); }
-  else if (level >= .8) { msg = `👍 좋아요 ${pct}%`; Arcade.sfx.coin(); }
-  else if (level >= .5) { msg = `😐 손님: "조금만 더…" ${pct}%`; col = '#868e96'; Arcade.sfx.tap(); }
-  else { msg = `😒 손님: "인색하시네…" ${pct}%`; col = '#868e96'; Arcade.sfx.miss(); pts = Math.round(pts / 2); }
+  else if (level >= .97) { msg = `🍶 캬~ 꽉 찼다! ${pct}%`; Arcade.sfx.perfect(6); Arcade.vibrate([20, 30, 50]); }
+  else { msg = `👍 통과 ${pct}%`; Arcade.sfx.coin(); }
   score += pts; updateHud();
   Arcade.toast(`${msg} +${pts}`, col);
   setTimeout(() => { cupNo++; nextCup(); }, 1300);

@@ -19,6 +19,10 @@
       desc: '고리 던지기! 머리 위에 헤일로를 씌우면 천사가 되어 승천' },
     { id: 'cine', file: 'cine.html', name: '씨네필 통역기', emoji: '🎬', unit: '개', bestKey: 'cine-best',
       desc: '옆자리 영화 고인물의 어려운 말, 쉬운 말로 빨리 번역하기' },
+    { id: 'cat', file: 'cat.html', name: '냥 떨구기', emoji: '🐱', unit: '점', bestKey: 'cat-best',
+      desc: '집사가 등 돌렸을 때 책상 위 물건 툭툭. 노트북은 대박 점수' },
+    { id: 'soccer', file: 'soccer.html', name: '슛 말고!', emoji: '⚽', unit: '골', bestKey: 'soccer-best',
+      desc: '캐스터가 "슛!!" 할 때 차면 키퍼가 막아요. 엇박으로 차야 골' },
   ];
 
   const q = new URLSearchParams(location.search);
@@ -166,6 +170,9 @@
     kaching() { tone('sine', 90, 60, .09, .5, { wet: .2 }); noise(.08, .3, { type: 'highpass', f0: 3000, when: .02 }); tone('triangle', 1568, 1568, .5, .14, { when: .05 }); tone('triangle', 2093, 2093, .6, .12, { when: .1 }); noise(.4, .08, { type: 'highpass', f0: 7000, when: .1 }); },
     ding() { tone('sine', 1175, 1175, 1.6, .28); tone('sine', 2350, 2350, .9, .05); tone('sine', 932, 932, 1.8, .2, { when: .32 }); },
     hmm() { tone('triangle', 190, 240, .16, .22, { vib: 14, wet: .3 }); tone('triangle', 240, 300, .2, .2, { when: .17, vib: 14, wet: .3 }); },
+    shout() { tone('sawtooth', 300, 230, .32, .1, { vib: 35, wet: .5 }); tone('square', 600, 470, .3, .04, { vib: 35, wet: .5 }); noise(.3, .18, { f0: 1300, q: 3, wet: .5 }); },
+    crowd(level = 1) { noise(1.6, .28 * level, { type: 'bandpass', f0: 700, f1: 500, q: .5, attack: .15 }); noise(1.2, .12 * level, { type: 'highpass', f0: 3000, attack: .1 }); },
+    kick() { tone('sine', 160, 50, .12, .7, { wet: .2 }); noise(.05, .4, { type: 'lowpass', f0: 2000 }); },
     thud() { tone('sine', 120, 45, .22, .7, { wet: .3 }); noise(.08, .35, { type: 'lowpass', f0: 500 }); },
     flap() { [0, .07, .14].forEach((w, i) => noise(.12, .45 - i * .1, { f0: 350 + i * 200, f1: 900, q: .7, when: w })); tone('sine', 90, 50, .3, .5, { when: .05 }); },
     splash() { noise(.6, .5, { type: 'lowpass', f0: 3000, f1: 300 }); for (let i = 0; i < 6; i++) tone('sine', 400 + Math.random() * 300, 900 + Math.random() * 600, .08, .12, { when: .1 + i * .06 }); },

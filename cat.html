@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>냥 떨구기</title>
+<script src="common.js?v=12"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#ffe8cc;
+    user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  #bubble{position:fixed;left:0;top:0;z-index:2;pointer-events:none}
+  /* bubble sits to the right of the owner's head (top of the screen is taken by the HUD) */
+  #bubble div{position:absolute;top:0;left:14px;transform:translateY(-50%);white-space:nowrap;background:#fff;color:#2b2438;border-radius:18px;
+    padding:6px 12px;font-family:"Jua",sans-serif;font-size:24px;box-shadow:0 6px 16px rgba(0,0,0,.25);border:0 solid #fff}
+  #bubble div::after{content:"";position:absolute;left:-9px;top:50%;margin-top:-9px;border:9px solid transparent;border-left:0;border-right-color:inherit}
+  #bubble div{border-color:#fff}
+  #bubble.warn div{background:#ffe066;border-color:#ffe066;animation:wob .12s linear infinite}
+  #bubble.look div{background:#ff6b6b;border-color:#ff6b6b;color:#fff;font-size:26px}
+  @keyframes wob{25%{transform:translateY(-50%) rotate(-4deg)}75%{transform:translateY(-50%) rotate(4deg)}}
+  .pop{position:fixed;z-index:4;pointer-events:none;font-family:"Jua",sans-serif;font-size:26px;color:#fff;white-space:nowrap;transform:translate(-50%,-50%);
+    text-shadow:0 3px 0 #e8590c,0 6px 14px rgba(0,0,0,.3);animation:popUp 1.1s ease-out forwards}
+  .pop.big{font-size:34px;color:#ffe066}
+  @keyframes popUp{0%{opacity:0;transform:translate(-50%,-30%) scale(.6)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}100%{opacity:0;transform:translate(-50%,-160%) scale(1)}}
+  .toast{top:64%}
+  #hint{position:fixed;bottom:max(13vh,80px);left:0;right:0;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
+  #hint .pill{font-size:15px;padding:10px 18px}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>점</small></div>
+  <div class="hud-row"><span class="pill" id="lives"></span><span class="pill" id="time"></span><span class="pill dark" id="dmg"></span></div>
+</div>
+<div id="bubble" class="hud-ctl"><div>💻</div></div>
+<div id="hint" class="hud-ctl"><span class="pill">👆 물건을 탭하면 냥펀치! 집사 눈치 보기</span></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+const $ = id => document.getElementById(id);
+
+// ---------- three ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffe8cc);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, .05, 100);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd8b88c, 1.6));
+const sun = new THREE.DirectionalLight(0xfff1dc, 1.6);
+sun.position.set(3, 8, 5); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -5, right: 5, top: 5, bottom: -5, near: 1, far: 25 });
+scene.add(sun);
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, flatShading: true, ...extra });
+const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
+
+// ---------- physics ----------
+const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.8, 0) });
+world.broadphase = new CANNON.SAPBroadphase(world);
+world.defaultContactMaterial.friction = .32;
+world.defaultContactMaterial.restitution = .15;
+const floorBody = new CANNON.Body({ type: CANNON.Body.STATIC, shape: new CANNON.Plane() });
+floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0); world.addBody(floorBody);
+
+// ---------- room ----------
+const DESK_W = 4.4, DESK_D = 1.6, DESK_Y = 1, EDGE = DESK_D / 2;
+{
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = '#d9a066'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#c98f55'; for (let i = 0; i < 64; i += 16) g.fillRect(0, i, 64, 2);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(8, 8); t.colorSpace = THREE.SRGBColorSpace;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({ map: t, roughness: .9 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+  const rug = new THREE.Mesh(new THREE.CircleGeometry(1.6, 20), flat(0x74c0fc)); rug.rotation.x = -Math.PI / 2; rug.position.set(0, .005, 1.8); rug.receiveShadow = true; scene.add(rug);
+  box(30, 6, .2, flat(0xfff4e6), 0, 3, -4.2);                                  // back wall
+  box(1.6, 1.1, .05, flat(0x99e9f2, { emissive: 0x66d9e8, emissiveIntensity: .3 }), 2.6, 3, -4.08);   // window
+  // the cat's desk
+  const wood = flat(0xb5835a);
+  box(DESK_W, .08, DESK_D, wood, 0, DESK_Y - .04, 0);
+  for (const x of [-1, 1]) for (const z of [-1, 1]) box(.08, DESK_Y - .08, .08, flat(0x8d5a3b), x * (DESK_W / 2 - .1), (DESK_Y - .08) / 2, z * (EDGE - .1));
+  const deskBody = new CANNON.Body({ type: CANNON.Body.STATIC, shape: new CANNON.Box(new CANNON.Vec3(DESK_W / 2, .04, DESK_D / 2)) });
+  deskBody.position.set(0, DESK_Y - .04, 0); world.addBody(deskBody);
+  // owner's own desk at the back, facing the wall
+  box(2.4, .08, 1, wood, 0, .92, -3.4);
+  for (const x of [-1, 1]) box(.08, .88, .9, flat(0x8d5a3b), x * 1.1, .44, -3.4);
+  box(1.1, .65, .05, flat(0x212529), 0, 1.4, -3.65);
+  box(1, .55, .02, new THREE.MeshBasicMaterial({ color: 0x74c0fc }), 0, 1.4, -3.62);
+  box(.5, .08, .5, flat(0x343a40), 0, .55, -2.55);                              // chair seat
+}
+
+// ---------- owner (집사) ----------
+const owner = new THREE.Group(); owner.position.set(0, 0, -2.55); scene.add(owner);
+const oSkin = flat(0xffd2a8);
+box(.62, .7, .36, flat(0x96f2d7), 0, 1.0, 0, owner);                            // hoodie
+for (const s of [-1, 1]) { box(.22, .2, .6, flat(0x495057), s * .15, .62, .22, owner); box(.2, .6, .2, flat(0x495057), s * .15, .3, .5, owner); }
+const oArms = [-1, 1].map(s => { const p = new THREE.Group(); p.position.set(s * .38, 1.28, 0); box(.16, .6, .18, flat(0x96f2d7), 0, -.3, 0, p); owner.add(p); return p; });
+const oHead = new THREE.Group(); oHead.position.y = 1.38; owner.add(oHead);
+box(.42, .46, .4, oSkin, 0, .24, 0, oHead);
+box(.46, .16, .44, flat(0x3b2a1a), 0, .52, -.02, oHead); box(.46, .3, .12, flat(0x3b2a1a), 0, .36, -.18, oHead);
+for (const s of [-1, 1]) box(.06, .07, .02, flat(0x222222), s * .1, .28, .205, oHead);
+const oMouth = box(.12, .03, .02, flat(0x6a2a2a), 0, .13, .205, oHead);
+const oBrows = [-1, 1].map(s => box(.11, .025, .02, flat(0x3b2a1a), s * .1, .37, .206, oHead));
+const headset = new THREE.Mesh(new THREE.TorusGeometry(.25, .03, 4, 12, Math.PI), flat(0x212529)); headset.position.y = .3; oHead.add(headset);
+owner.rotation.y = Math.PI;   // back turned (working)
+
+// ---------- cat ----------
+const cat = new THREE.Group(); scene.add(cat);
+const fur = flat(0xf08c3a), white = flat(0xfff4e6), stripe = flat(0xc0601a);
+box(.34, .3, .5, fur, 0, .24, 0, cat);
+for (const z of [-.12, .04]) box(.35, .06, .08, stripe, 0, .37, z, cat);
+box(.24, .22, .06, white, 0, .22, .25, cat);
+for (const s of [-1, 1]) box(.09, .14, .1, white, s * .1, .07, -.18, cat);
+const pawL = new THREE.Group(); pawL.position.set(-.09, .2, .2); box(.08, .2, .08, fur, 0, -.1, 0, pawL); box(.09, .05, .1, white, 0, -.19, .01, pawL); cat.add(pawL);
+const pawR = new THREE.Group(); pawR.position.set(.09, .2, .2); box(.08, .2, .08, fur, 0, -.1, 0, pawR); box(.09, .05, .1, white, 0, -.19, .01, pawR); cat.add(pawR);
+const catHead = new THREE.Group(); catHead.position.set(0, .48, .22); cat.add(catHead);
+box(.32, .26, .26, fur, 0, 0, 0, catHead);
+box(.16, .09, .06, white, 0, -.06, .14, catHead);
+box(.04, .03, .02, flat(0xff8fab), 0, -.02, .175, catHead);
+const eyes = [-1, 1].map(s => box(.05, .07, .02, flat(0x2b2b2b), s * .08, .03, .135, catHead));
+const ears = [-1, 1].map(s => { const e = new THREE.Mesh(new THREE.ConeGeometry(.07, .14, 4), fur); e.position.set(s * .1, .18, 0); e.rotation.y = Math.PI / 4; catHead.add(e); return e; });
+const tail = []; { let parent = cat, pos = [0, .3, -.25]; for (let i = 0; i < 5; i++) { const g = new THREE.Group(); g.position.set(...pos); box(.06, .06, .14, i % 2 ? stripe : fur, 0, 0, -.06, g); parent.add(g); tail.push(g); parent = g; pos = [0, 0, -.12]; } }
+cat.traverse(o => { if (o.isMesh) o.castShadow = true; });
+cat.scale.setScalar(1.15);
+
+// ---------- items ----------
+const ITEMS = [
+  { id: 'pencil', name: '연필', emoji: '✏️', price: 500, pts: 3, loud: false, w: 3 },
+  { id: 'tissue', name: '휴지', emoji: '🧻', price: 1500, pts: 5, loud: false, w: 3 },
+  { id: 'remote', name: '리모컨', emoji: '📺', price: 15000, pts: 8, loud: false, w: 3 },
+  { id: 'mug', name: '머그컵', emoji: '☕', price: 8000, pts: 12, loud: true, w: 5 },
+  { id: 'glass', name: '유리컵', emoji: '🥛', price: 12000, pts: 15, loud: true, w: 4 },
+  { id: 'cake', name: '케이크', emoji: '🍰', price: 32000, pts: 25, loud: false, w: 2 },
+  { id: 'plant', name: '화분', emoji: '🪴', price: 25000, pts: 25, loud: true, w: 3 },
+  { id: 'bowl', name: '어항', emoji: '🐟', price: 45000, pts: 60, loud: true, w: 1.5 },
+  { id: 'phone', name: '아이폰', emoji: '📱', price: 1350000, pts: 50, loud: true, w: 2 },
+  { id: 'laptop', name: '집사 노트북', emoji: '💻', price: 2400000, pts: 120, loud: true, w: .8 },
+];
+const COLORS = [0xff6b6b, 0x4dabf7, 0xffd43b, 0x69db7c, 0xb197fc, 0xffa94d];
+const rndC = () => COLORS[(Math.random() * COLORS.length) | 0];
+function buildItem(def) {
+  const g = new THREE.Group(); let shape, mass, h;
+  switch (def.id) {
+    case 'pencil': box(.3, .035, .035, flat(0xffd43b), 0, 0, 0, g); box(.04, .036, .036, flat(0xff8fab), -.16, 0, 0, g); shape = new CANNON.Box(new CANNON.Vec3(.17, .018, .018)); mass = .05; h = .035; g.rotation.y = .4; break;
+    case 'tissue': box(.26, .12, .14, flat(0xe7f5ff), 0, 0, 0, g); box(.08, .06, .02, flat(0xffffff), 0, .08, 0, g); shape = new CANNON.Box(new CANNON.Vec3(.13, .06, .07)); mass = .08; h = .12; break;
+    case 'remote': box(.08, .035, .3, flat(0x343a40), 0, 0, 0, g); box(.03, .01, .03, flat(0xfa5252), 0, .02, -.1, g); shape = new CANNON.Box(new CANNON.Vec3(.04, .018, .15)); mass = .12; h = .035; break;
+    case 'mug': { const c = rndC(); const m = new THREE.Mesh(new THREE.CylinderGeometry(.11, .1, .22, 8), flat(c)); g.add(m);
+      const hd = new THREE.Mesh(new THREE.TorusGeometry(.06, .018, 4, 8), flat(c)); hd.position.x = .13; g.add(hd);
+      shape = new CANNON.Cylinder(.11, .1, .22, 8); mass = .3; h = .22; break; }
+    case 'glass': g.add(new THREE.Mesh(new THREE.CylinderGeometry(.08, .065, .26, 8), new THREE.MeshStandardMaterial({ color: 0xd0ebff, transparent: true, opacity: .55, roughness: .1 })));
+      { const milk = new THREE.Mesh(new THREE.CylinderGeometry(.07, .06, .16, 8), flat(0xffffff)); milk.position.y = -.04; g.add(milk); }
+      shape = new CANNON.Cylinder(.08, .065, .26, 8); mass = .25; h = .26; break;
+    case 'cake': { const m = new THREE.Mesh(new THREE.CylinderGeometry(.16, .16, .14, 10), flat(0xffc9de)); g.add(m);
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(.165, .165, .03, 10), flat(0xffffff)); top.position.y = .075; g.add(top);
+      const berry = new THREE.Mesh(new THREE.IcosahedronGeometry(.04, 0), flat(0xe03131)); berry.position.y = .12; g.add(berry);
+      shape = new CANNON.Cylinder(.16, .16, .14, 10); mass = .5; h = .14; break; }
+    case 'plant': { const pot = new THREE.Mesh(new THREE.CylinderGeometry(.14, .1, .22, 7), flat(0xd9480f)); g.add(pot);
+      const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(.2, 0), flat(0x40c057)); leaf.position.y = .25; g.add(leaf);
+      shape = new CANNON.Cylinder(.14, .1, .22, 7); mass = .6; h = .22; break; }
+    case 'bowl': { const b = new THREE.Mesh(new THREE.IcosahedronGeometry(.19, 1), new THREE.MeshStandardMaterial({ color: 0x74c0fc, transparent: true, opacity: .55, roughness: .1, flatShading: true })); g.add(b);
+      const fish = new THREE.Mesh(new THREE.ConeGeometry(.04, .1, 4), flat(0xff922b)); fish.rotation.z = Math.PI / 2; g.add(fish); g.userData.fish = fish;
+      shape = new CANNON.Sphere(.19); mass = .9; h = .38; break; }
+    case 'phone': box(.16, .02, .3, flat(0x212529), 0, 0, 0, g); box(.14, .005, .27, new THREE.MeshBasicMaterial({ color: 0x4dabf7 }), 0, .012, 0, g);
+      shape = new CANNON.Box(new CANNON.Vec3(.08, .01, .15)); mass = .18; h = .02; break;
+    case 'laptop': { box(.56, .035, .4, flat(0xadb5bd, { metalness: .4 }), 0, 0, 0, g);
+      const lid = box(.56, .36, .02, flat(0xadb5bd, { metalness: .4 }), 0, .18, -.2, g); lid.rotation.x = -.25;
+      box(.5, .3, .005, new THREE.MeshBasicMaterial({ color: 0x96f2d7 }), 0, .18, -.188, g).rotation.x = -.25;
+      shape = new CANNON.Box(new CANNON.Vec3(.28, .02, .2)); mass = 1.1; h = .035; break; }
+  }
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
+  return { g, shape, mass, h };
+}
+const SLOTS = [-1.65, -.82, 0, .82, 1.65];
+let items = [], debris = [];
+function pickDef() {
+  const pool = ITEMS.filter(d => d.id !== 'laptop' || elapsed > 12);
+  let r = Math.random() * pool.reduce((a, d) => a + d.w, 0);
+  for (const d of pool) { r -= d.w; if (r <= 0) return d; }
+  return pool[0];
+}
+function spawnItem(slot, delay = 0) {
+  const def = pickDef(), b = buildItem(def);
+  const x = SLOTS[slot] + (Math.random() - .5) * .2, z = -.35 + Math.random() * .55;
+  const body = new CANNON.Body({ mass: b.mass, linearDamping: .05, angularDamping: .3 });
+  body.addShape(b.shape);
+  body.position.set(x, DESK_Y + b.h / 2 + .4, z);
+  body.quaternion.setFromEuler(0, b.g.rotation.y, 0); b.g.rotation.set(0, 0, 0);
+  const it = { def, ...b, body, slot, state: 'wait', t: -delay, landed: false };
+  b.g.visible = false; scene.add(b.g);
+  items.push(it); return it;
+}
+const freeSlots = () => SLOTS.map((_, i) => i).filter(i => !items.some(it => it.slot === i && it.state !== 'gone'));
+
+// ---------- state ----------
+const ROUND = 60, LIVES = 3;
+let state = 'ready', score = 0, lives = LIVES, elapsed = 0, damage = 0, dropped = 0, overAt = 0, sel = null;
+let catPos = new THREE.Vector3(0, DESK_Y, -.55), hop = null, swatT = 9, lockT = 0, caughtT = 0;
+const O = { mode: 'work', t: 3, shout: '', alarm: 0, grace: 0 };
+let best = 0; try { best = +localStorage.getItem('cat-best') || 0; } catch {}
+const $score = $('score'), $lives = $('lives'), $time = $('time'), $dmg = $('dmg'), $center = $('center'), $bubble = $('bubble'), $bt = $bubble.firstElementChild, $hint = $('hint');
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🐱', title: '냥 떨구기', how: [
+  ['👆', '책상 위 물건을 <b>탭</b>하면 냥펀치로 툭'],
+  ['💻', '집사가 <b>등 돌리고 있을 때만</b>! 쳐다볼 때 치면 혼나요'],
+  ['💥', '<b>와장창</b> 깨지면 집사가 돌아봐요. 잠깐 얌전히'],
+  ['💰', '비싼 물건일수록 고득점. 노트북은 여러 번 쳐야 해요'],
+] }));
+const won = n => '₩' + n.toLocaleString('ko-KR');
+function updateHud() {
+  $score.innerHTML = `${score}<small>점</small>`;
+  $lives.textContent = '😺'.repeat(lives) + '😿'.repeat(LIVES - lives);
+  $time.textContent = `⏱ ${Math.max(0, Math.ceil(ROUND - elapsed))}`;
+  $dmg.textContent = `피해 ${won(damage)}`;
+}
+function clearAll() {
+  for (const it of items) { scene.remove(it.g); world.removeBody(it.body); }
+  for (const d of debris) { scene.remove(d.m); world.removeBody(d.b); }
+  items = []; debris = [];
+}
+function reset() {
+  clearAll(); score = 0; lives = LIVES; elapsed = 0; damage = 0; dropped = 0; sel = null; hop = null; swatT = 9; lockT = 0; caughtT = 0;
+  Object.assign(O, { mode: 'work', t: 3, shout: '', alarm: 0 });
+  SLOTS.forEach((_, i) => spawnItem(i, i * .08));
+  catPos.set(0, DESK_Y, -.55); updateHud();
+}
+function start() {
+  state = 'count'; $center.style.display = 'none'; $hint.style.display = '';
+  Arcade.countdown({ final: '냥!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { state = 'playing'; } });
+}
+
+// owner brain
+function warnTime() { return Math.max(.38, .8 - elapsed * .006); }
+function setOwner(mode, t, shout = '') {
+  O.mode = mode; O.t = t; O.shout = shout;
+  if (mode === 'warn') Arcade.sfx.hmm();
+  if (mode === 'look') O.grace = .12;
+}
+function swat(it) {
+  if (state !== 'playing' || lockT > 0 || swatT < .2 || !it || it.state !== 'desk') return;
+  sel = it;
+  const target = new THREE.Vector3(it.body.position.x, DESK_Y, Math.max(-.72, it.body.position.z - .42));
+  if (target.distanceTo(catPos) > .12) hop = { from: catPos.clone(), to: target, t: 0, then: it };
+  else doSwat(it);
+}
+function doSwat(it) {
+  swatT = 0; $hint.style.display = 'none';
+  if (O.mode === 'look' && O.grace <= 0) return caught();
+  // custom slide model (thin boxes stick in cannon's friction solver, so we drive the push ourselves)
+  it.push = 1.25 / (1 + it.mass * .55); it.pushX = (Math.random() - .5) * .25;
+  it.body.wakeUp();
+  it.body.velocity.y = .6; it.body.angularVelocity.y = (Math.random() - .5) * 3;
+  Arcade.sfx.tap(); Arcade.vibrate(10);
+}
+function caught() {
+  lives--; lockT = 1.1; caughtT = 1.1; updateHud();
+  setOwner('look', 1.6, '야!! 내려와!');
+  Arcade.sfx.crash(); Arcade.shake(.3); Arcade.vibrate([60, 40, 120]);
+  Arcade.toast('😾 들켰다! 혼남…', '#e03131');
+  if (lives <= 0) setTimeout(finish, 900);
+}
+function crashed(it) {
+  it.state = 'broken'; it.t = 0; dropped++;
+  const pts = it.def.pts; score += pts; damage += it.def.price; updateHud();
+  const sp = new THREE.Vector3().copy(it.body.position).project(camera);
+  const sx = (sp.x * .5 + .5) * innerWidth, sy = (-sp.y * .5 + .5) * innerHeight;
+  const el = document.createElement('div'); el.className = 'pop' + (pts >= 50 ? ' big' : '');
+  el.textContent = `+${pts} ${it.def.emoji}`; el.style.left = sx + 'px'; el.style.top = sy + 'px';
+  document.body.appendChild(el); setTimeout(() => el.remove(), 1200);
+  if (it.def.loud) {
+    Arcade.sfx.crash(); if (it.def.id === 'bowl') Arcade.sfx.splash(); else Arcade.sfx.kaching();
+    Arcade.shake(pts >= 50 ? .35 : .18); Arcade.vibrate(pts >= 50 ? [30, 30, 80] : 40);
+    shatter(it);
+    if (O.mode !== 'look') O.alarm = .55;     // the crash makes the owner turn around
+  } else { Arcade.sfx.thud(); Arcade.sfx.pop(.8); }
+  if (pts >= 50) { Arcade.confetti({ x: sx, y: sy, count: 60, emoji: ['💥', '😹', it.def.emoji] }); Arcade.toast(`💥 ${it.def.name} 박살! ${won(it.def.price)}`, '#e8590c'); }
+  setTimeout(() => { if (state === 'playing' || state === 'count') { const f = freeSlots(); if (f.length) spawnItem(f[(Math.random() * f.length) | 0]); } }, 900);
+}
+function shatter(it) {
+  const col = new THREE.Color(); it.g.traverse(o => { if (o.isMesh && !col.r && o.material.color) col.copy(o.material.color); });
+  const mat = flat(col.getHex());
+  for (let i = 0; i < 7; i++) {
+    const s = .03 + Math.random() * .05;
+    const m = new THREE.Mesh(new THREE.TetrahedronGeometry(s, 0), mat); m.castShadow = true; scene.add(m);
+    const b = new CANNON.Body({ mass: .02, shape: new CANNON.Box(new CANNON.Vec3(s * .6, s * .6, s * .6)) });
+    b.position.copy(it.body.position); b.position.y = Math.max(.1, b.position.y);
+    b.velocity.set((Math.random() - .5) * 3, 1 + Math.random() * 2, (Math.random() - .2) * 2.5);
+    b.angularVelocity.set(Math.random() * 10, Math.random() * 10, 0);
+    world.addBody(b); debris.push({ m, b, t: 0 });
+  }
+  it.g.visible = false;
+}
+function finish() {
+  if (state === 'over') return;
+  state = 'over'; overAt = performance.now();
+  const isBest = score > best;
+  if (isBest) { best = score; try { localStorage.setItem('cat-best', best); } catch {} }
+  isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  const msg = lives <= 0 ? '집사: "너 오늘 츄르 없어"' : damage >= 2000000 ? '집사가 노트북 할부를 알아보고 있어요' : damage >= 500000 ? '집사의 한숨이 깊어집니다' : '집사: "오늘은 얌전했네?" (아님)';
+  setTimeout(() => {
+    showScreen(Arcade.resultScreen({ emoji: lives <= 0 ? '😾' : '😼', label: '냥펀치 점수', score, unit: '점', msg,
+      rows: [['떨군 물건', `${dropped}개`], ['집사 피해액', won(damage)]], isBest: isBest && score > 0, best }));
+    Arcade.gameOver(score);
+  }, 400);
+}
+function tapStart() {
+  if (state === 'ready') start();
+  else if (state === 'over' && performance.now() - overAt > 1200 && !Arcade.inRun()) { reset(); start(); }
+}
+
+// ---------- input ----------
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function itemAt(x, y) {
+  ndc.set(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
+  const onDesk = items.filter(it => it.state === 'desk');
+  const hits = ray.intersectObjects(onDesk.map(it => it.g), true);
+  if (hits.length) return onDesk.find(it => { let o = hits[0].object; while (o) { if (o === it.g) return true; o = o.parent; } return false; });
+  // generous fallback: nearest item on screen
+  let bestIt = null, bd = 90;
+  for (const it of onDesk) { const p = it.g.position.clone().project(camera); const d = Math.hypot((p.x * .5 + .5) * innerWidth - x, (-p.y * .5 + .5) * innerHeight - y); if (d < bd) { bd = d; bestIt = it; } }
+  return bestIt;
+}
+addEventListener('pointerdown', e => { if (state === 'playing') swat(itemAt(e.clientX, e.clientY)); else tapStart(); });
+addEventListener('keydown', e => {
+  if (state !== 'playing') { if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); tapStart(); } return; }
+  const desk = items.filter(it => it.state === 'desk').sort((a, b) => a.body.position.x - b.body.position.x);
+  if (!desk.length) return;
+  let i = sel ? desk.indexOf(sel) : -1;
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') sel = desk[Math.max(0, i - 1)] || desk[0];
+  else if (e.code === 'ArrowRight' || e.code === 'KeyD') sel = desk[Math.min(desk.length - 1, i + 1)];
+  else if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); swat(sel && sel.state === 'desk' ? sel : desk[0]); return; }
+  else return;
+  swat(sel);
+});
+
+// ---------- camera fit ----------
+function placeCamera() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.fov = camera.aspect < 1 ? 62 : 45; camera.updateProjectionMatrix();
+  const half = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
+  const d = Math.max(4.2, 2.6 / Math.tan(half));
+  camBase.set(0, 1.4 + d * .38, 1 + d);
+}
+const camBase = new THREE.Vector3();
+placeCamera();
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
+
+// ---------- loop ----------
+const tmpV = new THREE.Vector3();
+let last = performance.now();
+reset(); showIntro();
+window.__cat = { world, get state() { return state; }, get items() { return items; }, swat, O, get score() { return score; }, get lives() { return lives; } };
+
+function frame(now) {
+  const dt = Math.min(.04, (now - last) / 1000); last = now; const t = now / 1000;
+
+  if (state === 'playing') {
+    elapsed += dt;
+    if (elapsed >= ROUND) { elapsed = ROUND; finish(); }
+    // owner AI
+    O.t -= dt; O.grace -= dt;
+    if (O.alarm > 0) { O.alarm -= dt; if (O.alarm <= 0) setOwner('look', 1.5, '뭐야?!'); }
+    else if (O.mode === 'work' && O.t <= 0) setOwner('warn', warnTime());
+    else if (O.mode === 'warn' && O.t <= 0) Math.random() < Math.min(.4, elapsed * .008) ? setOwner('work', 1 + Math.random()) : setOwner('look', 1 + Math.random() * .8, ['흠…', '뭐 하니?', '…?', '착하지?'][(Math.random() * 4) | 0]);
+    else if (O.mode === 'look' && O.t <= 0) setOwner('work', Math.max(1.2, 3.6 - elapsed * .035) * (.7 + Math.random() * .6));
+    updateHud();
+  }
+  lockT -= dt; caughtT -= dt; swatT += dt;
+
+  // items
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]; it.t += dt;
+    if (it.state === 'wait') { if (it.t >= 0) { it.state = 'desk'; it.g.visible = true; world.addBody(it.body); } else continue; }
+    it.g.position.copy(it.body.position); it.g.quaternion.copy(it.body.quaternion);
+    if (it.g.userData.fish) it.g.userData.fish.position.x = Math.sin(t * 3) * .08;
+    if (it.state === 'desk' && it.push > 0) {
+      it.body.velocity.z = it.push; it.body.velocity.x = it.pushX * it.push;
+      it.push -= 2.6 * dt;
+      if (it.body.position.z > EDGE - .02) { it.push = Math.max(it.push, .5); it.body.angularVelocity.x = 4; }   // tip over the edge
+    }
+    if (it.state === 'desk' && it.body.position.y < DESK_Y - .15) it.state = 'falling';
+    if (it.state === 'falling' && it.body.position.y < .35) crashed(it);
+    if (it.state === 'broken' && it.t > (it.def.loud ? .1 : 1.6)) { scene.remove(it.g); world.removeBody(it.body); items.splice(i, 1); }
+  }
+  world.step(1 / 60, dt, 4);
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const d = debris[i]; d.t += dt; d.m.position.copy(d.b.position); d.m.quaternion.copy(d.b.quaternion);
+    if (d.t > 3) { scene.remove(d.m); world.removeBody(d.b); debris.splice(i, 1); }
+  }
+
+  // cat
+  if (hop) {
+    hop.t += dt / .16; const k = Math.min(1, hop.t);
+    catPos.lerpVectors(hop.from, hop.to, k); catPos.y = DESK_Y + Math.sin(k * Math.PI) * .2;
+    if (k >= 1) { const it = hop.then; hop = null; catPos.y = DESK_Y; if (it.state === 'desk') doSwat(it); }
+  }
+  cat.position.copy(catPos);
+  const sw = swatT < .25 ? Math.sin(swatT / .25 * Math.PI) : 0;
+  pawR.rotation.x = -sw * 1.6;
+  const scared = caughtT > 0;
+  ears.forEach((e, i) => { e.rotation.z = scared ? (i ? -.9 : .9) : 0; });
+  eyes.forEach(e => e.scale.y = scared ? .3 : (Math.sin(t * .7) > .985 ? .15 : 1));
+  catHead.rotation.y = O.mode === 'look' ? Math.sin(t * 2) * .1 : Math.sin(t * .8) * .3;
+  cat.rotation.z = scared ? Math.sin(t * 40) * .04 : 0;
+  tail.forEach((g, i) => { g.rotation.x = .35 + (O.mode === 'warn' ? .2 : 0); g.rotation.y = Math.sin(t * (O.mode === 'warn' ? 9 : 2.5) - i * .6) * (.25 + i * .05); });
+
+  // owner pose: back turned → glance → full turn
+  const yawT = O.mode === 'look' ? 0 : Math.PI;
+  owner.rotation.y += (yawT - owner.rotation.y) * Math.min(1, dt * 10);
+  oHead.rotation.y += ((O.mode === 'warn' ? -.6 : 0) - oHead.rotation.y) * Math.min(1, dt * 10);
+  const typing = O.mode === 'work';
+  oArms.forEach((a, i) => a.rotation.x = typing ? -1.1 + Math.sin(t * 18 + i * 2) * .1 : caughtT > 0 && i === 1 ? -1.5 : -.2);
+  oBrows.forEach((b, i) => b.rotation.z = caughtT > 0 ? (i ? .45 : -.45) : 0);
+  oMouth.scale.set(caughtT > 0 ? 1.4 : 1, caughtT > 0 ? 3 : 1, 1);
+
+  // bubble
+  tmpV.set(.32, 1.68, -2.55).project(camera);
+  const vis = state === 'playing' || caughtT > 0;
+  $bubble.style.display = vis ? '' : 'none';
+  if (vis) {
+    $bubble.style.transform = `translate(${(tmpV.x * .5 + .5) * innerWidth}px,${(-tmpV.y * .5 + .5) * innerHeight}px)`;
+    let cls = '', txt = '💻 (업무 중)';
+    if (O.mode === 'look') { cls = 'look'; txt = `👀 ${O.shout}`; }
+    else if (O.mode === 'warn' || O.alarm > 0) { cls = 'warn'; txt = O.alarm > 0 ? '!?' : '…?'; }
+    $bubble.className = `hud-ctl ${cls}`; if ($bt.textContent !== txt) $bt.textContent = txt;
+  }
+
+  camera.position.copy(camBase);
+  Arcade.applyShake(camera, dt);
+  camera.lookAt(0, 1.05, -.9);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

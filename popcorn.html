@@ -26,6 +26,8 @@
   #hint{position:fixed;bottom:max(12vh,76px);left:0;right:0;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
   #hint .pill{font-size:15px;padding:10px 18px}
   .toast{top:58%}
+  #ring{position:fixed;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;pointer-events:none;z-index:4;opacity:0;
+    background:conic-gradient(#ffd43b calc(var(--p,0)*1turn),rgba(255,255,255,.25) 0);-webkit-mask:radial-gradient(circle,transparent 17px,#000 18px);mask:radial-gradient(circle,transparent 17px,#000 18px)}
 </style>
 </head>
 <body>
@@ -35,6 +37,7 @@
 </div>
 <div id="pip" class="hud-ctl"><span class="lbl">💑 옆자리</span><div id="gstate">🎬 영화 몰입 중</div></div>
 <div id="hint" class="hud-ctl"><span class="pill">👆 카라멜 팝콘을 탭해서 냠! 여친이 볼 땐 일반 팝콘만</span></div>
+<div id="ring"></div>
 <div class="screen" id="center"></div>
 
 <script type="module">
@@ -131,6 +134,20 @@ const herHand = new THREE.Group(); scene.add(herHand);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(.06, .02, 4, 8), flat(0xffd43b, { metalness: .6, roughness: .2 })); ring.position.set(.5, .07, .07); ring.rotation.x = Math.PI / 2; herHand.add(ring);
 }
 const HER_HOME = new THREE.Vector3(-R - 3, 1.4, -.5);
+const ajHand = new THREE.Group(); scene.add(ajHand);
+{
+  const skin = flat(0xd9a07a), hair = flat(0x3b2a1a);
+  box(.85, .3, .95, skin, 0, 0, 0, ajHand);
+  for (let i = 0; i < 4; i++) box(.2, .2, .6, skin, -.62, -.02, -.3 + i * .2, ajHand);
+  for (let i = 0; i < 9; i++) box(.06, .05, .06, hair, (Math.random() - .5) * .7, .17, (Math.random() - .5) * .8, ajHand);   // hairy knuckles
+  box(3, .34, .95, flat(0x5c3d2e), 1.9, .05, 0, ajHand);       // brown jacket sleeve from the right
+  const watch = box(.15, .34, 1, flat(0xffd43b, { metalness: .6, roughness: .3 }), .5, .02, 0, ajHand);
+}
+const AJ_HOME = new THREE.Vector3(R + 5, 1.6, .4);
+ajHand.position.copy(AJ_HOME);
+const shadow = new THREE.Mesh(new THREE.CircleGeometry(.75, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false }));
+shadow.rotation.x = -Math.PI / 2; shadow.position.y = 1.15; scene.add(shadow);
+const AJ = { mode: 'away', t: 12, target: null };
 herHand.position.copy(HER_HOME);
 const H = { mode: 'away', t: 2.5, target: null };
 
@@ -161,13 +178,15 @@ const ROUND = 45, LIVES = 3;
 let state = 'ready', score = 0, lives = LIVES, elapsed = 0, eaten = 0, caramelEaten = 0, overAt = 0, combo = 0;
 const G = { mode: 'watch', t: 3, grace: 0, mad: 0 };
 let best = 0; try { best = +localStorage.getItem('popcorn-best') || 0; } catch {}
+const $ring = $('ring');
 const $score = $('score'), $lives = $('lives'), $time = $('time'), $center = $('center'), $pip = $('pip'), $gstate = $('gstate'), $hint = $('hint');
 const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
 const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🍿', title: '카라멜 몰래 먹기', how: [
   ['👆', '<b>카라멜 묻은 팝콘</b>을 탭해서 냠! 진할수록 고득점'],
   ['💑', '오른쪽 위 여친이 <b>쳐다볼 때</b> 카라멜 먹으면 들켜요'],
   ['🍿', '쳐다볼 땐 <b>일반 팝콘</b>만 먹는 척 (안전)'],
-  ['✋', '통에 들어오는 <b>여친 손</b>에 닿으면 들켜요'],
+  ['⏳', '카라멜은 끈적해서 <b>떼는 데 시간</b>이 걸려요 (진할수록 오래)'],
+  ['✋', '<b>여친 손</b>, 그리고 가끔 튀어나오는 <b>옆자리 아저씨 손</b> 조심!'],
 ] }));
 function updateHud() {
   $score.innerHTML = `${score}<small>점</small>`;
@@ -177,6 +196,7 @@ function updateHud() {
 function reset() {
   score = 0; lives = LIVES; elapsed = 0; eaten = 0; caramelEaten = 0; combo = 0;
   Object.assign(G, { mode: 'watch', t: 3, mad: 0 }); Object.assign(H, { mode: 'away', t: 3, target: null }); herHand.position.copy(HER_HOME);
+  Object.assign(AJ, { mode: 'away', t: 8 + Math.random() * 4, target: null }); ajHand.position.copy(AJ_HOME); shadow.material.opacity = 0; pick = null;
   fillBucket(); updateHud();
 }
 function start() {
@@ -197,7 +217,7 @@ function popText(x, y, text, big) {
   el.style.left = x + 'px'; el.style.top = y + 'px'; document.body.appendChild(el); setTimeout(() => el.remove(), 950);
 }
 function grab() {
-  if (state !== 'playing' || slapT > 0 || grabT < .18) return;
+  if (state !== 'playing' || slapT > 0 || grabT < .18 || pick) return;
   grabT = 0;
   // nearest kernel under the hand, preferring the top layer
   let bestK = null, bd = .55;
@@ -206,7 +226,24 @@ function grab() {
   $hint.style.display = 'none';
   const sweet = bestK.kind !== 'plain';
   if (sweet && G.mode === 'look' && G.grace <= 0) { eatKernel(bestK, false); return busted(rnd(['😠 너 카라멜만 골라 먹지?!', '😤 야! 그거 내 카라멜이야', '🙄 카라멜 도둑 검거'])); }
-  eatKernel(bestK, true);
+  if (!sweet) return eatKernel(bestK, true);
+  // caramel is sticky: you have to pry it loose (longer for gooier ones) — and you're exposed meanwhile
+  pick = { k: bestK, t: 0, dur: { light: .45, heavy: .75, mega: 1.15 }[bestK.kind] * (1 + elapsed / ROUND * .3) };
+  Arcade.sfx.tap(); Arcade.vibrate(8);
+}
+let pick = null;
+function stepPick(dt) {
+  if (!pick) { $ring.style.opacity = 0; return; }
+  pick.t += dt;
+  const k = pick.k;
+  if (!k.alive) { pick = null; return; }
+  if (G.mode === 'look' && G.grace <= 0) { eatKernel(k, false); pick = null; return busted(rnd(['😠 카라멜 떼는 거 다 봤어!', '🙄 손이 왜 이렇게 끈적해?', '😤 너 카라멜만 골라 먹지?!'])); }
+  k.m.position.y = k.y + Math.sin(pick.t * 40) * .03 + pick.t / pick.dur * .25;   // wiggling it free
+  tmp.copy(k.m.position).project(camera);
+  $ring.style.opacity = 1; $ring.style.left = `${(tmp.x * .5 + .5) * innerWidth}px`; $ring.style.top = `${(-tmp.y * .5 + .5) * innerHeight}px`;
+  $ring.style.setProperty('--p', Math.min(1, pick.t / pick.dur).toFixed(3));
+  if (Math.random() < dt * 12) Arcade.vibrate(5);
+  if (pick.t >= pick.dur) { pick = null; eatKernel(k, true); }
 }
 const rnd = a => a[(Math.random() * a.length) | 0];
 function eatKernel(k, count) {
@@ -278,7 +315,7 @@ addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); pl
 // ---------- loop ----------
 let last = performance.now();
 reset(); showIntro();
-window.__pop = { G, H, get state() { return state; }, get score() { return score; }, get lives() { return lives; }, kernels: () => kernels, hand, grab,
+window.__pop = { G, H, AJ, get pick() { return pick; }, get state() { return state; }, get score() { return score; }, get lives() { return lives; }, kernels: () => kernels, hand, grab,
   aimAt(x, z) { handTarget.set(x, 1.6, z + .55); hand.position.copy(handTarget); } };
 
 function frame(now) {
@@ -288,9 +325,9 @@ function frame(now) {
     const lv = Math.min(1, elapsed / ROUND);
     // girlfriend's attention
     G.t -= dt; G.grace -= dt; G.mad = Math.max(0, G.mad - dt);
-    if (G.mode === 'watch' && G.t <= 0) setG('warn', Math.max(.38, .75 - lv * .35));
+    if (G.mode === 'watch' && G.t <= 0) setG('warn', Math.max(.3, .6 - lv * .3));
     else if (G.mode === 'warn' && G.t <= 0) Math.random() < .2 + lv * .15 ? setG('watch', .8 + Math.random()) : setG('look', .9 + Math.random() * .8);
-    else if (G.mode === 'look' && G.t <= 0) setG('watch', Math.max(1.1, 3.4 - lv * 1.8) * (.6 + Math.random() * .7));
+    else if (G.mode === 'look' && G.t <= 0) setG('watch', Math.max(.9, 2.8 - lv * 1.6) * (.6 + Math.random() * .7));
     // her hand dips in for popcorn too (she likes caramel as well)
     H.t -= dt;
     if (H.mode === 'away' && H.t <= 0) {
@@ -304,17 +341,46 @@ function frame(now) {
       if (herHand.position.distanceTo(tmp) < .15) { H.mode = 'grab'; H.t = .35; if (H.target.alive) { H.target.alive = false; H.target.flyT = 0; H.target.from = H.target.m.position.clone(); H.target.toHer = true; } }
     } else if (H.mode === 'grab') { H.t -= dt; herHand.position.y = 1.05 + Math.max(0, H.t) * .5; if (H.t <= 0) H.mode = 'out'; }
     else if (H.mode === 'out') { herHand.position.lerp(HER_HOME, Math.min(1, dt * 4)); if (herHand.position.distanceTo(HER_HOME) < .3) { H.mode = 'away'; H.t = Math.max(1.2, 4.5 - lv * 2.5) * (.6 + Math.random() * .8); } }
+    // ajeossi: brief shadow, then a fast hairy grab from the right
+    AJ.t -= dt;
+    if (AJ.mode === 'away' && AJ.t <= 0) {
+      const c = kernels.filter(k => k.alive && !k.drop && k.kind !== 'plain');
+      AJ.target = c.length ? rnd(c) : rnd(kernels.filter(k => k.alive));
+      if (AJ.target) { AJ.mode = 'shadow'; AJ.t = .38; shadow.position.set(AJ.target.m.position.x + .3, 1.15, AJ.target.m.position.z); }
+    } else if (AJ.mode === 'shadow') {
+      shadow.material.opacity = .45 * (1 - AJ.t / .38); if (AJ.t <= 0) { AJ.mode = 'in'; Arcade.sfx.whoosh(); }
+    } else if (AJ.mode === 'in') {
+      tmp.set(AJ.target.m.position.x + .62, 1.3, AJ.target.m.position.z);
+      ajHand.position.lerp(tmp, Math.min(1, dt * 14));
+      if (ajHand.position.distanceTo(tmp) < .2) {
+        AJ.mode = 'grab'; AJ.t = .45; shadow.material.opacity = 0;
+        if (AJ.target.alive) { AJ.target.alive = false; AJ.target.flyT = 0; AJ.target.from = AJ.target.m.position.clone(); AJ.target.toAj = true; }
+        Arcade.sfx.thud();
+      }
+    } else if (AJ.mode === 'grab') { AJ.t -= 0; if (AJ.t <= 0) AJ.mode = 'out'; }
+    else if (AJ.mode === 'out') { ajHand.position.lerp(AJ_HOME, Math.min(1, dt * 6)); if (ajHand.position.distanceTo(AJ_HOME) < .4) { AJ.mode = 'away'; AJ.t = Math.max(4, 9 - lv * 4) * (.6 + Math.random() * .8); } }
+    if (AJ.mode === 'grab') AJ.t -= dt;
+    if ((AJ.mode === 'in' || AJ.mode === 'grab') && slapT <= 0 && Math.hypot(ajHand.position.x - .4 - hand.position.x, ajHand.position.z - (hand.position.z - .4)) < .75) {
+      if (pick) { eatKernel(pick.k, false); pick = null; }
+      lives--; combo = 0; slapT = .6; updateHud();
+      Arcade.sfx.crash(); Arcade.shake(.45); Arcade.vibrate([100, 50, 100]);
+      Arcade.toast(rnd(['😱 깜짝! 옆자리 아저씨 손!!', '😱 아저씨: "어이쿠 미안~ 내 건 줄"', '😨 털손에 닿았다…']), '#5c3d2e');
+      if (G.mode !== 'look') setG('look', 1.2);   // the commotion makes her look
+      AJ.mode = 'out'; shadow.material.opacity = 0;
+      if (lives <= 0) setTimeout(finish, 800);
+    }
     // touching her hand = busted
     if (H.mode !== 'away' && slapT <= 0 && Math.hypot(herHand.position.x + .3 - hand.position.x, herHand.position.z - (hand.position.z - .4)) < .62) {
       busted(rnd(['😳 손 닿았다… "너 지금 카라멜 노렸지?"', '✋ 손 겹침! 수상한 손놀림 적발', '😠 "왜 자꾸 내 쪽으로 손 와?"']));
       H.mode = 'out';
     }
+    stepPick(dt);
     updateHud();
   }
   grabT += dt; slapT = Math.max(0, slapT - dt);
 
   // my hand: follows the pointer, dips on grab, recoils when slapped
-  const dip = grabT < .2 ? Math.sin(grabT / .2 * Math.PI) : 0;
+  const dip = pick ? 1 : grabT < .2 ? Math.sin(grabT / .2 * Math.PI) : 0;
   const target = slapT > 0 ? new THREE.Vector3(handTarget.x, 2.2, handTarget.z + 1.5) : handTarget;
   hand.position.lerp(target, Math.min(1, dt * 18));
   hand.position.y = (slapT > 0 ? 2.2 : 1.6) - dip * .8;
@@ -326,7 +392,7 @@ function frame(now) {
     if (k.drop) { k.m.position.y -= dt * 9; k.m.rotation.x += dt * 8; if (k.m.position.y <= k.y) { k.m.position.y = k.y; k.drop = false; } }
     if (!k.alive) {
       k.flyT += dt * 2.6; const u = Math.min(1, k.flyT);
-      const to = k.toHer ? new THREE.Vector3(-R - 4, 3, -.5) : new THREE.Vector3(hand.position.x * .3, 6, R + 3);
+      const to = k.toHer ? new THREE.Vector3(-R - 4, 3, -.5) : k.toAj ? new THREE.Vector3(R + 5, 3, .4) : new THREE.Vector3(hand.position.x * .3, 6, R + 3);
       k.m.position.lerpVectors(k.from, to, u); k.m.position.y += Math.sin(u * Math.PI) * 1.5;
       if (u >= 1) { scene.remove(k.m); kernels.splice(i, 1); }
     }

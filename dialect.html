@@ -55,7 +55,7 @@
 </head>
 <body>
 <div class="hud">
-  <div id="score" class="hud-score">0<small>개</small></div>
+  <div id="score" class="hud-score">0<small>점</small></div>
   <div class="hud-row"><span class="pill" id="lives"></span><span class="pill dark" id="combo" style="display:none"></span></div>
 </div>
 <div id="lower" class="hud-ctl"><span class="tag">● LIVE 현장</span><span class="place" id="place">길거리 인터뷰</span></div>
@@ -117,6 +117,38 @@ const QS = [
   ['jj', '고맙수다', ['고맙습니다'], ['고마워요?', '죄송합니다'], '-수다 = -습니다'],
   ['jj', '놀멍 쉬멍 갑서', ['놀면서', '쉬면서', '가세요'], ['일하면서', '오세요'], '-멍 = -면서'],
 ];
+// longer sentences (2 points), unlocked after a few correct answers
+const QH = [
+  ['gs', '니 어데 가노? 퍼뜩 온나', ['너', '어디', '가니?', '빨리', '와'], ['퍼뜩', '천천히'], '퍼뜩 = 빨리, 온나 = 와'],
+  ['gs', '내 오늘 억수로 바빴데이', ['나', '오늘', '엄청', '바빴어'], ['억수로', '비 왔어'], '억수로 = 엄청 (비 아님!)'],
+  ['gs', '와 그라노, 니 아프나?', ['왜', '그러니,', '너', '아프니?'], ['그라노', '배고프니?'], '그라노 = 그러니'],
+  ['jl', '워메 시방 뭐 하는 것이여?', ['어머', '지금', '뭐', '하는', '거야?'], ['시방', '방에서'], '시방 = 지금'],
+  ['jl', '그라믄 낼 보장께', ['그러면', '내일', '보자'], ['그라믄', '보장'], '-장께 = -자'],
+  ['jl', '아따 고놈 참말로 귀엽네잉', ['아', '그놈', '정말로', '귀엽네'], ['참말로', '얄밉네'], '참말로 = 정말로'],
+  ['cc', '그류, 그럼 낼 와유', ['그래요,', '그럼', '내일', '와요'], ['그류', '가요'], '그류 = 그래요'],
+  ['cc', '야 그거 좀 빨리 혀봐유', ['야', '그거', '좀', '빨리', '해 봐요'], ['혀봐유', '천천히'], '혀봐유 = 해 봐요'],
+  ['gw', '오늘 날이 마이 춥드래요', ['오늘', '날이', '많이', '춥대요'], ['마이', '덥대요'], '마이 = 많이'],
+  ['jj', '이디 와봅서, 이거 맛 좋수다', ['여기', '와 보세요,', '이거', '맛', '좋습니다'], ['이디', '나쁩니다'], '이디 = 여기'],
+  ['jj', '무사 경 고만이 이서?', ['왜', '그렇게', '가만히', '있어?'], ['무사히', '고마워?'], '고만이 = 가만히'],
+  ['jj', '혼저 옵서, 하영 먹읍서', ['어서', '오세요,', '많이', '드세요'], ['혼자', '하얗게'], '혼저 = 어서, 하영 = 많이'],
+];
+// hidden guest: a tourist mixing English with dialect (3 points)
+const QF = [
+  ['fx', 'Hello~ 밥 뭇나?', ['안녕하세요,', '밥', '먹었어요?'], ['헬로', '뭇나'], '외국인도 부산에서 배웠대요'],
+  ['fx', 'Oh my god, 겁나게 spicy 하네잉', ['세상에,', '엄청', '맵네'], ['겁나게', '달콤하네'], '전주에서 비빔밥 먹은 관광객'],
+  ['fx', 'Where is 해운대 beach?', ['해운대', '해변이', '어디예요?'], ['언제예요?', '바다가'], '길 잃은 관광객'],
+  ['fx', 'I love 돌하르방, 하영 cute!', ['돌하르방', '엄청', '귀여워요'], ['하얗게', '무서워요'], '하영 = 많이'],
+  ['fx', 'Thank you, 폭삭 속았수다!', ['감사합니다,', '수고', '많으셨습니다'], ['폭삭', '속았습니다'], '제주 사투리 마스터 외국인'],
+  ['fx', 'Very 맛있드래요, 감자!', ['감자', '정말', '맛있어요'], ['맛있드래요', '고구마'], '평창 감자에 반함'],
+  ['fx', 'Excuse me, 버스 워디 가유?', ['실례지만,', '버스', '어디', '가요?'], ['택시', '언제'], '충청도 버스 정류장에서'],
+];
+REGIONS.fx = { name: '히든 게스트', place: '🌍 갑분 외국인', sky: 0xfff3bf, ground: 0xb2f2bb, prop: 'sea', who: [['🧑‍🦰', '배낭여행객 마이크'], ['👱‍♀️', '여행 유튜버 제니'], ['🧔', '교환학생 루카스']] };
+// generic traps; whole groups are dropped when they'd create a second valid answer
+const TRAPS = [['엄청', '완전', '아주', '정말'], ['빨리', '어서'], ['먹었니?', '먹었어?'], ['어디'], ['언제'], ['왜'], ['그냥'], ['좀'], ['안'], ['해요'], ['가요?'], ['해라'], ['그래요'], ['많이'], ['조금'], ['지금'], ['내일'], ['너'], ['나']];
+function trapsFor(correct, wrong, n) {
+  const pool = TRAPS.filter(g => !g.some(w => correct.includes(w) || wrong.includes(w))).flat();
+  return shuffle(pool).slice(0, n);
+}
 const OK_LINES = ['리포터: 아~ 그런 뜻이었군요!', '리포터: 완벽한 통역입니다!', '주민: 하모하모 / 맞당께 / 기여!', '리포터: 시청자 여러분 이해되셨죠?'];
 const NO_LINES = ['주민: 아이고 그게 아니라~', '리포터: …다시 한번 여쭤볼게요', '주민: 뭐라카노 / 뭔 소리여'];
 
@@ -189,7 +221,8 @@ mic.position.set(0, -.6, .15); reporter.arms[1].add(mic);
 let resident = null;
 const STYLES = { gs: [{ top: 0x868e96, hat: 'cap' }, { top: 0x1971c2, hat: 'cap' }, { top: 0xe64980 }], jl: [{ top: 0xae3ec9, gray: true, hat: 'scarf' }, { top: 0x2f9e44 }, { top: 0xf76707 }],
   cc: [{ top: 0x8d5a3b, gray: true, hat: 'straw' }, { top: 0xe03131, hat: 'straw' }, { top: 0xf783ac, gray: true, hat: 'scarf' }], gw: [{ top: 0x495057, gray: true }, { top: 0x5c940d, hat: 'scarf' }, { top: 0x1c7ed6 }],
-  jj: [{ top: 0x212529, hat: 'haenyeo' }, { top: 0xfd7e14, gray: true, hat: 'straw' }, { top: 0x0ca678, hat: 'scarf' }] };
+  jj: [{ top: 0x212529, hat: 'haenyeo' }, { top: 0xfd7e14, gray: true, hat: 'straw' }, { top: 0x0ca678, hat: 'scarf' }],
+  fx: [{ top: 0xff6b6b, hair: 0xffd43b, hat: 'cap' }, { top: 0x4dabf7, hair: 0xffe066 }, { top: 0x40c057, hair: 0xd9480f, hat: 'straw' }] };
 function setResident(region, wi) {
   if (resident) scene.remove(resident.root);
   resident = makePerson(STYLES[region][wi]);
@@ -214,6 +247,7 @@ addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); pl
 
 // ---------- state ----------
 const LIVES = 3;
+let correctN = 0;
 let state = 'ready', score = 0, lives = LIVES, combo = 0, maxCombo = 0, order = [], qi = 0, q = null, tLeft = 0, tMax = 1, overAt = 0, talkT = 0, react = null;
 let best = 0; try { best = +localStorage.getItem('dialect-best') || 0; } catch {}
 const $score = $('score'), $lives = $('lives'), $combo = $('combo'), $center = $('center'), $ans = $('ans'), $bank = $('bank'), $check = $('check'), $fb = $('fb');
@@ -222,31 +256,41 @@ const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🗣️', title:
   ['🎤', '전국 길거리 인터뷰! 주민이 <b>사투리</b>로 대답해요'],
   ['🧩', '낱말 카드를 <b>순서대로</b> 눌러서 표준어 문장 완성'],
   ['✅', '<b>확인</b>을 누르면 채점. 카드를 다시 누르면 빠져요'],
-  ['⏱️', '시간 초과나 오답 3번이면 방송 사고!'],
+  ['🃏', '<b>함정 카드</b> 주의! 사투리 단어 그대로는 오답'],
+  ['🌍', '가끔 <b>갑분 외국인</b> 등장 (+3점). 시간 초과·오답 3번이면 방송 사고!'],
 ] }));
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const rnd = a => a[(Math.random() * a.length) | 0];
 function updateHud() {
-  $score.innerHTML = `${score}<small>개</small>`;
+  $score.innerHTML = `${score}<small>점</small>`;
   $lives.textContent = '🎙️'.repeat(lives) + '🔇'.repeat(LIVES - lives);
   $combo.style.display = combo >= 3 ? '' : 'none'; $combo.textContent = `🔥 ${combo}연속`;
 }
-function reset() { score = 0; lives = LIVES; combo = 0; maxCombo = 0; order = shuffle(QS.map((_, i) => i)); qi = 0; updateHud(); }
+function reset() { correctN = 0; score = 0; lives = LIVES; combo = 0; maxCombo = 0; order = shuffle(QS.map((_, i) => i)); qi = 0; updateHud(); }
 function nextQ() {
   if (state !== 'playing') return;
   $fb.className = ''; $ans.classList.remove('shake', 'good', 'bad');
   if (qi >= order.length) { order = shuffle(order); qi = 0; }
-  const [rg, line, correct, wrong, note] = QS[order[qi++]];
+  let src = QS[order[qi++]], pts = 1;
+  if (score >= 3 && Math.random() < .09) { src = rnd(QF); pts = 3; }
+  else if (score >= 4 && Math.random() < .55) { src = rnd(QH); pts = 2; }
+  const [rg, line, correct, wrong, note] = src;
   const R = REGIONS[rg], wi = (Math.random() * R.who.length) | 0;
-  q = { rg, line, correct, note, picked: [], tiles: shuffle([...correct, ...wrong].map((t, i) => ({ t, i }))), done: false };
+  q = { rg, line, correct, note, pts, picked: [], tiles: shuffle([...correct, ...wrong].map((t, i) => ({ t, i }))), done: false };
   // more distractors later on
-  if (score >= 8) q.tiles.push(...shuffle(['진짜', '그냥', '빨리', '많이', '안', '좀'].filter(w => !correct.includes(w))).slice(0, 2).map((t, k) => ({ t, i: 100 + k })));
+  // trap cards: the dialect words themselves + generic look-alikes; more as you go
+  const literal = line.replace(/[?!.,~“”]/g, '').split(/\s+/).filter(w => w && !/[a-z]/i.test(w) && !correct.includes(w) && !wrong.includes(w));
+  const extra = [...shuffle(literal).slice(0, score >= 6 ? 2 : 1), ...trapsFor(correct, wrong, score >= 10 ? 4 : score >= 5 ? 3 : 2)];
+  q.tiles.push(...extra.map((t, k) => ({ t, i: 100 + k })));
   shuffle(q.tiles);
   $('place').textContent = `${R.place} · ${R.name}`;
   $('face').textContent = R.who[wi][0]; $('who').textContent = R.who[wi][1];
   $('txt').textContent = `“${line}”`;
+  if (pts === 3) { Arcade.toast('🌍 갑분 외국인 등장! (+3점)', '#f59f00'); Arcade.sfx.coin(); Arcade.vibrate([20, 40, 20]); }
+  else if (pts === 2) $('q').firstElementChild.textContent = '🎤 리포터: 긴 문장! (+2점)';
+  if (pts === 1) $('q').firstElementChild.textContent = '🎤 리포터: 표준어로 통역하면?';
   scene.background.setHex(R.sky); groundMat.color.setHex(R.ground); buildProps(R.prop); setResident(rg, wi);
-  tMax = Math.max(9, 18 - score * .5); tLeft = tMax; talkT = 1.2; react = null;
+  tMax = Math.max(6, 13 - score * .35) + (q.correct.length - 2) * 1.2; tLeft = tMax; talkT = 1.2; react = null;
   renderTiles(); Arcade.sfx.tap(); placeCamera();
 }
 let justAdded = -1;
@@ -270,7 +314,7 @@ function judge(timeout) {
   $ans.classList.remove('shake', 'good', 'bad'); void $ans.offsetWidth;
   if (ok) { $ans.classList.add('good'); renderTiles(); } else { $ans.classList.add('shake', 'bad'); }
   if (ok) {
-    score++; combo++; maxCombo = Math.max(maxCombo, combo); react = { k: 'ok', t: 0 };
+    score += q.pts; correctN++; combo++; maxCombo = Math.max(maxCombo, combo); react = { k: 'ok', t: 0 };
     Arcade.sfx.perfect(Math.min(combo, 12)); Arcade.vibrate(combo >= 3 ? [20, 30, 20, 30, 60] : [20, 30, 50]);
     if (combo % 5 === 0) { Arcade.confetti({ y: innerHeight * .3, count: 70, emoji: ['🗣️', '🎤', '⭐'] }); Arcade.sfx.coin(); }
   } else {
@@ -285,8 +329,8 @@ function finish() {
   const isBest = score > best;
   if (isBest) { best = score; try { localStorage.setItem('dialect-best', best); } catch {} }
   isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
-  const rank = score < 3 ? '🔇 통역 연습생' : score < 8 ? '🎤 신입 리포터' : score < 15 ? '📺 지역 방송 에이스' : score < 25 ? '🗺️ 팔도 통역사' : '👑 사투리 국가대표';
-  showScreen(Arcade.resultScreen({ emoji: '🗣️', label: '통역 성공', score, unit: '개', msg: rank, rows: [['최대 연속', `${maxCombo}개`]], isBest: isBest && score > 0, best }));
+  const rank = score < 4 ? '🔇 통역 연습생' : score < 12 ? '🎤 신입 리포터' : score < 24 ? '📺 지역 방송 에이스' : score < 40 ? '🗺️ 팔도 통역사' : '👑 사투리 국가대표';
+  showScreen(Arcade.resultScreen({ emoji: '🗣️', label: '통역 점수', score, unit: '점', msg: rank, rows: [['통역 성공', `${correctN}개`], ['최대 연속', `${maxCombo}개`]], isBest: isBest && score > 0, best }));
   Arcade.gameOver(score);
 }
 function start() {

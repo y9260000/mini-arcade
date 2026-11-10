@@ -140,7 +140,7 @@ let best = 0; try { best = +localStorage.getItem('sake-best') || 0; } catch {}
 const $score = $('score'), $lives = $('lives'), $pct = $('pct'), $center = $('center'), $hint = $('hint');
 const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
 const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🍶', title: '찰랑찰랑 사케', how: [
-  ['👆', '꾹 누르면 졸졸 따르고, 떼면 멈춰요'],
+  ['👆', '꾹 누르면 따르고, 떼면 멈춰요. <b>오래 누를수록 콸콸</b> 빨라져요'],
   ['🎵', '찰수록 <b>도레미파솔라시도</b>! 가득 채울수록 고득점'],
   ['💧', '100%를 넘으면 <b>표면장력</b>으로 볼록… 한계는 잔마다 달라요'],
   ['⚠️', '손을 떼도 <b>공중의 술</b>은 마저 떨어져요'],
@@ -241,7 +241,7 @@ function frame(now) {
     const want = holding && cupState === 'pour' ? 1 : 0;
     tilt += (want - tilt) * Math.min(1, dt * (want ? 5 : 9));
     if (holding && cupState === 'pour') holdT += dt; else holdT = 0;
-    const flow = tilt > .35 ? (tilt - .35) / .65 * (.24 + Math.min(.16, holdT * .1) + Math.min(.16, cupNo * .012)) * cup.speed : 0;   // cup-fulls per second
+    const flow = tilt > .35 ? (tilt - .35) / .65 * (.1 + Math.min(.62, holdT * holdT * .22 + holdT * .08) + Math.min(.12, cupNo * .01)) * cup.speed   /* accelerates the longer you hold */ : 0;   // cup-fulls per second
     if (flow > 0) inAir.push({ amt: flow * dt, t: FALL_T });
     let arrived = 0;
     for (const p of inAir) p.t -= dt;
@@ -266,7 +266,7 @@ function frame(now) {
   } else Arcade.sfx.pour(0);
 
   // bottle pose + stream
-  bottle.rotation.z = -.5 - tilt * 1.75;
+  bottle.rotation.z = -.5 - tilt * (1.55 + Math.min(.45, holdT * .25));
   bottle.position.set(BOTTLE_PIVOT.x + tilt * .3, BOTTLE_PIVOT.y - tilt * .12, 0);
   bottle.updateMatrixWorld(); spout.set(0, .6, 0); bottle.localToWorld(spout);
   const surfaceY = cupBaseY + cup.h * Math.min(level, 1) + .02;

@@ -37,7 +37,7 @@ const TAU = Math.PI * 2;
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 
 // ---------- world constants (2D in the XY plane, viewed from +Z) ----------
-const RE = 1.65, RO = 3.9, PLATE_W = .5, MAX_TILT = .42;   // wide gap between ground and the reflector orbit
+const RE = 1.65, RO = 3.9, PLATE_W = .72, MAX_TILT = .42;   // wide gap between ground and the reflector orbit
 const MESSAGES = [
   ['밥 먹었어?', '🍚'], ['치킨 시켜줘', '🍗'], ['엄마 사랑해', '💌'], ['나 합격했어!!', '🎓'], ['월급 들어왔다', '💰'], ['보고 싶다…', '🥺'],
   ['내일 비 온대', '☔'], ['고양이 사진 보내줘', '🐱'], ['생일 축하해!', '🎂'], ['와이파이 비번 뭐야?', '📶'], ['오늘 야근이야', '😵'], ['우리 결혼해요', '💍'],
@@ -121,6 +121,31 @@ plateGlow.rotation.z = -PLATE_W / 2; plate.add(plateGlow);
   for (const s of [-1, 1]) { const pan = new THREE.Mesh(new THREE.BoxGeometry(.04, .5, .26), flat(0x1c3d6e, { metalness: .3 })); pan.position.set(0, s * .38, 0); sat.add(pan); }
   sat.position.set(RO + .22, 0, 0); plate.add(sat); }
 
+// where the beam will next reach the orbit (aim helper)
+const aimMark = new THREE.Group(); scene.add(aimMark);
+const aimDot = new THREE.Mesh(new THREE.CircleGeometry(.13, 20), new THREE.MeshBasicMaterial({ color: 0x69db7c })); aimMark.add(aimDot);
+const aimRing = new THREE.Mesh(new THREE.RingGeometry(.22, .3, 24), new THREE.MeshBasicMaterial({ color: 0x69db7c, transparent: true, opacity: .8, side: THREE.DoubleSide })); aimMark.add(aimRing);
+const aimLineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+const aimLine = new THREE.Line(aimLineGeo, new THREE.LineDashedMaterial({ color: 0x69db7c, dashSize: .1, gapSize: .08, transparent: true, opacity: .6 })); scene.add(aimLine);
+aimMark.visible = aimLine.visible = false;
+function predictCrossing() {   // follow the straight path (with ground bounces) until it crosses the orbit outward
+  if (!sig) return null;
+  const p = sig.p.clone(), v = sig.v.clone().normalize();
+  let from = p.clone();
+  for (let seg = 0; seg < 4; seg++) {
+    // solve |p + v t| = R for the nearest positive root (orbit first, unless the ground comes sooner)
+    const b = 2 * p.dot(v), cO = p.lengthSq() - RO * RO, cE = p.lengthSq() - RE * RE;
+    const dE = b * b - 4 * cE; let tE = Infinity;
+    if (dE >= 0) { const t1 = (-b - Math.sqrt(dE)) / 2; if (t1 > 1e-3) tE = t1; }
+    const dO = b * b - 4 * cO; let tO = Infinity;
+    if (dO >= 0) { const t2 = (-b + Math.sqrt(dO)) / 2; if (t2 > 1e-3) tO = t2; }
+    if (tO < tE) return { pt: p.clone().addScaledVector(v, tO), from };
+    if (tE === Infinity) return null;
+    p.addScaledVector(v, tE); const n = p.clone().normalize(); v.sub(n.multiplyScalar(2 * v.dot(n))); from = p.clone();
+    if (stage.key === 'earth' && Math.abs(wrap(Math.atan2(p.y, p.x) - recvAng)) <= .2) return null;   // it'll land on the receiver
+  }
+  return null;
+}
 // hazards
 let storms = [], debris = [];
 const stormMat = new THREE.MeshBasicMaterial({ color: 0x7048e8, transparent: true, opacity: .55, side: THREE.DoubleSide });
@@ -149,6 +174,7 @@ const showScreen = html => { $center.innerHTML = html; $center.style.display = '
 const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '📡', title: '지구 반대편 전파', how: [
   ['📡', '서울에서 쏜 전파를 <b>지구 반대편</b>까지 보내야 해요'],
   ['🛰️', '드래그해서 <b>반사판</b>을 궤도에서 돌려 전파를 받아 튕기기'],
+  ['🟢', '<b>초록 점</b>이 전파가 도착할 곳! 거기로 판을 옮기세요 (빨강 = 판이 없음)'],
   ['🎯', '판 <b>가운데</b>는 그대로, <b>끝</b>에 맞으면 비스듬히 튕겨요'],
   ['⛈️', '<b>뇌우</b>·<b>우주 쓰레기</b> 조심!'],
   ['🚀', '지구를 정복하면 <b>달 → 화성 → 목성</b>까지! 판을 비켜줘야 우주로 날아가요'],
@@ -210,7 +236,7 @@ function launch() {
   const a = sendAng, out = new THREE.Vector2(Math.cos(a), Math.sin(a)), tan = new THREE.Vector2(-Math.sin(a), Math.cos(a)).multiplyScalar(launchDir);
   const elev = .62 + Math.random() * .25;   // angle from the horizon
   const dir = tan.clone().multiplyScalar(Math.cos(elev)).add(out.clone().multiplyScalar(Math.sin(elev))).normalize();
-  sig = { p: out.clone().multiplyScalar(RE + .02), v: dir.multiplyScalar(3.2 + Math.min(1.8, level * .15)), travelled: 0 };
+  sig = { p: out.clone().multiplyScalar(RE + .02), v: dir.multiplyScalar(2.8 + Math.min(1.4, level * .12)), travelled: 0 };
   head.visible = true; trailPts = [];
   Arcade.sfx.whoosh(true); Arcade.sfx.note(0);
   ripple(sig.p.x, sig.p.y, 0xff6b6b);
@@ -221,6 +247,7 @@ function start() {
   Arcade.countdown({ final: '송신!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { state = 'playing'; waitT = .3; } });
 }
 function lost(why) {
+  aimMark.visible = aimLine.visible = false;
   sig = null; head.visible = false; lives--; updateHud();
   Arcade.sfx.crash(); Arcade.shake(.25); Arcade.vibrate([60, 40, 100]);
   Arcade.toast(why, '#e03131');
@@ -228,6 +255,7 @@ function lost(why) {
   setTimeout(() => { if (lives <= 0) return finish(); trailPts = []; state = 'playing'; waitT = 1; }, 1400);
 }
 function delivered() {
+  aimMark.visible = aimLine.visible = false;
   const bonus = 300 + Math.max(0, 200 - hops * 15) + level * 20;
   score += bonus; sig = null; head.visible = false; updateHud();
   Arcade.sfx.fanfare(); Arcade.confetti({ y: innerHeight * .4, count: 100, emoji: ['📡', msg[1], '✨'] }); Arcade.vibrate([30, 30, 80]);
@@ -322,15 +350,26 @@ function frame(now) {
   const dt = Math.min(.04, (now - last) / 1000); last = now; const t = now / 1000;
   if (keyRot) plateTarget = plateAng + keyRot * .6;
   // plate follows the target with a max angular speed
-  const dA = wrap(plateTarget - plateAng), maxStep = 3.4 * dt;
+  const dA = wrap(plateTarget - plateAng), maxStep = 9 * dt;   // plate snaps to your finger
   plateAng += THREE.MathUtils.clamp(dA, -maxStep, maxStep);
   plate.rotation.z = plateAng;
   plateMesh.material.emissiveIntensity += (.6 - plateMesh.material.emissiveIntensity) * Math.min(1, dt * 6);
 
   if (state === 'playing') {
-    if (!sig) { waitT -= dt; if (waitT <= 0) launch(); }
+    if (!sig) { aimMark.visible = aimLine.visible = false; waitT -= dt; if (waitT <= 0) launch(); }
     else {
-      for (let i = 0; i < 8 && sig; i++) stepSignal(dt / 8);
+      const pred = predictCrossing();
+      if (pred && (stage.key === 'earth' || sig.p.length() < RO)) {
+        aimMark.visible = aimLine.visible = true;
+        aimMark.position.set(pred.pt.x, pred.pt.y, .1); aimRing.scale.setScalar(1 + Math.sin(t * 8) * .15);
+        const ok = Math.abs(wrap(Math.atan2(pred.pt.y, pred.pt.x) - plateAng)) <= PLATE_W / 2;
+        aimDot.material.color.setHex(ok ? 0x69db7c : 0xff6b6b); aimRing.material.color.setHex(ok ? 0x69db7c : 0xff6b6b);
+        aimLineGeo.setFromPoints([new THREE.Vector3(pred.from.x, pred.from.y, .07), new THREE.Vector3(pred.pt.x, pred.pt.y, .07)]); aimLine.computeLineDistances();
+      } else aimMark.visible = aimLine.visible = false;
+      // bullet-time as it approaches the orbit
+      const r0 = sig.p.length(), outward = sig.p.dot(sig.v) > 0;
+      const slow = outward && r0 > RO - 1.1 && r0 < RO + .05 ? .4 : 1;
+      for (let i = 0; i < 8 && sig; i++) stepSignal(dt * slow / 8);
       if (sig) {
         head.position.set(sig.p.x, sig.p.y, .08);
         trailPts.push(sig.p.clone()); if (trailPts.length > TRAIL_N) trailPts.shift();

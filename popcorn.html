@@ -185,7 +185,7 @@ const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🍿', title: '�
   ['👆', '<b>카라멜 묻은 팝콘</b>을 탭해서 냠! 진할수록 고득점'],
   ['💑', '오른쪽 위 여친이 <b>쳐다볼 때</b> 카라멜 먹으면 들켜요'],
   ['🍿', '쳐다볼 땐 <b>일반 팝콘</b>만 먹는 척 (안전)'],
-  ['⏳', '카라멜은 끈적해서 <b>떼는 데 시간</b>이 걸려요 (진할수록 오래)'],
+  ['⏳', '카라멜은 끈적해서 <b>떼는 데 시간</b>이 걸려요. 한 번 더 탭하면 취소'],
   ['✋', '<b>여친 손</b>, 그리고 가끔 튀어나오는 <b>옆자리 아저씨 손</b> 조심!'],
 ] }));
 function updateHud() {
@@ -217,7 +217,12 @@ function popText(x, y, text, big) {
   el.style.left = x + 'px'; el.style.top = y + 'px'; document.body.appendChild(el); setTimeout(() => el.remove(), 950);
 }
 function grab() {
-  if (state !== 'playing' || slapT > 0 || grabT < .18 || pick) return;
+  if (state === 'playing' && pick) {          // tap again while prying = let go (put it back, look innocent)
+    pick.k.m.position.y = pick.k.y; if (pick.k.baseS) pick.k.m.scale.setScalar(pick.k.baseS); pick = null; grabT = .1;
+    Arcade.sfx.tap(); Arcade.vibrate(6); Arcade.toast('🙊 슬쩍 내려놓기', '#495057');
+    return;
+  }
+  if (state !== 'playing' || slapT > 0 || grabT < .18) return;
   grabT = 0;
   // nearest kernel under the hand, preferring the top layer
   let bestK = null, bd = .55;
@@ -232,17 +237,23 @@ function grab() {
   Arcade.sfx.tap(); Arcade.vibrate(8);
 }
 let pick = null;
+const strand = new THREE.Mesh(new THREE.CylinderGeometry(.04, .07, 1, 6), new THREE.MeshStandardMaterial({ color: 0xc8781e, roughness: .2, metalness: .2, transparent: true, opacity: .85 }));
+strand.visible = false; scene.add(strand);
 function stepPick(dt) {
-  if (!pick) { $ring.style.opacity = 0; return; }
+  if (!pick) { $ring.style.opacity = 0; strand.visible = false; return; }
   pick.t += dt;
   const k = pick.k;
   if (!k.alive) { pick = null; return; }
   if (G.mode === 'look' && G.grace <= 0) { eatKernel(k, false); pick = null; return busted(rnd(['😠 카라멜 떼는 거 다 봤어!', '🙄 손이 왜 이렇게 끈적해?', '😤 너 카라멜만 골라 먹지?!'])); }
-  k.m.position.y = k.y + Math.sin(pick.t * 40) * .03 + pick.t / pick.dur * .25;   // wiggling it free
+  // slowly lifting it out, a caramel string stretching underneath
+  const u = Math.min(1, pick.t / pick.dur), e = u * u * (3 - 2 * u);
+  pick.lift = e;
+  k.m.position.y = k.y + e * .95;
+  if (!k.baseS) k.baseS = k.m.scale.x; k.m.scale.setScalar(k.baseS * (1 + e * .35));   // reads as 'coming up' from the top view
+  strand.visible = true; strand.position.set(k.m.position.x, k.y + e * .95 / 2, k.m.position.z); strand.scale.set(1 - e * .6, Math.max(.01, e * .95), 1 - e * .6);
   tmp.copy(k.m.position).project(camera);
   $ring.style.opacity = 1; $ring.style.left = `${(tmp.x * .5 + .5) * innerWidth}px`; $ring.style.top = `${(-tmp.y * .5 + .5) * innerHeight}px`;
   $ring.style.setProperty('--p', Math.min(1, pick.t / pick.dur).toFixed(3));
-  if (Math.random() < dt * 12) Arcade.vibrate(5);
   if (pick.t >= pick.dur) { pick = null; eatKernel(k, true); }
 }
 const rnd = a => a[(Math.random() * a.length) | 0];
@@ -380,7 +391,7 @@ function frame(now) {
   grabT += dt; slapT = Math.max(0, slapT - dt);
 
   // my hand: follows the pointer, dips on grab, recoils when slapped
-  const dip = pick ? 1 : grabT < .2 ? Math.sin(grabT / .2 * Math.PI) : 0;
+  const dip = pick ? 1 - (pick.lift || 0) * 1.15 : grabT < .2 ? Math.sin(grabT / .2 * Math.PI) : 0;
   const target = slapT > 0 ? new THREE.Vector3(handTarget.x, 2.2, handTarget.z + 1.5) : handTarget;
   hand.position.lerp(target, Math.min(1, dt * 18));
   hand.position.y = (slapT > 0 ? 2.2 : 1.6) - dip * .8;

@@ -17,6 +17,8 @@
       desc: '부장님이 폰 볼 때만 닫힘 버튼 꾹. 눈 마주치면 끝장' },
     { id: 'halo', file: 'halo.html', name: '천사 만들기', emoji: '😇', unit: '명', bestKey: 'halo-best',
       desc: '고리 던지기! 머리 위에 헤일로를 씌우면 천사가 되어 승천' },
+    { id: 'cine', file: 'cine.html', name: '씨네필 통역기', emoji: '🎬', unit: '개', bestKey: 'cine-best',
+      desc: '옆자리 영화 고인물의 어려운 말, 쉬운 말로 빨리 번역하기' },
   ];
 
   const q = new URLSearchParams(location.search);

@@ -6,92 +6,123 @@
 <title>미니 아케이드</title>
 <link rel="icon" type="image/png" href="thumbs/favicon.png">
 <link rel="apple-touch-icon" href="thumbs/favicon.png">
-<script src="common.js?v=17"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="common.js?v=18"></script>
 <style>
   *{box-sizing:border-box}
-  /* 얼마집 brand: blue #2D6FF0, charcoal, white */
-  :root{--accent:#2d6ff0;--accent-dark:#1f54c4;--ink:#1e2532;--ink-soft:#5c6678;--tint:#eaf1fe}
-  body{margin:0;min-height:100vh;background:#dde6f4;color:var(--ink);display:flex;justify-content:center}
-  body::before{content:"";position:absolute;left:0;right:0;top:0;height:clamp(250px,34vh,320px);background:var(--accent);z-index:-1;border-radius:0 0 28px 28px}
-  main{width:100%;max-width:1100px;padding:max(36px,5vh) max(16px,env(safe-area-inset-left)) 120px}
-  .logo{text-align:center;margin-bottom:22px}
-  .logo .t-title{margin:6px 0 4px}
-  .logo p{margin:0;color:#fff;font-weight:700;opacity:.92;text-shadow:0 1px 4px rgba(0,0,0,.15)}
-  #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:14px}
-  @media(min-width:640px){#list{grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:16px}}
-  .card{position:relative;display:flex;flex-direction:column;background:#fff;border-radius:22px;overflow:hidden;min-width:0;
-    text-decoration:none;color:inherit;box-shadow:0 1px 0 rgba(20,40,90,.06),0 10px 26px rgba(20,45,110,.16);border:1px solid rgba(255,255,255,.9);transition:transform .25s cubic-bezier(.2,.8,.3,1),box-shadow .25s;
-    transform:perspective(700px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));will-change:transform}
-  .card:active{transform:scale(.97)}
-  @media(hover:hover){.card:hover{box-shadow:0 1px 0 rgba(20,40,90,.06),0 20px 38px rgba(20,45,110,.28)}}
-  .tile{position:relative;aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#f4f8ff;border-bottom:1px solid #e3eaf6}
-  .tile img{width:100%;height:100%;object-fit:contain}
-  .tile canvas.live{position:absolute;inset:0;width:100%!important;height:100%!important}
-  .tile.live-on img{visibility:hidden}
+  /* clean list layout · 얼마집 blue accent */
+  :root{--accent:#2d6ff0;--accent-dark:#1f54c4;--ink:#191f28;--ink-2:#4e5968;--ink-3:#8b95a1;--line:#f2f4f6;--chip:#f2f4f6;--tile:#f3f6fb}
+  html,body{background:#fff}
+  body{margin:0;min-height:100vh;color:var(--ink);font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;-webkit-font-smoothing:antialiased}
+  main{max-width:600px;margin:0 auto;padding:max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) 120px max(20px,env(safe-area-inset-left))}
+  header{display:flex;align-items:center;gap:12px;padding:12px 0 6px}
+  header img{width:44px;height:44px}
+  header h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.02em}
+  header p{margin:2px 0 0;font-size:14px;color:var(--ink-3)}
+  /* tabs */
+  .tabs{display:flex;gap:22px;margin:14px -20px 0;padding:0 20px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tabs button{flex:none;border:0;background:none;padding:12px 2px 13px;font:600 17px Pretendard,sans-serif;color:var(--ink-3);cursor:pointer;position:relative;letter-spacing:-.02em}
+  .tabs button.on{color:var(--ink)}
+  .tabs button.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--ink);border-radius:2px}
+  /* featured row */
+  .feat{display:flex;align-items:center;gap:14px;margin:18px 0 10px;padding:16px;border-radius:20px;background:#f9fafb;border:1px solid var(--line);text-decoration:none;color:inherit}
+  .feat .ic{width:60px;height:60px;border-radius:16px}
+  .feat b{font-size:17px}
+  /* list */
+  .sec{margin:22px 0 4px;font-size:15px;font-weight:600;color:var(--ink-2)}
+  #list{display:flex;flex-direction:column}
+  .gi{display:flex;align-items:center;gap:14px;padding:12px 8px;margin:0 -8px;border-radius:16px;text-decoration:none;color:inherit;transition:background .15s}
+  @media(hover:hover){.gi:hover,.feat:hover{background:#f5f7fa}}
+  .gi:active{background:#eef1f5}
+  .rank{width:20px;flex:none;text-align:center;font-size:16px;font-weight:600;color:var(--ink-2)}
+  .ic{position:relative;flex:none;width:56px;height:56px;border-radius:15px;background:var(--tile);overflow:hidden}
+  .ic img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(1.25)}
+    .ic.live-on img{visibility:hidden}
+  .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+  .tx b{font-size:16px;font-weight:600;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tx small{font-size:13.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tag{display:inline-block;margin-left:6px;padding:2px 6px;border-radius:6px;font-size:11px;font-weight:700;vertical-align:2px}
+  .tag.new{background:#e8f0fe;color:var(--accent)} .tag.hot{background:#ffebec;color:#f04452}
+  .best{font-size:12.5px;color:var(--accent);font-weight:600}
+  .go{flex:none;border:0;border-radius:999px;padding:8px 14px;font:600 14px Pretendard,sans-serif;background:#e8f0fe;color:var(--accent)}
+  .feat .go{background:var(--accent);color:#fff;padding:10px 16px}
+  .empty{padding:40px 0;text-align:center;color:var(--ink-3);font-size:14px}
+  .run{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(560px,calc(100% - 40px));
+    border:0;border-radius:16px;padding:17px;font:700 17px Pretendard,sans-serif;background:var(--accent);color:#fff;cursor:pointer;box-shadow:0 8px 24px rgba(45,111,240,.3)}
+  .run:active{transform:translateX(-50%) scale(.98)}
+  .fade{position:fixed;left:0;right:0;bottom:0;height:110px;background:linear-gradient(rgba(255,255,255,0),#fff 60%);pointer-events:none}
   /* random roulette */
-  #roul{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;flex-direction:column;gap:18px;background:rgba(20,30,55,.72);backdrop-filter:blur(4px)}
+  #roul{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;flex-direction:column;gap:18px;background:rgba(25,31,40,.55);backdrop-filter:blur(4px)}
   #roul.on{display:flex}
-  #roul .win{position:relative;width:min(340px,82vw);height:min(300px,70vw);overflow:hidden;border-radius:26px;background:#fff;box-shadow:0 0 0 6px var(--accent),0 24px 60px rgba(0,0,0,.4)}
+  #roul .win{position:relative;width:min(320px,82vw);height:min(280px,72vw);overflow:hidden;border-radius:24px;background:#fff;box-shadow:0 0 0 4px var(--accent),0 24px 60px rgba(0,0,0,.3)}
   #roul .win::before,#roul .win::after{content:"";position:absolute;left:0;right:0;height:12%;z-index:2;pointer-events:none}
   #roul .win::before{top:0;background:linear-gradient(#fff,rgba(255,255,255,0))} #roul .win::after{bottom:0;background:linear-gradient(rgba(255,255,255,0),#fff)}
-  #roul .item{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
-  #roul .item img{width:76%;aspect-ratio:16/10;object-fit:contain;background:var(--tint);border-radius:16px}
-  #roul .item b{font:26px "Jua",sans-serif;color:var(--ink)}
-  #roul .item.in{animation:rin var(--d,.08s) linear}
-  @keyframes rin{from{transform:translateY(-100%)}}
-  #roul .item.out{animation:rout var(--d,.08s) linear forwards}
-  @keyframes rout{to{transform:translateY(100%)}}
-  #roul .ptr{position:absolute;top:50%;width:0;height:0;border:16px solid transparent;transform:translateY(-50%);z-index:3}
-  #roul .ptr.l{left:-6px;border-left-color:#ffd43b} #roul .ptr.r{right:-6px;border-right-color:#ffd43b}
-  #roul .cap{font:22px "Jua",sans-serif;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.3)}
-  #roul.done .win{animation:won .5s ease-out} @keyframes won{30%{transform:scale(1.08)}}
-  .body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:4px;flex:1}
-  .card h2{font-family:"Jua",sans-serif;font-weight:400;font-size:clamp(17px,4.6vw,21px);margin:0;line-height:1.2}
-  .card p{margin:0;font-size:12.5px;line-height:1.4;color:var(--ink-soft);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  .card .best{align-self:flex-start;margin-top:auto;background:var(--tint);color:var(--accent);border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:700}
-  .card .num{position:absolute;left:10px;top:9px;font:700 11px "Noto Sans KR",sans-serif;color:var(--accent);background:rgba(255,255,255,.9);border-radius:999px;padding:2px 8px}
-  .card .new.hot{background:#f03e3e;box-shadow:0 2px 0 #a61e1e}
-  .card.is-hot{grid-column:span 2;box-shadow:0 0 0 3px var(--accent),0 6px 0 rgba(43,36,56,.08),0 10px 24px rgba(43,36,56,.12)}
-  .card.is-hot .tile{aspect-ratio:16/7}
-  .card .new{position:absolute;right:10px;top:9px;font:12px "Jua",sans-serif;color:#fff;background:var(--accent);border-radius:999px;padding:3px 9px;box-shadow:0 2px 0 var(--accent-dark)}
-  .run{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(488px,calc(100% - 32px));
-    border:0;border-radius:20px;padding:18px;font-family:"Jua",sans-serif;font-size:24px;background:var(--accent);color:#fff;cursor:pointer;
-    box-shadow:0 6px 0 var(--accent-dark),0 14px 30px rgba(45,111,240,.35)}
-  .run:active{transform:translateX(-50%) translateY(4px);box-shadow:0 2px 0 var(--accent-dark)}
-  .result{margin-bottom:20px}
-  .result .r-sheet{margin:0 auto;max-width:480px}
+  #roul .item{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+  #roul .item img{width:74%;aspect-ratio:16/10;object-fit:contain;background:var(--tile);border-radius:16px}
+  #roul .item b{font-size:21px;font-weight:700;color:var(--ink)}
+  #roul .item.in{animation:rin var(--d,.08s) linear} @keyframes rin{from{transform:translateY(-100%)}}
+  #roul .item.out{animation:rout var(--d,.08s) linear forwards} @keyframes rout{to{transform:translateY(100%)}}
+  #roul .ptr{position:absolute;top:50%;width:0;height:0;border:14px solid transparent;transform:translateY(-50%);z-index:3}
+  #roul .ptr.l{left:-4px;border-left-color:var(--accent)} #roul .ptr.r{right:-4px;border-right-color:var(--accent)}
+  #roul .cap{font-size:19px;font-weight:700;color:#fff}
+  #roul.done .win{animation:won .5s ease-out} @keyframes won{30%{transform:scale(1.06)}}
 </style>
 </head>
 <body data-hub>
 <main>
-  <div class="logo"><img src="thumbs/favicon.png" alt="" width="96" height="96" style="filter:drop-shadow(0 8px 14px rgba(0,0,0,.2))"><div class="t-title">미니 아케이드</div><p id="sub">3D 미니게임 모음 · 하나씩 or 연속으로!</p></div>
-  <div class="result" id="result"></div>
+  <header><img src="thumbs/favicon.png" alt=""><div><h1>미니 아케이드</h1><p id="sub">3D 미니게임</p></div></header>
+  <nav class="tabs" id="tabs"></nav>
+  <a class="feat" id="feat"></a>
+  <div class="sec" id="sec">전체 게임</div>
   <div id="list"></div>
 </main>
+<div class="fade"></div>
 <button class="run" id="run">🎲 랜덤 플레이</button>
 <div id="roul"><div class="cap" id="rcap">두구두구두구…</div><div class="win" id="rwin"><span class="ptr l"></span><span class="ptr r"></span></div></div>
 <script>
   const { GAMES } = Arcade;
-  const TILE = { softserve: '#ffe3ec', skydive: '#d0ebff', stock: '#1b2240', moktak: '#f3d9c4', door: '#ffe8cc', elevator: '#dbe4ff', halo: '#fff3bf', cine: '#2b2438', cat: '#ffe8cc', soccer: '#d3f9d8', inventory: '#30251c', dialect: '#e5dbff', popcorn: '#3b2716', shop: '#fff0f6', sake: '#3b2416', radio: '#0b1030', tower: '#d0ebff', inspect: '#fff4e6', bus: '#d0ebff', court: '#3b2416', fight: '#2b1d3a', checkout: '#fff5f5' };
   const best = k => { try { return +localStorage.getItem(k) || 0; } catch { return 0; } };
-  const NEW = new Set(GAMES.slice(-4).map(g => g.id)), HOT = ['soccer'];
-  const ORDER = [...GAMES.filter(g => HOT.includes(g.id)), ...GAMES.filter(g => !HOT.includes(g.id))];
-  document.getElementById('sub').textContent = `3D 미니게임 ${GAMES.length}종 · 골라서 or 랜덤으로!`;
-  document.getElementById('list').innerHTML = ORDER.map((g, i) => `
-    <a class="card ${HOT.includes(g.id) ? 'is-hot' : ''}" data-id="${g.id}" href="${g.file}">
-      <div class="tile"><img src="thumbs/${g.id}.png" alt="${g.name}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${g.emoji}',style:'font-size:56px'}))"></div>
-      <span class="num">#${GAMES.indexOf(g) + 1}</span>${HOT.includes(g.id) ? '<span class="new hot">🔥 HOT</span>' : NEW.has(g.id) ? '<span class="new">NEW</span>' : ''}
-      <div class="body"><h2>${g.name}</h2><p>${g.desc}</p>
-      ${best(g.bestKey) ? `<span class="best">🏆 ${best(g.bestKey)}${g.unit}</span>` : ''}</div>
-    </a>`).join('');
+  const NEW = new Set(GAMES.slice(-4).map(g => g.id)), HOT = ['soccer', 'fight', 'checkout', 'court'];
+  const REAL = new Set(['tower', 'inspect', 'checkout']);   // 생활·부동산 테마
+  const TABS = [
+    ['전체', () => GAMES],
+    ['인기', () => GAMES.filter(g => HOT.includes(g.id))],
+    ['신작', () => GAMES.filter(g => NEW.has(g.id))],
+    ['생활', () => GAMES.filter(g => REAL.has(g.id) || ['bus', 'elevator', 'door', 'shop', 'popcorn', 'cat'].includes(g.id))],
+    ['내 기록', () => GAMES.filter(g => best(g.bestKey))],
+  ];
+  const $ = id => document.getElementById(id);
+  $('sub').textContent = `3D 미니게임 ${GAMES.length}종`;
+  const icon = g => `<div class="ic" data-ic="${g.id}"><img src="thumbs/${g.id}.png" alt="" loading="lazy"></div>`;
+  const tags = g => HOT[0] === g.id ? '<span class="tag hot">HOT</span>' : NEW.has(g.id) ? '<span class="tag new">NEW</span>' : '';
+  // featured: the HOT pick
+  const F = GAMES.find(g => g.id === HOT[0]);
+  $('feat').href = F.file; $('feat').dataset.id = F.id;
+  $('feat').innerHTML = `${icon(F)}<div class="tx"><b>${F.name}<span class="tag hot">HOT</span></b><small>${F.desc}</small></div><span class="go">시작</span>`;
+  let tab = 0;
+  function renderList() {
+    const items = TABS[tab][1]();
+    $('sec').textContent = `${TABS[tab][0] === '전체' ? '전체 게임' : TABS[tab][0]} ${items.length}`;
+    $('list').innerHTML = items.length ? items.map((g, i) => `
+      <a class="gi" data-id="${g.id}" href="${g.file}">
+        <span class="rank">${i + 1}</span>${icon(g)}
+        <div class="tx"><b>${g.name}${tags(g)}</b><small>${best(g.bestKey) ? `<span class="best">최고 ${best(g.bestKey)}${g.unit}</span> · ` : ''}${g.desc}</small></div>
+        <span class="go">시작</span>
+      </a>`).join('') : '<div class="empty">아직 기록이 없어요. 한 판 해볼까요?</div>';
+    bindLive();
+  }
+  $('tabs').innerHTML = TABS.map(([n], i) => `<button class="${i ? '' : 'on'}" data-i="${i}">${n}</button>`).join('');
+  $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; tab = +b.dataset.i; [...$('tabs').children].forEach(x => x.classList.toggle('on', x === b)); renderList(); });
+
   // 🎲 random play: slot-machine reel that slows down and lands on a game
   let spinning = false;
-  document.getElementById('run').onclick = () => {
+  $('run').onclick = () => {
     if (spinning) return; spinning = true;
     let last = ''; try { last = sessionStorage.getItem('last-random') || ''; } catch {}
     const pool = GAMES.filter(g => g.id !== last), pick = pool[(Math.random() * pool.length) | 0];
     try { sessionStorage.setItem('last-random', pick.id); } catch {}
-    const R = document.getElementById('roul'), win = document.getElementById('rwin'), cap = document.getElementById('rcap');
+    const R = $('roul'), win = $('rwin'), cap = $('rcap');
     R.className = 'on'; cap.textContent = '두구두구두구…';
     const steps = 26 + ((Math.random() * 6) | 0); let i = (Math.random() * GAMES.length) | 0, n = 0;
     const show = (g, d) => {
@@ -101,7 +132,7 @@
     };
     const step = () => {
       n++; const left = steps - n, g = left === 0 ? pick : GAMES[(i += 1 + ((Math.random() * 3) | 0)) % GAMES.length];
-      const d = .05 + Math.pow(1 - left / steps, 3) * .38;   // decelerate: 두두두둑
+      const d = .05 + Math.pow(1 - left / steps, 3) * .38;
       show(g, Math.min(.3, d)); Arcade.sfx.tick(); Arcade.vibrate(5);
       if (left > 0) setTimeout(step, d * 1000);
       else setTimeout(() => {
@@ -111,43 +142,35 @@
     };
     step();
   };
-  // live 3D on hover: the card's model comes alive in a shared WebGL canvas
-  if (matchMedia('(hover:hover)').matches) {
-    let mod = null, R3 = null, live = null;
-    const ensure = async () => {
-      if (mod) return;
-      mod = await import('./thumbs/models.js');
-      R3 = new mod.THREE.WebGLRenderer({ antialias: true, alpha: true }); R3.setPixelRatio(Math.min(devicePixelRatio, 2));
-      R3.outputColorSpace = mod.THREE.SRGBColorSpace; R3.shadowMap.enabled = true; R3.domElement.className = 'live';
-    };
-    const loop = now => { if (!live) return; live.st.tick((now - live.t0) / 1000); R3.render(live.st.scene, live.st.camera); requestAnimationFrame(loop); };
-    document.querySelectorAll('.card').forEach(card => {
-      const id = card.dataset.id, tile = card.querySelector('.tile');
-      card.addEventListener('pointerenter', async () => {
+
+  // live 3D on hover: the row's icon model comes alive in a shared WebGL canvas
+  const canHover = matchMedia('(hover:hover)').matches;
+  let mod = null, R3 = null, live = null;
+  const ensure = async () => {
+    if (mod) return;
+    mod = await import('./thumbs/models.js');
+    R3 = new mod.THREE.WebGLRenderer({ antialias: true, alpha: true }); R3.setPixelRatio(Math.min(devicePixelRatio, 2));
+    R3.outputColorSpace = mod.THREE.SRGBColorSpace; R3.shadowMap.enabled = true; R3.domElement.className = 'live';
+  };
+  const loop = now => { if (!live) return; live.st.tick((now - live.t0) / 1000); R3.render(live.st.scene, live.st.camera); requestAnimationFrame(loop); };
+  function bindLive() {
+    if (!canHover) return;
+    document.querySelectorAll('.gi, .feat').forEach(row => {
+      if (row.dataset.bound) return; row.dataset.bound = 1;
+      const id = row.dataset.id, ic = row.querySelector('.ic');
+      row.addEventListener('pointerenter', async () => {
         try { await ensure(); } catch { return; }
-        if (!card.matches(':hover')) return;
-        const w = tile.clientWidth, h = tile.clientHeight; R3.setSize(w, h, false);
-        live = { card, st: mod.stage(id, w, h), t0: performance.now() - 1000 };
-        tile.appendChild(R3.domElement); tile.classList.add('live-on'); requestAnimationFrame(loop);
+        if (!row.matches(':hover')) return;
+        // match the static icon: 16:10 image, cover-fit into the square, then scaled 1.25x
+        const H = ic.clientHeight * 1.25, W = H * 1.6; R3.setSize(W, H, false);
+        R3.domElement.style.cssText = `position:absolute;left:50%;top:50%;width:${W}px;height:${H}px;transform:translate(-50%,-50%)`;
+        live = { row, st: mod.stage(id, W, H), t0: performance.now() - 1000 };
+        ic.appendChild(R3.domElement); ic.classList.add('live-on'); requestAnimationFrame(loop);
       });
-      card.addEventListener('pointerleave', () => { if (live?.card === card) live = null; tile.classList.remove('live-on'); if (R3?.domElement.parentNode === tile) R3.domElement.remove(); });
+      row.addEventListener('pointerleave', () => { if (live?.row === row) live = null; ic.classList.remove('live-on'); if (R3?.domElement.parentNode === ic) R3.domElement.remove(); });
     });
   }
-  // gentle 3D tilt toward the cursor
-  if (matchMedia('(hover:hover)').matches) document.querySelectorAll('.card').forEach(c => {
-    c.addEventListener('pointermove', e => { const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
-      c.style.setProperty('--ry', (x * 9).toFixed(2) + 'deg'); c.style.setProperty('--rx', (-y * 7).toFixed(2) + 'deg'); });
-    c.addEventListener('pointerleave', () => { c.style.setProperty('--ry', '0deg'); c.style.setProperty('--rx', '0deg'); });
-  });
-
-  const done = new URLSearchParams(location.search).get('done');
-  if (done !== null) {
-    const scores = done.split(',').map(Number);
-    document.getElementById('result').innerHTML = `<div class="r-sheet">
-      <div class="r-emoji">🏆</div><div class="r-label">연속 플레이 결과</div>
-      <div class="rows">${GAMES.map((g, i) => `<div class="row"><span>${g.emoji} ${g.name}</span><b>${scores[i] ?? 0}${g.unit}</b></div>`).join('')}</div>
-    </div>`;
-  }
+  renderList();
 </script>
 </body>
 </html>

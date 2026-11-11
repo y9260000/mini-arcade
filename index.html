@@ -131,7 +131,7 @@
     try { sessionStorage.setItem('last-random', pick.id); } catch {}
     const R = $('roul'), win = $('rwin'), cap = $('rcap');
     R.className = 'on'; cap.textContent = '두구두구두구…';
-    const steps = 26 + ((Math.random() * 6) | 0); let i = (Math.random() * GAMES.length) | 0, n = 0;
+    const steps = 18 + ((Math.random() * 4) | 0); let i = (Math.random() * GAMES.length) | 0, n = 0;
     const show = (g, d) => {
       win.querySelectorAll('.item').forEach(el => { el.classList.remove('in'); el.style.setProperty('--d', d + 's'); el.classList.add('out'); setTimeout(() => el.remove(), d * 1000); });
       const el = document.createElement('div'); el.className = 'item in'; el.style.setProperty('--d', d + 's');
@@ -139,13 +139,13 @@
     };
     const step = () => {
       n++; const left = steps - n, g = left === 0 ? pick : GAMES[(i += 1 + ((Math.random() * 3) | 0)) % GAMES.length];
-      const d = .05 + Math.pow(1 - left / steps, 3) * .38;
-      show(g, Math.min(.3, d)); Arcade.sfx.tick(); Arcade.vibrate(5);
+      const d = .04 + Math.pow(1 - left / steps, 3) * .2;
+      show(g, Math.min(.18, d)); Arcade.sfx.tick(); Arcade.vibrate(5);
       if (left > 0) setTimeout(step, d * 1000);
       else setTimeout(() => {
         R.classList.add('done'); cap.textContent = `🎉 ${pick.name}!`; Arcade.sfx.fanfare(); Arcade.confetti({ y: innerHeight * .45, count: 70 });
-        setTimeout(() => { location.href = pick.file; }, 1300);
-      }, 250);
+        setTimeout(() => { location.href = pick.file; }, 850);
+      }, 120);
     };
     step();
   };

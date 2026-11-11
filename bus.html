@@ -89,7 +89,7 @@ function hazardMesh(kind) {
   const g = new THREE.Group();
   box(.12, 3.2, .12, 0x495057, 0, 1.1, 0, g);
   if (kind === 'brake') { box(.5, 1.2, .3, 0x212529, 0, 2.6, 0, g); for (const [y, c] of [[3, 0xff3b3b], [2.6, 0x4a4a4a], [2.2, 0x4a4a4a]]) { const l = new THREE.Mesh(new THREE.SphereGeometry(.14, 10, 8), new THREE.MeshBasicMaterial({ color: c })); l.position.set(0, y, .17); g.add(l); } }
-  else { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); x.fillStyle = kind === 'go' ? '#2f9e44' : '#ffd43b'; x.beginPath(); x.moveTo(64, 6); x.lineTo(122, 64); x.lineTo(64, 122); x.lineTo(6, 64); x.fill(); x.font = '64px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText({ bump: '⛰️', curve: '↩️', go: '🟢', kid: '🚸', back: '🔙' }[kind], 64, 68);
+  else { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); x.fillStyle = kind === 'go' ? '#2f9e44' : '#ffd43b'; x.beginPath(); x.moveTo(64, 6); x.lineTo(122, 64); x.lineTo(64, 122); x.lineTo(6, 64); x.fill(); x.font = '64px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText({ bump: '⛰️', curve: '↩️', go: '🟢', kid: '🚸', back: '🔙', pigeon: '🐦' }[kind], 64, 68);
     const sgn = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true })); sgn.position.y = 2.6; g.add(sgn); }
   g.position.set(14, -.5, -2.6); scene.add(g); return g;
 }
@@ -109,7 +109,8 @@ function makePerson({ top, bottom = 0x2b2f3a, skin = 0xffd2a8, hair = 0x2b2b2b, 
 }
 const me = makePerson({ top: 0x364fc7 });   // faces +x (toward the front of the bus)
 me.root.position.set(0, 0, .2);
-const phone = box(.03, .2, .12, 0x212529, .12, -.7, 0, me.arms[1]); box(.005, .17, .1, new THREE.MeshBasicMaterial({ color: 0x74c0fc }), .14, -.7, 0, me.arms[1]);
+const phoneGrp = new THREE.Group(); phoneGrp.position.set(.02, -.68, -.05); me.arms[1].add(phoneGrp);
+box(.2, .03, .12, 0x212529, .05, 0, 0, phoneGrp); box(.17, .005, .1, new THREE.MeshBasicMaterial({ color: 0x74c0fc }), .05, .018, 0, phoneGrp);
 const others = [
   Object.assign(makePerson({ top: 0xe64980, hair: 0x6b4f3a }), { x: -2.6, z: .1, ph: 1 }),
   Object.assign(makePerson({ top: 0x868e96, hair: 0xdee2e6 }), { x: 3, z: -.1, ph: 2.5 }),
@@ -141,15 +142,26 @@ const KINDS = {
     setTimeout(() => { if (state !== 'playing') return; push(-1, 1.05, .5); targetSpeed = 0; Arcade.sfx.thud(); line('끼익!'); }, 2700);       // stopping from reverse throws you back
     setTimeout(() => { reversing = false; if (state === 'playing') targetSpeed = rr(35, 50); }, 3400);
   } },
+  pigeon: { warn: '🐦 비둘기 돌진! 몸을 크게 젖혀 피해요', col: '#5c7cfa', fire() {
+    const dir = Math.random() < .5 ? -1 : 1;   // −1 = flies from the front (right) toward the back (left)
+    pig = { x: dir < 0 ? 9 : -9, dir, hit: false }; pigeon.visible = true; pigeon.rotation.y = dir < 0 ? Math.PI : 0; Arcade.sfx.squawk(); Arcade.sfx.flap(); line('구구구구!!');
+  } },
   kid: { warn: '🚸 어린이 보호구역… 급정거 두 번!', col: '#e8590c', fire() { push(+1, .9, .4); setTimeout(() => state === 'playing' && push(+1, 1.0, .4), 700); targetSpeed = 15; setTimeout(() => { targetSpeed = rr(30, 45); }, 2000); Arcade.sfx.thud(); line('어이쿠!'); } },
 };
 let bounce = 0, curveT = 0, lineT = 0, reversing = false, beepT = 0;
+const pigeon = new THREE.Group(); pigeon.visible = false; scene.add(pigeon);
+{ const b = new THREE.Mesh(new THREE.SphereGeometry(.18, 8, 6), flat(0x868e96)); b.scale.set(1.5, 1, 1); pigeon.add(b);
+  const h = new THREE.Mesh(new THREE.SphereGeometry(.11, 8, 6), flat(0x5c7cfa)); h.position.set(.24, .08, 0); pigeon.add(h);
+  const bk = new THREE.Mesh(new THREE.ConeGeometry(.04, .12, 4), flat(0xfab005)); bk.rotation.z = -Math.PI / 2; bk.position.set(.36, .07, 0); pigeon.add(bk);
+  pigeon.userData.wings = [-1, 1].map(s => box(.25, .03, .32, 0x868e96, 0, .05, s * .2, pigeon)); }
+const PIGEON_Y = 1.1;   // flight height: duck under it by leaning past ~30°
+let pig = null;
 function push(dir, strength, dur) { events.push({ dir, a: strength * (1 + Math.min(.8, survived / 90)), t: dur, dur }); Arcade.shake(.25 * strength); Arcade.vibrate(Math.round(60 * strength)); }
 function line(text) { lineT = 1.2; driverLine = text; }
 let driverLine = '';
 function scheduleHazard() {
   const lvl = Math.min(1, survived / 80);
-  const pool = ['brake', 'brake', 'go', 'bump', 'bump', ...(survived > 15 ? ['curve'] : []), ...(survived > 30 ? ['kid'] : []), ...(survived > 20 ? ['back'] : [])];
+  const pool = ['brake', 'brake', 'go', 'bump', 'bump', ...(survived > 15 ? ['curve'] : []), ...(survived > 30 ? ['kid'] : []), ...(survived > 20 ? ['back'] : []), ...(survived > 18 ? ['pigeon', 'pigeon'] : [])];
   const kind = rnd(pool);
   hazards.push({ kind, m: hazardMesh(kind), fired: false });
   nextEventT = rr(3.6, 6) * (1 - lvl * .4);
@@ -159,7 +171,7 @@ function updateHud() {
   $('speed').textContent = speed < -1 ? `🔙 후진 ${Math.round(-speed)}km/h` : `${Math.round(speed)}km/h`; $('speed').style.background = speed < -1 ? '#ffe066' : '';
 }
 function reset() {
-  reversing = false;
+  reversing = false; pig = null; pigeon.visible = false;
   theta = 0; omega = 0; input = 0; events = []; speed = 0; targetSpeed = 40; dist = 0; stops = 0; nextStop = 300; survived = 0; nextEventT = 3; bounce = 0; curveT = 0; fallT = 0;
   for (const h of hazards) scene.remove(h.m); hazards.length = 0;
   me.root.rotation.set(0, 0, 0); me.root.position.set(0, 0, .2); $warn.style.display = 'none';
@@ -250,6 +262,16 @@ function frame(now) {
     const noise = (Math.sin(t * 3.1) * .5 + Math.sin(t * 7.3) * .3) * (.25 + lvl * .35) * Math.min(1, speed / 30);
     const alpha = (1.2 + lvl * .8) * Math.sin(theta) + aBus * 6.5 + noise + input * 7 - omega * 1.8;   // press toward the side you want to lean   // slightly unstable upright + bus push + your counter-lean
     omega += alpha * dt; theta += omega * dt;
+    if (pig) {   // pigeon flight + head collision
+      pig.x += pig.dir * 7.5 * dt; pigeon.position.set(pig.x, PIGEON_Y, me.root.position.z);
+      pigeon.userData.wings.forEach((w, j) => w.rotation.x = (j ? 1 : -1) * Math.sin(t * 40) * .7);
+      const headX = Math.sin(theta) * 1.17, headH = Math.cos(theta) * 1.17;   // head of a leaning passenger
+      if (!pig.hit && !pig.dodged && Math.abs(pig.x - headX) < .35) {
+        if (headH > PIGEON_Y - .08) { pig.hit = true; omega += -pig.dir * 3.2; Arcade.sfx.crash(); Arcade.sfx.squawk(); Arcade.shake(.4); Arcade.vibrate([60, 30, 90]); Arcade.toast('🐦💥 비둘기 박치기!!', '#e03131'); }
+        else { pig.dodged = true; Arcade.sfx.whoosh(); Arcade.toast('🐦 휙! 매트릭스 회피!', '#2b8a3e'); }
+      }
+      if (Math.abs(pig.x) > 10) { pig = null; pigeon.visible = false; }
+    }
     if (Math.abs(theta) > FALL) fall();
   } else if (state === 'fall') {
     fallT += dt;
@@ -259,11 +281,20 @@ function frame(now) {
   // body pose: pivot at the feet, flailing arms when off balance
   me.root.rotation.z = -theta;   // +theta leans toward +x (front)
   const panic = Math.min(1, Math.abs(theta) / FALL);
-  me.arms[0].rotation.x = panic * 1.8 * Math.sin(t * 18); me.arms[0].rotation.z = -theta * 1.5 - .2;
-  me.arms[1].rotation.z = -.9 + panic * Math.sin(t * 15) * .8;   // phone hand
+  const flail = Math.max(0, (panic - .3) / .7);   // 0 calm → 1 full windmill
+  const spin = t * 13;
+  me.arms.forEach((a, i) => {
+    const side = i ? 1 : -1;
+    // calm: free arm hangs, phone arm bent up in front of the chest; panic: both arms swing big circles, cartoon style
+    const calmZ = i ? 1.15 : .15 + theta * .6, calmX = i ? side * -.35 : side * .1;
+    const windZ = spin * (i ? 1 : -1) + (i ? 0 : Math.PI), windX = side * -.75;
+    a.rotation.z = calmZ * (1 - flail) + windZ * flail;
+    a.rotation.x = calmX * (1 - flail) + windX * flail;
+  });
+  phoneGrp.rotation.z = -1.0 * (1 - flail);   // screen faces the eyes when calm
   me.legs.forEach((l, i) => l.rotation.x = (i ? 1 : -1) * (.12 + panic * .25));
   me.mouth.scale.set(1, 1 + panic * 3, 1);
-  me.head.rotation.z = theta * .5;
+  me.head.rotation.z = theta * .5 - .25 * (1 - Math.min(1, Math.abs(theta) / FALL * 2));   // eyes on the phone when calm
   if (state === 'fall') me.root.position.y = -Math.min(.25, fallT * .5);
   for (const o of others) { o.root.rotation.z = -(theta * .5 + Math.sin(t * 2 + o.ph) * .04); if (state === 'fall') o.head.rotation.y = Math.atan2(me.root.position.z - o.z, me.root.position.x - o.x); }
   for (const s of straps) s.rotation.z = -theta * .9 + Math.sin(t * 3) * .05;

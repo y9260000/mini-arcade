@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,interactive-widget=resizes-content">
 <title>법정 속기사</title>
 <script src="common.js?v=17"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding:wght@400;700&family=Nanum+Myeongjo:wght@700;800&display=swap">
@@ -10,49 +10,50 @@
   html,body{margin:0;height:100%;overflow:hidden;background:#3b2416;
     user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
   canvas{display:block}
-  .hud-score{font-size:40px}
-  #say{position:fixed;left:50%;top:max(120px,calc(env(safe-area-inset-top) + 110px));transform:translateX(-50%);width:min(560px,calc(100% - 32px));box-sizing:border-box;z-index:3;pointer-events:none;
-    background:#fffdf5;color:#2b2438;border-radius:16px;padding:10px 16px;box-shadow:0 10px 26px rgba(0,0,0,.35);border:3px solid #2b2438}
-  #say .who{font:700 12px "Noto Sans KR",sans-serif;color:#7a5c3a}
-  #say .txt{font:800 clamp(18px,4.8vw,24px) "Nanum Myeongjo",serif;line-height:1.4;min-height:1.4em;word-break:keep-all}
-  #say .txt .w{opacity:.25} #say .txt .w.on{opacity:1} #say .txt .w.typed{color:#2b8a3e} #say .txt .w.next{text-decoration:underline 3px #ffd43b}
-  #say::after{content:"";position:absolute;left:var(--tail,30%);top:-14px;border:12px solid transparent;border-top:0;border-bottom-color:#2b2438}
-  /* the typewriter */
-  #tw{position:fixed;left:0;right:0;bottom:0;z-index:3;display:flex;flex-direction:column;align-items:center;pointer-events:none}
-  #paperWrap{width:min(520px,92vw);height:clamp(90px,15vh,130px);overflow:hidden;position:relative;margin-bottom:-6px}
-  #paper{position:absolute;left:0;right:0;bottom:0;background:#fffef8;border-radius:4px 4px 0 0;box-shadow:0 -4px 16px rgba(0,0,0,.25);padding:10px 18px 14px;
-    font:700 clamp(15px,3.9vw,19px)/1.65 "Nanum Gothic Coding",monospace;color:#1c1c24;transition:transform .35s cubic-bezier(.3,1.4,.5,1)}
-  #paper .ln{white-space:nowrap;overflow:hidden;text-overflow:clip;border-bottom:1px dashed #e9ecef}
-  #paper .ln .bad{color:#c92a2a;text-decoration:line-through}
-  #paper .ln .cursor{display:inline-block;width:.55em;height:1.1em;background:#1c1c24;vertical-align:-3px;animation:cb .8s steps(2) infinite}
-  @keyframes cb{50%{opacity:0}}
-  #carriage{width:min(560px,96vw);height:22px;background:linear-gradient(#2b2b33,#18181d);border-radius:8px;box-shadow:0 3px 0 #0b0b0e;position:relative}
-  #carriage::after{content:"";position:absolute;right:-6px;top:-10px;width:30px;height:12px;border-radius:6px;background:#adb5bd;box-shadow:0 2px 0 #495057}
-  #body{width:min(560px,96vw);box-sizing:border-box;background:linear-gradient(#3d3d48,#26262e);border-radius:18px 18px 0 0;padding:14px 12px max(14px,env(safe-area-inset-bottom));
-    box-shadow:0 -6px 20px rgba(0,0,0,.4);pointer-events:auto}
-  #brand{font:800 12px "Nanum Myeongjo",serif;letter-spacing:3px;color:#c9a96e;text-align:center;margin-bottom:8px}
-  #keys{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;min-height:64px}
-  .key{min-width:74px;padding:12px 14px 14px;border-radius:999px;border:0;cursor:pointer;background:radial-gradient(circle at 50% 35%,#fffdf5,#e9e2d0);color:#1c1c24;
-    font:700 clamp(15px,3.9vw,18px) "Nanum Gothic Coding",monospace;box-shadow:0 6px 0 #6b6152,0 0 0 4px #1c1c24,0 10px 14px rgba(0,0,0,.4);transition:transform .04s,box-shadow .04s}
-  .key:active,.key.down{transform:translateY(5px);box-shadow:0 1px 0 #6b6152,0 0 0 4px #1c1c24,0 3px 6px rgba(0,0,0,.4)}
-  .key.wrong{background:radial-gradient(circle at 50% 35%,#ffe3e3,#ff8787)}
-  #keys.wait .key{opacity:.35;pointer-events:none}
-  #listen{font:700 13px "Noto Sans KR",sans-serif;color:#adb5bd;text-align:center;margin-top:8px;min-height:1.2em}
-  #backlog{display:inline-block;margin-left:6px;color:#ffd43b}
   .hud{top:max(10px,env(safe-area-inset-top))!important}
-  .toast{top:44%}
+  .hud-score{font-size:38px}
+  #say{position:fixed;left:50%;top:max(112px,calc(env(safe-area-inset-top) + 102px));transform:translateX(-50%);width:min(560px,calc(100% - 32px));box-sizing:border-box;z-index:3;pointer-events:none;
+    background:#fffdf5;color:#2b2438;border-radius:14px;padding:8px 14px;box-shadow:0 10px 26px rgba(0,0,0,.35);border:3px solid #2b2438}
+  #say .who{font:700 12px "Noto Sans KR",sans-serif;color:#7a5c3a;display:flex;justify-content:space-between}
+  #say .txt{font:800 clamp(17px,4.6vw,22px) "Nanum Myeongjo",serif;line-height:1.4;word-break:keep-all}
+  #say::after{content:"";position:absolute;left:var(--tail,30%);top:-14px;border:12px solid transparent;border-top:0;border-bottom-color:#2b2438}
+  #tbar{height:8px;border-radius:4px;background:#e9ecef;overflow:hidden;margin-top:6px}
+  #tbar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#fa5252,#fcc419 35%,#51cf66);transform-origin:left;border-radius:4px}
+  #tbar.low{animation:lowT .3s infinite} @keyframes lowT{50%{box-shadow:0 0 0 3px #ff8787}}
+  /* paper + typewriter */
+  #tw{position:fixed;left:0;right:0;bottom:0;z-index:3;display:flex;flex-direction:column;align-items:center}
+  #paper{position:relative;width:min(540px,92vw);box-sizing:border-box;background:#fffef8;border-radius:4px 4px 0 0;box-shadow:0 -4px 16px rgba(0,0,0,.25);padding:10px 16px 12px;
+    font:700 clamp(17px,4.5vw,22px)/1.7 "Nanum Gothic Coding",monospace;color:#1c1c24;transition:transform .35s cubic-bezier(.3,1.4,.5,1);cursor:text}
+  #prev{color:#868e96;font-size:.8em;line-height:1.5;min-height:1.5em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px dashed #e9ecef;margin-bottom:4px}
+  #line{min-height:1.7em;word-break:keep-all}
+  #line .c{color:#adb5bd} #line .c.ok{color:#1c1c24} #line .c.bad{color:#fff;background:#e03131;border-radius:3px} #line .c.cur{color:#1c1c24;box-shadow:inset 0 -3px 0 #fab005}
+  #line .caret{display:inline-block;width:2px;height:1.1em;background:#1c1c24;vertical-align:-3px;animation:cb .8s steps(2) infinite;margin:0 -1px}
+  @keyframes cb{50%{opacity:0}}
+  #typed{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;font-size:16px;caret-color:transparent;color:transparent;background:transparent}
+  #tapme{position:absolute;right:10px;bottom:6px;font:700 12px "Noto Sans KR",sans-serif;color:#e8590c}
+  #carriage{width:min(580px,96vw);height:18px;background:linear-gradient(#2b2b33,#18181d);border-radius:8px;box-shadow:0 3px 0 #0b0b0e;position:relative}
+  #carriage::after{content:"";position:absolute;right:-6px;top:-9px;width:30px;height:11px;border-radius:6px;background:#adb5bd}
+  #body{width:min(580px,96vw);box-sizing:border-box;background:linear-gradient(#3d3d48,#26262e);border-radius:16px 16px 0 0;padding:10px 12px max(10px,env(safe-area-inset-bottom));box-shadow:0 -6px 20px rgba(0,0,0,.4)}
+  #brand{font:800 11px "Nanum Myeongjo",serif;letter-spacing:3px;color:#c9a96e;text-align:center}
+  #deco{display:flex;gap:6px;justify-content:center;margin-top:8px}
+  #deco span{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 50% 35%,#fffdf5,#d8cfbb);box-shadow:0 4px 0 #6b6152,0 0 0 3px #1c1c24;transition:transform .04s}
+  #deco span.down{transform:translateY(4px);box-shadow:0 0 0 #6b6152,0 0 0 3px #1c1c24}
+  #strikes{font-family:"Jua",sans-serif}
+  #speed{font-family:"Jua",sans-serif;min-width:96px;justify-content:center;transition:background .2s,color .2s}
+  #speed.hot{background:#ffd43b} #speed.fire{background:#e03131;color:#fff;animation:sp .3s infinite} @keyframes sp{50%{transform:scale(1.08)}}
+  .toast{top:40%}
 </style>
 </head>
 <body>
 <div class="hud">
-  <div id="score" class="hud-score">0<small>단어</small></div>
-  <div class="hud-row"><span class="pill" id="lives"></span><span class="pill dark" id="case">사건 1</span></div>
+  <div id="score" class="hud-score">0<small>글자</small></div>
+  <div class="hud-row"><span class="pill" id="strikes"></span><span class="pill dark" id="case">사건 1</span><span class="pill" id="speed">⌨️ 0타</span></div>
 </div>
-<div id="say" class="hud-ctl"><div class="who" id="who">판사</div><div class="txt" id="txt"></div></div>
+<div id="say" class="hud-ctl"><div class="who"><span id="who">판사</span><span id="cpm"></span></div><div class="txt" id="txt"></div><div id="tbar"><i id="tfill"></i></div></div>
 <div id="tw" class="hud-ctl">
-  <div id="paperWrap"><div id="paper"></div></div>
+  <div id="paper"><div id="prev"></div><div id="line"></div><input id="typed" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"><span id="tapme">👆 여기를 눌러 타자</span></div>
   <div id="carriage"></div>
-  <div id="body"><div id="brand">ARCADE · TYPEWRITER · 1953</div><div id="keys"></div><div id="listen"></div></div>
+  <div id="body"><div id="brand">ARCADE · TYPEWRITER · 1953</div><div id="deco"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
 </div>
 <div class="screen" id="center"></div>
 
@@ -132,6 +133,25 @@ const CAST = {
 };
 for (const c of Object.values(CAST)) { c.root.position.set(...c.pos); c.root.lookAt(0, c.pos[1], 4); }
 const gavel = new THREE.Group(); gavel.position.set(.8, 1.75, -1.8); scene.add(gavel);
+// the stenographer (you), seen from behind at the front desk
+const steno = makePerson({ robe: 0x5f3dc4, hair: 0x3b2316, tie: 0xffffff });
+steno.root.position.set(-1.6, -.25, 2.4); steno.root.rotation.y = Math.PI; steno.root.scale.setScalar(1.05);
+box(1.6, .7, .8, 0x6b4226, -1.6, .35, 1.75); box(.9, .18, .5, 0x26262e, -1.6, .8, 1.75);   // desk + tiny typewriter
+const sweat = [];
+// judge's party sunglasses (hidden until things get hot)
+const shades = new THREE.Group(); CAST.판사.head.add(shades); shades.visible = false;
+for (const sx of [-1, 1]) box(.17, .1, .03, 0x111111, sx * .11, .29, .23, shades); box(.08, .02, .03, 0x111111, 0, .3, .23, shades);
+// gallery on both sides
+const crowd = [];
+for (const side of [-1, 1]) for (let r = 0; r < 2; r++) for (let i = 0; i < 4; i++) {
+  const p = makePerson({ robe: rnd([0xff8787, 0x74c0fc, 0xffd43b, 0x8ce99a, 0xb197fc, 0xffa94d]), hair: rnd([0x2b2b2b, 0x6b4f3a, 0xdee2e6]), tie: 0xffffff });
+  p.root.position.set(side * (6.4 + r * 1.1), -.3 + r * .25, 1.2 - i * 1.1); p.root.scale.setScalar(.85); p.root.lookAt(0, 0, 0); crowd.push(p);
+}
+// mirror ball + coloured spots
+const disco = new THREE.Group(); disco.position.set(2.6, 9, .4); scene.add(disco);
+const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(.6, 1), new THREE.MeshStandardMaterial({ color: 0xdee2e6, metalness: 1, roughness: .15, flatShading: true, emissive: 0x444444 })); disco.add(ball);
+box(.03, 3, .03, 0xadb5bd, 0, 1.8, 0, disco);
+const spots = [0xff3bd4, 0x3bc9ff, 0xfff23b].map((c, i) => { const l = new THREE.PointLight(c, 0, 9, 1.4); scene.add(l); return l; });
 box(.07, .07, .5, 0x8d5a3b, 0, 0, .1, gavel); box(.18, .16, .16, 0x5c3a21, 0, 0, -.18, gavel);
 
 // ---------- cases ----------
@@ -153,133 +173,126 @@ const CASES = [
     ['증인', '세 시간 동안 같은 노래만 불렀어요'], ['변호사', '그 노래는 명곡이라 무죄입니다'], ['검사', '탬버린까지 압수했다는 증언이 있습니다'],
     ['판사', '피고인에게 박수 세 번을 명합니다'] ] },
 ];
-// plausible typos: tweak one vowel of one syllable, or swap a particle
-function typo(w) {
-  const sw = [['을', '를'], ['는', '은'], ['이', '가'], ['다', '댜'], ['니', '나']];
-  for (const [a, b] of shuffle(sw.slice())) { if (w.endsWith(a) && Math.random() < .5) return w.slice(0, -1) + b; }
-  const chars = [...w], idx = (Math.random() * chars.length) | 0, c = chars[idx].charCodeAt(0);
-  if (c < 0xAC00 || c > 0xD7A3) return w + '.';
-  const s = c - 0xAC00, cho = Math.floor(s / 588), jung = Math.floor((s % 588) / 28), jong = s % 28;
-  const nj = (jung + (Math.random() < .5 ? 1 : 20)) % 21;
-  chars[idx] = String.fromCharCode(0xAC00 + cho * 588 + nj * 28 + jong);
-  return chars.join('');
-}
 
 // ---------- state ----------
-const LIVES = 3;
-let state = 'ready', score = 0, lives = LIVES, caseNo = 0, lineNo = 0, words = [], spoken = 0, typed = 0, speakT = 0, wps = 1.1, speaker = '판사', overAt = 0, typing = Promise.resolve(), paperLines = [], curLine = '';
+const STRIKES = 3;
+let state = 'ready', chars = 0, strikes = 0, caseNo = 0, lineNo = 0, target = '', speaker = '판사', timeLeft = 10, timeMax = 10, overAt = 0, lines = 0, perfectLines = 0, lineErrors = 0, prevText = '';
+let secPerChar = .62, baseTime = 3.2, keyCount = 0, lineStart = 0, strokes = [], tpm = 0, topTpm = 0, hype = 0, hypeStage = 0, beatT = 0, clapT = 0;
 let best = 0; try { best = +localStorage.getItem('court-best') || 0; } catch {}
-const $score = $('score'), $lives = $('lives'), $center = $('center'), $keys = $('keys'), $paper = $('paper'), $txt = $('txt'), $listen = $('listen');
+const $score = $('score'), $center = $('center'), $txt = $('txt'), $line = $('line'), $typed = $('typed'), $paper = $('paper');
 const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
 const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '⌨️', title: '법정 속기사', how: [
-  ['👨‍⚖️', '법정에서 하는 말을 <b>한 단어씩</b> 받아 적어요'],
-  ['⌨️', '타자기 <b>자판</b>에서 다음 단어를 골라 탁! (숫자키 1~6도 OK)'],
-  ['✏️', '비슷한 <b>오타 함정</b> 주의. 오타 3번이면 해고'],
-  ['🏃', '말이 점점 빨라져요. <b>5단어 이상 밀리면</b> 누락!'],
-] }));
+  ['👨‍⚖️', '법정에서 하는 말을 <b>직접 타자</b>로 받아 적어요'],
+  ['⏳', '말풍선 아래 <b>시간 바</b>가 다 닳기 전에 문장 완성!'],
+  ['✏️', '오타는 빨갛게 표시돼요. <b>지우고 고쳐야</b> 넘어가요'],
+  ['❌', '시간 초과 = 속기 누락. <b>누락 3번이면 해고</b>'],
+], cta: '탭해서 개정' }));
 function updateHud() {
-  $score.innerHTML = `${score}<small>단어</small>`;
-  $lives.textContent = '🖋️'.repeat(lives) + '💥'.repeat(LIVES - lives);
+  $score.innerHTML = `${chars}<small>글자</small>`;
+  $('strikes').textContent = '🖋️'.repeat(STRIKES - strikes) + '❌'.repeat(strikes);
   $('case').textContent = `사건 ${caseNo + 1} · ${CASES[caseNo % CASES.length].name}`;
 }
-function renderSay() {
-  $txt.innerHTML = words.map((w, i) => `<span class="w ${i < spoken ? 'on' : ''} ${i < typed ? 'typed' : ''} ${i === typed ? 'next' : ''}">${w}</span>`).join(' ');
-  const back = spoken - typed;
-  $listen.innerHTML = typed >= spoken && spoken < words.length ? '👂 듣는 중…' : back >= 3 ? `⚠️ 밀리는 중<span id="backlog">${back}단어</span>` : '';
-}
-function renderPaper() {
-  const lines = [...paperLines.slice(-3), curLine + '<span class="cursor"></span>'];
-  $paper.innerHTML = lines.map(l => `<div class="ln">${l || '&nbsp;'}</div>`).join('');
-}
-function renderKeys() {
-  if (typed >= words.length) { $keys.innerHTML = ''; return; }
-  const w = words[typed], n = Math.min(6, 3 + Math.floor((caseNo * 8 + lineNo) / 6));
-  const pool = new Set([w]);
-  pool.add(typo(w)); if (n > 3) pool.add(typo(w));
-  const others = shuffle(CASES.flatMap(c => c.lines.flatMap(l => l[1].split(' '))).filter(x => x !== w));
-  for (const o of others) { if (pool.size >= n) break; pool.add(o); }
-  const opts = shuffle([...pool]);
-  $keys.innerHTML = opts.map((o, i) => `<button class="key" data-w="${o}">${o}</button>`).join('');
-  $keys.classList.toggle('wait', typed >= spoken);
+const norm = s => s.replace(/\s+/g, ' ');
+function render() {
+  const v = norm($typed.value);
+  let out = '', allOk = true;
+  const composingLast = v.length > 0;
+  for (let i = 0; i < target.length; i++) {
+    const t = target[i], c = v[i];
+    let cls = 'c';
+    if (c !== undefined) {
+      if (c === t) cls += ' ok';
+      else if (i === v.length - 1) cls += ' cur';   // the syllable still being composed
+      else { cls += ' bad'; allOk = false; }
+    }
+    out += (i === v.length ? '<span class="caret"></span>' : '') + `<span class="${cls}">${t === ' ' ? '&nbsp;' : t}</span>`;
+  }
+  if (v.length >= target.length) out += '<span class="caret"></span>';
+  if (v.length > target.length) out += `<span class="c bad">${v.slice(target.length).replace(/ /g, '&nbsp;')}</span>`;
+  $line.innerHTML = out;
+  $('prev').textContent = prevText;
+  return allOk;
 }
 function nextLine() {
   const C = CASES[caseNo % CASES.length];
-  if (lineNo >= C.lines.length) {   // case closed
+  if (lineNo >= C.lines.length) {
     SND.gavel(); gavelT = .6; Arcade.toast(`🔨 ${C.name} 종결! 다음 사건`, '#7a5c3a'); Arcade.confetti({ y: innerHeight * .3, count: 50, emoji: ['📜', '⚖️', '⌨️'] });
-    caseNo++; lineNo = 0; wps = Math.min(3, wps + .3); updateHud();
-    setTimeout(nextLine, 1400); return;
+    caseNo++; lineNo = 0; secPerChar = Math.max(.32, secPerChar - .06); baseTime = Math.max(2, baseTime - .2); updateHud();
+    state = 'pause'; setTimeout(() => { state = 'playing'; nextLine(); }, 1300); return;
   }
-  const [who, line] = C.lines[lineNo++];
-  speaker = who; words = line.split(' '); spoken = 0; typed = 0; speakT = .35;
+  const [who, text] = C.lines[lineNo++];
+  speaker = who; target = text; $typed.value = ''; lineErrors = 0; lineStart = performance.now();
+  timeMax = baseTime + target.replace(/ /g, '').length * secPerChar; timeLeft = timeMax;
   $('who').textContent = who; document.getElementById('say').style.setProperty('--tail', CAST[who].tail);
-  if (who === '판사' && lineNo === 1) { SND.gavel(); gavelT = .6; }
-  renderSay(); renderKeys();
+  $txt.textContent = text;
+  if (who === '판사') { SND.gavel(); gavelT = .6; }
+  render();
 }
 let gavelT = 0;
-function typeOut(text, bad) {   // characters hit the paper one by one, each with its own clack
-  typing = typing.then(() => new Promise(res => {
-    const chars = [...text]; let i = 0;
-    const step = () => {
-      if (i < chars.length) { curLine += bad ? `<span class="bad">${chars[i]}</span>` : chars[i]; i++; SND.key(); renderPaper(); setTimeout(step, 38 + Math.random() * 22); }
-      else { curLine += ' '; SND.space(); renderPaper(); res(); }
-    };
-    step();
-  }));
+function lineDone() {
+  const secs = (performance.now() - lineStart) / 1000, n = target.replace(/ /g, '').length;
+  chars += n; lines++; if (!lineErrors) perfectLines++;
+  const bonus = Math.round(timeLeft);
+  updateHud();
+  prevText = target; SND.carriage(); $paper.style.transform = 'translateX(-14px)'; setTimeout(() => $paper.style.transform = '', 380);
+  $('cpm').textContent = `⚡ ${Math.round(n / Math.max(.5, secs) * 60)}타/분`;
+  Arcade.vibrate([15, 30, 25]);
+  if (!lineErrors) Arcade.toast(timeLeft > timeMax * .5 ? '✨ 완벽 속기! 판사님 감탄' : '👍 오타 없이 완료', '#2b8a3e');
+  state = 'pause'; setTimeout(() => { if (state === 'pause') { state = 'playing'; nextLine(); } }, 450);
 }
-function carriageReturn() {
-  typing = typing.then(() => new Promise(res => {
-    SND.carriage(); $paper.style.transform = 'translateX(-14px)';
-    setTimeout(() => { paperLines.push(curLine.trim()); curLine = ''; $paper.style.transform = ''; renderPaper(); res(); }, 360);
-  }));
+function miss() {
+  strikes++; updateHud();
+  SND.wrong(); Arcade.shake(.2); Arcade.vibrate([60, 40, 100]);
+  Arcade.toast(rnd(['❌ 속기 누락! 판사님이 째려봐요', '❌ "다시 말해 줄 수 없습니다"', '❌ 기록에 구멍이 났다']), '#e03131');
+  prevText = target + '  (누락)';
+  if (strikes >= STRIKES) { setTimeout(finish, 700); state = 'pause'; return; }
+  state = 'pause'; setTimeout(() => { if (state === 'pause') { state = 'playing'; nextLine(); } }, 900);
 }
-function pick(w) {
-  if (state !== 'playing' || typed >= spoken) return;
-  const right = w === words[typed];
-  const btn = [...$keys.children].find(b => b.dataset.w === w);
-  if (right) {
-    typeOut(w, false); typed++; score++; updateHud(); Arcade.vibrate(8);
-    if (btn) { btn.classList.add('down'); setTimeout(() => btn.classList.remove('down'), 90); }
-  } else {
-    typeOut(w, true); lives--; updateHud(); SND.wrong(); Arcade.shake(.12); Arcade.vibrate([40, 30, 60]);
-    if (btn) btn.classList.add('wrong');
-    Arcade.toast(rnd(['✏️ 오타! 판사님이 째려봐요', '🙀 속기록 오류!', '😤 "다시 적으세요"']), '#e03131');
-    typed++;   // the wrong word stays crossed out; move on
-    if (lives <= 0) { setTimeout(finish, 600); return; }
-  }
-  renderSay();
-  if (typed >= words.length) { carriageReturn(); setTimeout(() => state === 'playing' && nextLine(), 650); }
-  else renderKeys();
-}
-$keys.addEventListener('pointerdown', e => { const b = e.target.closest('.key'); if (b) { e.preventDefault(); pick(b.dataset.w); } });
+// every keystroke clacks; the line completes the moment it matches exactly
+let lastLen = 0, typingT = 0;
+$typed.addEventListener('input', e => {
+  if (state !== 'playing') { $typed.value = ''; return; }
+  const v = norm($typed.value);
+  const del = e.inputType && e.inputType.startsWith('delete');
+  if (del) SND.space(); else if (v.endsWith(' ')) SND.space(); else SND.key();
+  if (!del) strokes.push(performance.now());
+  typingT = .25;
+  pressDeco();
+  const ok = render();
+  if (!ok && !del && v.length > lastLen) lineErrors++;
+  lastLen = v.length;
+  if (v.trim() === target) lineDone();
+});
+$typed.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
+function pressDeco() { const k = $('deco').children[(Math.random() * 10) | 0]; k.classList.add('down'); setTimeout(() => k.classList.remove('down'), 70); }
+$paper.addEventListener('pointerdown', () => { if (state === 'playing') setTimeout(() => $typed.focus(), 0); });
 function finish() {
   if (state === 'over') return;
-  state = 'over'; overAt = performance.now();
-  const isBest = score > best;
-  if (isBest) { best = score; try { localStorage.setItem('court-best', best); } catch {} }
-  isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  state = 'over'; overAt = performance.now(); $typed.blur();
+  const isBest = chars > best;
+  if (isBest) { best = chars; try { localStorage.setItem('court-best', best); } catch {} }
+  isBest && chars > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
   SND.gavel();
-  const msg = score >= 80 ? '대법원에서 스카우트하러 왔어요' : score >= 40 ? '베테랑 속기사 인정' : score >= 15 ? '수습 딱지는 뗐어요' : '판사님: "속기사 바꿔주세요"';
-  showScreen(Arcade.resultScreen({ emoji: '⌨️', label: '받아 적은 단어', score, unit: '단어', msg, rows: [['처리한 사건', `${caseNo}건`], ['말 속도', `${wps.toFixed(1)}단어/초`]], isBest: isBest && score > 0, best }));
-  Arcade.gameOver(score);
+  const msg = chars >= 300 ? '대법원에서 스카우트하러 왔어요' : chars >= 150 ? '베테랑 속기사 인정' : chars >= 60 ? '수습 딱지는 뗐어요' : '판사님: "속기사 바꿔주세요"';
+  showScreen(Arcade.resultScreen({ emoji: '⌨️', label: '받아 적은 글자', score: chars, unit: '글자', msg, rows: [['최고 타수', `${topTpm}타/분`], ['완료한 발언', `${lines}개`], ['오타 없는 발언', `${perfectLines}개`], ['처리한 사건', `${caseNo}건`]], isBest: isBest && chars > 0, best }));
+  Arcade.gameOver(chars);
 }
-function reset() { score = 0; lives = LIVES; caseNo = 0; lineNo = 0; wps = 1.1; paperLines = []; curLine = ''; words = []; spoken = typed = 0; renderPaper(); $keys.innerHTML = ''; $txt.innerHTML = ''; updateHud(); }
+function reset() { strokes = []; tpm = 0; topTpm = 0; hype = 0; hypeStage = 0; chars = 0; strikes = 0; caseNo = 0; lineNo = 0; lines = 0; perfectLines = 0; secPerChar = .62; baseTime = 3.2; prevText = ''; target = ''; $typed.value = ''; $line.innerHTML = ''; $txt.textContent = ''; $('cpm').textContent = ''; updateHud(); }
 function start() {
   state = 'count'; $center.style.display = 'none';
-  Arcade.countdown({ final: '개정!', onTick: n => n ? SND.key() : SND.gavel(), onDone: () => { state = 'playing'; nextLine(); } });
+  $typed.focus();   // must happen inside the tap so the phone keyboard opens
+  Arcade.countdown({ final: '개정!', onTick: n => n ? SND.key() : SND.gavel(), onDone: () => { state = 'playing'; nextLine(); $typed.focus(); } });
 }
 function tapStart() {
   if (state === 'ready') start();
   else if (state === 'over' && performance.now() - overAt > 1200 && !Arcade.inRun()) { reset(); start(); }
 }
-addEventListener('pointerdown', e => { if (e.target.closest?.('.key, .arcade-btn')) return; if (state !== 'playing') tapStart(); });
-addEventListener('keydown', e => {
-  const n = +e.key; if (n >= 1 && n <= 6 && state === 'playing') { const b = $keys.children[n - 1]; if (b) pick(b.dataset.w); return; }
-  if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); tapStart(); }
-});
+addEventListener('pointerdown', e => { if (e.target.closest?.('.arcade-btn, #paper')) return; if (state === 'ready' || state === 'over') tapStart(); else if (state === 'playing') setTimeout(() => $typed.focus(), 0); });
+addEventListener('keydown', e => { if ((state === 'ready' || state === 'over') && (e.code === 'Space' || e.code === 'Enter')) { e.preventDefault(); tapStart(); } });
 
 function placeCamera() {
   camera.aspect = innerWidth / innerHeight; camera.fov = camera.aspect < 1 ? 66 : 42; camera.updateProjectionMatrix();
-  camera.position.set(0, 2.6, camera.aspect < 1 ? 11 : 9); camera.lookAt(0, .6, -1);
+  camera.position.set(0, 2.8, camera.aspect < 1 ? 11 : 9);
 }
 placeCamera();
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
@@ -287,35 +300,53 @@ addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); pl
 // ---------- loop ----------
 let last = performance.now();
 reset(); showIntro();
-window.__court = { get state() { return state; }, get words() { return words; }, get spoken() { return spoken; }, get typed() { return typed; }, pick, get score() { return score; }, get lives() { return lives; } };
+window.__court = { setHype(v) { tpm = v; strokes = Array.from({ length: Math.round(v / 15) }, () => performance.now()); },  get state() { return state; }, get target() { return target; }, typeAll() { $typed.value = target; $typed.dispatchEvent(new Event('input')); }, get chars() { return chars; }, get strikes() { return strikes; }, get timeLeft() { return timeLeft; } };
 
 function frame(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
-  if (state === 'playing' && words.length && spoken < words.length) {
-    speakT -= dt;
-    if (speakT <= 0) {
-      spoken++; speakT = 1 / wps * (.8 + Math.random() * .4);
-      SND.blip(speaker === '판사' ? 180 : speaker === '증인' ? 420 : 300); renderSay();
-      if (typed < spoken && $keys.classList.contains('wait')) $keys.classList.remove('wait');
-      if (spoken - typed >= 5) {   // fell too far behind: those words are lost
-        lives--; updateHud(); SND.wrong(); Arcade.shake(.15);
-        Arcade.toast('📜 속기 누락! "(…청취 불가…)"', '#e03131');
-        typeOut('(누락)', true); typed = spoken; renderSay(); renderKeys();
-        if (lives <= 0) setTimeout(finish, 600);
-        else if (typed >= words.length) { carriageReturn(); setTimeout(() => state === 'playing' && nextLine(), 650); }
-      }
-    }
-  }
-  // speaker animation
+  if (state === 'playing') { timeLeft -= dt; if (timeLeft <= 0) { timeLeft = 0; miss(); } }
+  $('tfill').style.transform = `scaleX(${target ? timeLeft / timeMax : 0})`;
+  $('tbar').classList.toggle('low', state === 'playing' && timeLeft < timeMax * .25);
+  $('tapme').style.display = state === 'playing' && document.activeElement !== $typed ? '' : 'none';
   for (const [name, c] of Object.entries(CAST)) {
-    const talking = state === 'playing' && name === speaker && spoken < words.length;
+    const talking = state === 'playing' && name === speaker && timeLeft > timeMax - 1.6;
     c.mouth.scale.y = talking ? 1 + Math.abs(Math.sin(t * 18)) * 2.5 : 1;
     c.arms[1].rotation.x = talking ? -1 + Math.sin(t * 5) * .4 : -.1;
-    c.head.rotation.z = talking ? Math.sin(t * 4) * .06 : 0;
   }
+  // typing speed (strokes in the last 4s → per minute) drives the courtroom's mood
+  const nowMs = performance.now(); strokes = strokes.filter(x => nowMs - x < 4000);
+  tpm += ((state === 'playing' ? strokes.length * 15 : 0) - tpm) * Math.min(1, dt * 4); const shown = Math.round(tpm); topTpm = Math.max(topTpm, shown);
+  $('speed').textContent = `⌨️ ${shown}타/분`; $('speed').className = `pill ${shown > 420 ? 'fire' : shown > 260 ? 'hot' : ''}`;
+  hype += ((state === 'playing' ? Math.max(0, Math.min(1, (tpm - 180) / 320)) : 0) - hype) * Math.min(1, dt * 2);
+  const stage = hype > .75 ? 3 : hype > .45 ? 2 : hype > .15 ? 1 : 0;
+  if (stage > hypeStage) { Arcade.toast(['', '👏 방청석이 술렁인다!', '😎 판사님이 선글라스를 꼈다!', '🪩 법정 디스코 타임!!'][stage], ['', '#1971c2', '#e8590c', '#ae3ec9'][stage]); Arcade.sfx.coin(); }
+  hypeStage = stage;
+  for (const [i, p] of crowd.entries()) {   // gallery claps, stands and waves as you speed up
+    const clap = stage >= 1 ? Math.sin(t * (10 + stage * 4) + i) : 0;
+    p.arms[0].rotation.x = p.arms[1].rotation.x = stage >= 1 ? -1.3 : -.1;
+    p.arms[0].rotation.z = clap * .4 + (stage >= 3 ? -1.2 : 0); p.arms[1].rotation.z = -clap * .4 + (stage >= 3 ? 1.2 : 0);
+    p.root.userData.y0 ??= p.root.position.y; p.root.position.y = p.root.userData.y0 + (stage >= 2 ? Math.abs(Math.sin(t * 8 + i)) * .25 : 0);
+  }
+  clapT -= dt; if (stage >= 1 && clapT <= 0) { clapT = .12 + Math.random() * (.5 - stage * .12); if (ac) burst(ac.currentTime, .05, 2200 + Math.random() * 1500, 1.2, .08 + stage * .05); }
+  shades.visible = stage >= 2; CAST.판사.head.rotation.x = stage >= 2 ? Math.sin(t * 9) * .12 : 0;
+  // mirror ball drops in and the room fills with coloured light; a little disco beat underneath
+  disco.position.y += ((stage >= 3 ? 2.9 : 9) - disco.position.y) * Math.min(1, dt * 2.5); ball.rotation.y += dt * 1.5;
+  spots.forEach((l, i) => { l.intensity = stage >= 3 ? 8 : 0; l.position.set(Math.cos(t * 2 + i * 2.1) * 4, 3, Math.sin(t * 2 + i * 2.1) * 3); });
+  if (stage >= 3 && ac) { beatT -= dt; if (beatT <= 0) { beatT = .43; thump(ac.currentTime, 90, .18, .5); burst(ac.currentTime + .215, .04, 7000, 1, .06, 'highpass'); } }
+  // the stenographer hammers away and sweats under pressure
+  typingT = Math.max(0, typingT - dt);
+  steno.arms.forEach((a, i) => a.rotation.x = typingT > 0 ? -1.1 + Math.sin(t * 40 + i * 2) * .25 : -.9);
+  steno.head.rotation.x = typingT > 0 ? .25 + Math.sin(t * 30) * .03 : .15;
+  const stress = state === 'playing' ? Math.max(typingT > 0 ? .5 : 0, 1 - timeLeft / timeMax) : 0;
+  if (Math.random() < stress * dt * 14) {
+    const d = new THREE.Mesh(new THREE.SphereGeometry(.05, 6, 4), new THREE.MeshStandardMaterial({ color: 0x74c0fc, transparent: true, opacity: .85, roughness: .1 }));
+    const hp = new THREE.Vector3(); steno.head.getWorldPosition(hp); d.position.copy(hp).add(new THREE.Vector3((Math.random() - .5) * .5, .35, (Math.random() - .5) * .3)); scene.add(d);
+    sweat.push({ m: d, v: new THREE.Vector3((Math.random() - .5) * 1.4, 1 + Math.random(), (Math.random() - .5) * .6), t: 0 });
+  }
+  for (let i = sweat.length - 1; i >= 0; i--) { const d = sweat[i]; d.t += dt; d.v.y -= 9 * dt; d.m.position.addScaledVector(d.v, dt); if (d.t > .8) { scene.remove(d.m); d.m.geometry.dispose(); d.m.material.dispose(); sweat.splice(i, 1); } }
   gavelT = Math.max(0, gavelT - dt); gavel.rotation.x = -Math.abs(Math.sin(gavelT * 18)) * .9 * (gavelT > 0 ? 1 : 0);
   camera.position.x = Math.sin(t * .2) * .2;
-  Arcade.applyShake(camera, dt); camera.lookAt(0, .6, -1);
+  Arcade.applyShake(camera, dt); camera.lookAt(0, 1.85, -1);   // judge sits just below the speech bubble
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }

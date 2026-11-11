@@ -409,22 +409,23 @@ let cam = new THREE.OrthographicCamera(0, innerWidth, 0, -innerHeight, -2000, 20
 addEventListener('resize', () => { r.setSize(innerWidth, innerHeight); cam.right = innerWidth; cam.bottom = -innerHeight; cam.updateProjectionMatrix(); draw(); });
 scene.add(new THREE.HemisphereLight(0xfff4e6, 0x8a6a50, 1.5));
 const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(-300, 500, 800); scene.add(dl);
-const M = c => new THREE.MeshStandardMaterial({ color: c, roughness: .75, flatShading: true });
-const skin = M(0xf5c9a0), skinD = M(0xe8b086), nail = M(0xffe3e0), sleeve = M(0x74c0fc), cuff = M(0x4dabf7);
+const M = c => new THREE.MeshStandardMaterial({ color: c, roughness: .6 });
+const skin = M(0xf3c6a1), nail = M(0xffe6e1), sleeve = M(0x74c0fc), cuff = M(0x4dabf7);
 const hand = new THREE.Group(), inner = new THREE.Group(); hand.add(inner); scene.add(hand);
-const B = (w, h, d, m, x, y, z, rz = 0) => { const g = new THREE.BoxGeometry(w, h, d); const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.rotation.z = rz; inner.add(o); return o; };
-const C = (rad, h, m, x, y, z) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, h, 8), m); o.position.set(x, y, z); inner.add(o); return o; };
-// index finger: rounded segments, tip at origin
-C(16, 30, skin, 0, -17, 0); const tip = new THREE.Mesh(new THREE.SphereGeometry(16, 8, 6), skin); tip.position.set(0, -4, 0); inner.add(tip);
-B(20, 18, 6, nail, 0, -10, 14);
-C(17, 36, skin, 0, -50, 0); C(18, 36, skin, 0, -84, 0);
-// fist
-B(92, 76, 58, skin, 34, -136, 0);
-for (let i = 0; i < 3; i++) B(26, 30, 26, skinD, 22 + i * 26, -112, 26);      // folded finger knuckles
-B(26, 64, 26, skin, 14, -146, 34, 1.15);                                        // thumb across the front
-// sleeve
-B(108, 46, 70, cuff, 34, -196, 0); B(104, 260, 66, sleeve, 34, -345, 0);
-inner.rotation.set(-.35, .35, 0); hand.rotation.z = .5; hand.visible = false;
+const add = (geo, m, x, y, z, sx = 1, sy = 1, sz = 1, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.scale.set(sx, sy, sz); o.rotation.z = rz; inner.add(o); return o; };
+const SPH = new THREE.SphereGeometry(1, 20, 14);
+// POV: your own right hand seen from behind -> nail and back of the hand face the camera
+add(new THREE.CapsuleGeometry(15, 78, 6, 14), skin, 0, -54, 0);              // index finger, tip at y≈0
+add(SPH, nail, 0, -16, 12, 10, 13, 4);                                         // nail
+add(SPH, skin, 40, -128, -4, 56, 58, 30);                                      // back of the hand
+for (let i = 0; i < 3; i++) add(SPH, skin, 30 + i * 24, -84 - i * 4, 6, 14, 13, 14);   // knuckles of the curled fingers
+add(new THREE.CapsuleGeometry(14, 40, 6, 12), skin, -14, -128, 10, 1, 1, 1, .55);     // thumb along the left side
+add(new THREE.CapsuleGeometry(36, 70, 6, 14), skin, 42, -205, -6);              // wrist
+add(new THREE.CylinderGeometry(50, 54, 320, 18), sleeve, 44, -400, -6);
+add(new THREE.TorusGeometry(48, 9, 8, 22), cuff, 44, -240, -6, 1, 1, 1).rotation.x = Math.PI / 2;
+inner.rotation.set(-.25, .2, 0); hand.rotation.z = .42; hand.visible = false;
+const shadow = document.createElement('div'); shadow.style.cssText = 'position:fixed;z-index:9997;pointer-events:none;width:46px;height:26px;margin:-13px 0 0 -10px;border-radius:50%;background:radial-gradient(rgba(0,0,0,.35),rgba(0,0,0,0) 70%);opacity:0;transition:opacity .15s';
+document.body.appendChild(shadow);
 let tx = 0, ty = 0, press = 0, show = 0, held = false, raf = 0;
 function draw() { r.render(scene, cam); }
 function loop() {
@@ -437,6 +438,7 @@ function loop() {
   hand.scale.setScalar(sc * (1 - press * .08));
   inner.position.y = -press * 6;
   hand.visible = show > .02;
+  shadow.style.left = tx + 'px'; shadow.style.top = ty + 'px'; shadow.style.opacity = held ? .5 + press * .5 : 0; shadow.style.transform = `scale(${1.4 - press * .5})`;
   draw();
   if (show > .02 || held) raf = requestAnimationFrame(loop); else raf = 0;
 }

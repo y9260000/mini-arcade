@@ -148,6 +148,16 @@ ajHand.position.copy(AJ_HOME);
 const shadow = new THREE.Mesh(new THREE.CircleGeometry(.75, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false }));
 shadow.rotation.x = -Math.PI / 2; shadow.position.y = 1.15; scene.add(shadow);
 const AJ = { mode: 'away', t: 12, target: null };
+function warnMarker(color, emoji) {
+  const g = new THREE.Group(); g.visible = false; scene.add(g);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(.55, .72, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .9, depthTest: false })); ring.rotation.x = -Math.PI / 2; ring.renderOrder = 9; g.add(ring);
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(.55, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .22, depthTest: false })); disc.rotation.x = -Math.PI / 2; disc.renderOrder = 9; g.add(disc);
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); x.font = '96px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(emoji, 64, 70);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false })); sp.scale.set(.7, .7, 1); sp.position.y = .5; sp.renderOrder = 10; g.add(sp);
+  g.userData = { ring, disc, sp }; return g;
+}
+const herWarn = warnMarker(0xf783ac, '✋'), ajWarn = warnMarker(0xe8590c, '⚠️');
+const HER_WARN = .9, AJ_WARN = .85;
 herHand.position.copy(HER_HOME);
 const H = { mode: 'away', t: 2.5, target: null };
 
@@ -186,7 +196,7 @@ const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🍿', title: '�
   ['💑', '오른쪽 위 여친이 <b>쳐다볼 때</b> 카라멜 먹으면 들켜요'],
   ['🍿', '쳐다볼 땐 <b>일반 팝콘</b>만 먹는 척 (안전)'],
   ['⏳', '카라멜은 끈적해서 <b>떼는 데 시간</b>이 걸려요. 한 번 더 탭하면 취소'],
-  ['✋', '<b>여친 손</b>, 그리고 가끔 튀어나오는 <b>옆자리 아저씨 손</b> 조심!'],
+  ['✋', '<b>분홍 원</b> = 여친 손, <b>주황 원</b> = 아저씨 손이 올 자리! 피하세요'],
 ] }));
 function updateHud() {
   $score.innerHTML = `${score}<small>점</small>`;
@@ -196,7 +206,7 @@ function updateHud() {
 function reset() {
   score = 0; lives = LIVES; elapsed = 0; eaten = 0; caramelEaten = 0; combo = 0;
   Object.assign(G, { mode: 'watch', t: 3, mad: 0 }); Object.assign(H, { mode: 'away', t: 3, target: null }); herHand.position.copy(HER_HOME);
-  Object.assign(AJ, { mode: 'away', t: 8 + Math.random() * 4, target: null }); ajHand.position.copy(AJ_HOME); shadow.material.opacity = 0; pick = null;
+  Object.assign(AJ, { mode: 'away', t: 8 + Math.random() * 4, target: null }); herWarn.visible = ajWarn.visible = false; ajHand.position.copy(AJ_HOME); shadow.material.opacity = 0; pick = null;
   fillBucket(); updateHud();
 }
 function start() {
@@ -344,8 +354,9 @@ function frame(now) {
     if (H.mode === 'away' && H.t <= 0) {
       const sweet = kernels.filter(k => k.alive && !k.drop && k.kind !== 'plain');
       const pick = sweet.length && Math.random() < .7 ? rnd(sweet) : rnd(kernels.filter(k => k.alive && !k.drop));
-      if (pick) { H.mode = 'in'; H.target = pick; H.t = 0; gfArm.rotation.x = 0; }
+      if (pick) { H.mode = 'warn'; H.target = pick; H.t = HER_WARN; gfArm.rotation.x = 0; Arcade.sfx.tick(); }   // telegraph where her hand will land
     }
+    if (H.mode === 'warn') { if (!H.target.alive) H.mode = 'away'; else if (H.t <= 0) H.mode = 'in'; }
     if (H.mode === 'in') {
       tmp.set(H.target.m.position.x - .5, 1.25, H.target.m.position.z);
       herHand.position.lerp(tmp, Math.min(1, dt * (3 + lv * 3)));
@@ -357,9 +368,9 @@ function frame(now) {
     if (AJ.mode === 'away' && AJ.t <= 0) {
       const c = kernels.filter(k => k.alive && !k.drop && k.kind !== 'plain');
       AJ.target = c.length ? rnd(c) : rnd(kernels.filter(k => k.alive));
-      if (AJ.target) { AJ.mode = 'shadow'; AJ.t = .38; shadow.position.set(AJ.target.m.position.x + .3, 1.15, AJ.target.m.position.z); }
+      if (AJ.target) { AJ.mode = 'shadow'; AJ.t = AJ_WARN; Arcade.sfx.hmm(); shadow.position.set(AJ.target.m.position.x + .3, 1.15, AJ.target.m.position.z); }
     } else if (AJ.mode === 'shadow') {
-      shadow.material.opacity = .45 * (1 - AJ.t / .38); if (AJ.t <= 0) { AJ.mode = 'in'; Arcade.sfx.whoosh(); }
+      shadow.material.opacity = .45 * (1 - AJ.t / AJ_WARN); if (AJ.t <= 0) { AJ.mode = 'in'; Arcade.sfx.whoosh(); }
     } else if (AJ.mode === 'in') {
       tmp.set(AJ.target.m.position.x + .62, 1.3, AJ.target.m.position.z);
       ajHand.position.lerp(tmp, Math.min(1, dt * 14));
@@ -390,6 +401,15 @@ function frame(now) {
   }
   grabT += dt; slapT = Math.max(0, slapT - dt);
 
+  for (const [m, active, tgt, warnT, total] of [[herWarn, H.mode === 'warn' || H.mode === 'in' || H.mode === 'grab', H.target, H.mode === 'warn' ? H.t : 0, HER_WARN], [ajWarn, AJ.mode === 'shadow' || AJ.mode === 'in' || AJ.mode === 'grab', AJ.target, AJ.mode === 'shadow' ? AJ.t : 0, AJ_WARN]]) {
+    m.visible = state === 'playing' && active && !!tgt;
+    if (!m.visible) continue;
+    m.position.set(tgt.m.position.x, 1.25, tgt.m.position.z);
+    const k = warnT / total, pulse = 1 + Math.sin(performance.now() / 70) * .08;
+    m.userData.ring.scale.setScalar((1 + k * .8) * pulse);   // ring shrinks onto the spot as the hand gets close
+    m.userData.disc.material.opacity = warnT > 0 ? .22 : .35;
+    m.userData.sp.visible = warnT > 0;
+  }
   // my hand: follows the pointer, dips on grab, recoils when slapped
   const dip = pick ? 1 - (pick.lift || 0) * 1.15 : grabT < .2 ? Math.sin(grabT / .2 * Math.PI) : 0;
   const target = slapT > 0 ? new THREE.Vector3(handTarget.x, 2.2, handTarget.z + 1.5) : handTarget;

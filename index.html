@@ -16,9 +16,9 @@
   body{margin:0;min-height:100vh;color:var(--ink);font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;-webkit-font-smoothing:antialiased}
   main{max-width:920px;margin:0 auto;padding:max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) 120px max(20px,env(safe-area-inset-left))}
   header{display:flex;align-items:center;gap:12px;padding:12px 0 6px}
-  header img{width:44px;height:44px}
-  header h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.02em}
-  header p{margin:2px 0 0;font-size:14px;color:var(--ink-3)}
+  header img{width:64px;height:64px}
+  header h1{margin:0;font-size:32px;font-weight:800;letter-spacing:-.03em;line-height:1.15}
+  header p{margin:4px 0 0;font-size:15px;color:var(--ink-3)}
   /* tabs */
   .tabs{position:relative;display:flex;gap:22px;margin:14px 0 0;padding:0;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
   .tabs::-webkit-scrollbar{display:none}
@@ -99,7 +99,7 @@
   ];
   const $ = id => document.getElementById(id);
   $('sub').textContent = `3D 미니게임 ${GAMES.length}종`;
-  const icon = g => `<div class="ic" data-ic="${g.id}"><img src="thumbs/${g.id}.png" alt="" loading="lazy"></div>`;
+  const icon = g => `<div class="ic" data-ic="${g.id}"><img src="thumbs/${g.id}.png" alt=""></div>`;
   const tags = g => HOT[0] === g.id ? '<span class="tag hot">HOT</span>' : NEW.has(g.id) ? '<span class="tag new">NEW</span>' : '';
   // featured: the HOT pick
   const F = GAMES.find(g => g.id === HOT[0]);

@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>법정 속기사</title>
+<script src="common.js?v=17"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding:wght@400;700&family=Nanum+Myeongjo:wght@700;800&display=swap">
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#3b2416;
+    user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  .hud-score{font-size:40px}
+  #say{position:fixed;left:50%;top:max(120px,calc(env(safe-area-inset-top) + 110px));transform:translateX(-50%);width:min(560px,calc(100% - 32px));box-sizing:border-box;z-index:3;pointer-events:none;
+    background:#fffdf5;color:#2b2438;border-radius:16px;padding:10px 16px;box-shadow:0 10px 26px rgba(0,0,0,.35);border:3px solid #2b2438}
+  #say .who{font:700 12px "Noto Sans KR",sans-serif;color:#7a5c3a}
+  #say .txt{font:800 clamp(18px,4.8vw,24px) "Nanum Myeongjo",serif;line-height:1.4;min-height:1.4em;word-break:keep-all}
+  #say .txt .w{opacity:.25} #say .txt .w.on{opacity:1} #say .txt .w.typed{color:#2b8a3e} #say .txt .w.next{text-decoration:underline 3px #ffd43b}
+  #say::after{content:"";position:absolute;left:var(--tail,30%);top:-14px;border:12px solid transparent;border-top:0;border-bottom-color:#2b2438}
+  /* the typewriter */
+  #tw{position:fixed;left:0;right:0;bottom:0;z-index:3;display:flex;flex-direction:column;align-items:center;pointer-events:none}
+  #paperWrap{width:min(520px,92vw);height:clamp(90px,15vh,130px);overflow:hidden;position:relative;margin-bottom:-6px}
+  #paper{position:absolute;left:0;right:0;bottom:0;background:#fffef8;border-radius:4px 4px 0 0;box-shadow:0 -4px 16px rgba(0,0,0,.25);padding:10px 18px 14px;
+    font:700 clamp(15px,3.9vw,19px)/1.65 "Nanum Gothic Coding",monospace;color:#1c1c24;transition:transform .35s cubic-bezier(.3,1.4,.5,1)}
+  #paper .ln{white-space:nowrap;overflow:hidden;text-overflow:clip;border-bottom:1px dashed #e9ecef}
+  #paper .ln .bad{color:#c92a2a;text-decoration:line-through}
+  #paper .ln .cursor{display:inline-block;width:.55em;height:1.1em;background:#1c1c24;vertical-align:-3px;animation:cb .8s steps(2) infinite}
+  @keyframes cb{50%{opacity:0}}
+  #carriage{width:min(560px,96vw);height:22px;background:linear-gradient(#2b2b33,#18181d);border-radius:8px;box-shadow:0 3px 0 #0b0b0e;position:relative}
+  #carriage::after{content:"";position:absolute;right:-6px;top:-10px;width:30px;height:12px;border-radius:6px;background:#adb5bd;box-shadow:0 2px 0 #495057}
+  #body{width:min(560px,96vw);box-sizing:border-box;background:linear-gradient(#3d3d48,#26262e);border-radius:18px 18px 0 0;padding:14px 12px max(14px,env(safe-area-inset-bottom));
+    box-shadow:0 -6px 20px rgba(0,0,0,.4);pointer-events:auto}
+  #brand{font:800 12px "Nanum Myeongjo",serif;letter-spacing:3px;color:#c9a96e;text-align:center;margin-bottom:8px}
+  #keys{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;min-height:64px}
+  .key{min-width:74px;padding:12px 14px 14px;border-radius:999px;border:0;cursor:pointer;background:radial-gradient(circle at 50% 35%,#fffdf5,#e9e2d0);color:#1c1c24;
+    font:700 clamp(15px,3.9vw,18px) "Nanum Gothic Coding",monospace;box-shadow:0 6px 0 #6b6152,0 0 0 4px #1c1c24,0 10px 14px rgba(0,0,0,.4);transition:transform .04s,box-shadow .04s}
+  .key:active,.key.down{transform:translateY(5px);box-shadow:0 1px 0 #6b6152,0 0 0 4px #1c1c24,0 3px 6px rgba(0,0,0,.4)}
+  .key.wrong{background:radial-gradient(circle at 50% 35%,#ffe3e3,#ff8787)}
+  #keys.wait .key{opacity:.35;pointer-events:none}
+  #listen{font:700 13px "Noto Sans KR",sans-serif;color:#adb5bd;text-align:center;margin-top:8px;min-height:1.2em}
+  #backlog{display:inline-block;margin-left:6px;color:#ffd43b}
+  .hud{top:max(10px,env(safe-area-inset-top))!important}
+  .toast{top:44%}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>단어</small></div>
+  <div class="hud-row"><span class="pill" id="lives"></span><span class="pill dark" id="case">사건 1</span></div>
+</div>
+<div id="say" class="hud-ctl"><div class="who" id="who">판사</div><div class="txt" id="txt"></div></div>
+<div id="tw" class="hud-ctl">
+  <div id="paperWrap"><div id="paper"></div></div>
+  <div id="carriage"></div>
+  <div id="body"><div id="brand">ARCADE · TYPEWRITER · 1953</div><div id="keys"></div><div id="listen"></div></div>
+</div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const $ = id => document.getElementById(id);
+const rnd = a => a[(Math.random() * a.length) | 0];
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+// ---------- crunchy typewriter audio (own little synth, tuned for ASMR clicks) ----------
+let ac, master, nbuf;
+function AC() {
+  if (!ac) { ac = new (window.AudioContext || window.webkitAudioContext)(); master = ac.createGain(); master.gain.value = .9; const comp = ac.createDynamicsCompressor(); master.connect(comp).connect(ac.destination);
+    nbuf = ac.createBuffer(1, ac.sampleRate * .5, ac.sampleRate); const d = nbuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+  if (ac.state === 'suspended') ac.resume(); return ac;
+}
+addEventListener('pointerdown', AC, { capture: true }); addEventListener('keydown', AC, { capture: true });
+function burst(when, dur, f, q, vol, type = 'bandpass') { const s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain(); s.buffer = nbuf; fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+  g.gain.setValueAtTime(vol, when); g.gain.exponentialRampToValueAtTime(.0005, when + dur); s.connect(fl).connect(g).connect(master); s.start(when, Math.random() * .3); s.stop(when + dur + .02); }
+function thump(when, f, dur, vol) { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(f, when); o.frequency.exponentialRampToValueAtTime(f * .5, when + dur); g.gain.setValueAtTime(vol, when); g.gain.exponentialRampToValueAtTime(.0005, when + dur); o.connect(g).connect(master); o.start(when); o.stop(when + dur + .02); }
+const SND = {
+  key(delay = 0) { if (!AC()) return; const t = ac.currentTime + delay, p = .85 + Math.random() * .3;   // the strike: crisp click + type-bar slap + platen thunk
+    burst(t, .018, 3800 * p, 2.5, .55, 'highpass'); burst(t + .004, .05, 1800 * p, 6, .35); thump(t + .006, 160 * p, .07, .45); burst(t + .03, .03, 900 * p, 3, .12); },
+  space() { if (!AC()) return; const t = ac.currentTime; thump(t, 110, .1, .5); burst(t, .06, 600, 2, .25); },
+  wrong() { if (!AC()) return; const t = ac.currentTime; for (let i = 0; i < 3; i++) { burst(t + i * .035, .03, 2600, 3, .4); thump(t + i * .035, 140, .05, .35); } thump(t + .12, 70, .25, .5); },
+  carriage() { if (!AC()) return; const t = ac.currentTime; for (let i = 0; i < 14; i++) burst(t + i * .022, .012, 5000, 8, .25 - i * .01, 'highpass');   // ratchet zip
+    burst(t, .35, 700, .8, .18); const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.value = 2400; g.gain.setValueAtTime(.3, t + .32); g.gain.exponentialRampToValueAtTime(.0005, t + 1.4); o.connect(g).connect(master); o.start(t + .32); o.stop(t + 1.45);
+    const o2 = ac.createOscillator(), g2 = ac.createGain(); o2.frequency.value = 4810; g2.gain.setValueAtTime(.08, t + .32); g2.gain.exponentialRampToValueAtTime(.0005, t + .9); o2.connect(g2).connect(master); o2.start(t + .32); o2.stop(t + .95); },
+  gavel() { if (!AC()) return; const t = ac.currentTime; for (let i = 0; i < 2; i++) { thump(t + i * .18, 220, .16, .8); burst(t + i * .18, .06, 1500, 2, .5); } },
+  blip(pitch) { if (!AC()) return; const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.value = pitch; g.gain.setValueAtTime(.04, t); g.gain.exponentialRampToValueAtTime(.0005, t + .06); o.connect(g).connect(master); o.start(t); o.stop(t + .07); },
+};
+
+// ---------- courtroom (3D backdrop) ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x3b2416);
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, .1, 100);
+scene.add(new THREE.HemisphereLight(0xfff1dc, 0x3b2416, 1.2));
+const lamp = new THREE.DirectionalLight(0xfff4e0, 1.4); lamp.position.set(2, 8, 6); lamp.castShadow = true; scene.add(lamp);
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, flatShading: true, ...extra });
+const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), typeof mat === 'number' ? flat(mat) : mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
+{
+  box(20, .2, 12, 0x8d5a3b, 0, -.1, 0);
+  box(20, 7, .3, 0x6b4226, 0, 3.4, -3.5);
+  for (let x = -8; x <= 8; x += 2) box(.12, 7, .1, 0x553219, x, 3.4, -3.3);
+  box(5, 1.6, 1.2, 0x5c3a21, 0, .8, -2.2); box(5.2, .12, 1.4, 0x7a4a2a, 0, 1.62, -2.2);   // judge's bench
+  box(1.8, .1, .6, 0x3b2416, 0, 2.3, -3.2);                                             // emblem plate
+  const scale = new THREE.Mesh(new THREE.TorusGeometry(.35, .04, 6, 20), flat(0xfab005, { metalness: .6 })); scale.position.set(0, 3.4, -3.3); scene.add(scale);
+  box(1.6, 1.1, 1, 0x5c3a21, -3.6, .55, -.4); box(1.6, 1.1, 1, 0x5c3a21, 3.6, .55, -.4);   // counsel tables / witness box
+  box(.06, 2.2, .06, 0x868e96, -6.5, 1.1, -2.6); const flag = box(1, .7, .02, 0xffffff, -6, 1.9, -2.6); const tg = new THREE.Mesh(new THREE.CircleGeometry(.16, 16), flat(0xe03131)); tg.position.set(-6, 1.9, -2.58); scene.add(tg);
+}
+function makePerson({ robe = 0x212529, hair = 0x2b2b2b, skin = 0xffd2a8, tie = 0xe03131, wig = false }) {
+  const root = new THREE.Group();
+  box(.7, .9, .4, flat(robe), 0, 1.2, 0, root);
+  box(.12, .5, .02, flat(tie), 0, 1.35, .21, root);
+  const arms = [-1, 1].map(s => { const p = new THREE.Group(); p.position.set(s * .43, 1.55, 0); box(.18, .65, .2, flat(robe), 0, -.32, 0, p); const h = new THREE.Mesh(new THREE.DodecahedronGeometry(.1, 0), flat(skin)); h.position.y = -.68; p.add(h); root.add(p); return p; });
+  const head = new THREE.Group(); head.position.y = 1.68; root.add(head);
+  box(.44, .48, .42, flat(skin), 0, .24, 0, head);
+  for (const s of [-1, 1]) box(.06, .07, .02, flat(0x222222), s * .1, .28, .215, head);
+  const mouth = box(.12, .04, .02, flat(0x7a2a2a), 0, .13, .215, head);
+  if (wig) { box(.54, .3, .48, flat(0xf1f3f5), 0, .48, -.02, head); for (const s of [-1, 1]) box(.12, .4, .3, flat(0xf1f3f5), s * .28, .2, -.05, head); }
+  else box(.48, .16, .46, flat(hair), 0, .5, -.02, head);
+  root.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  scene.add(root); return { root, head, arms, mouth };
+}
+const CAST = {
+  판사: Object.assign(makePerson({ robe: 0x1c1c24, wig: true, tie: 0xffffff }), { pos: [0, .9, -2.4], tail: '50%' }),
+  검사: Object.assign(makePerson({ robe: 0x343a40, hair: 0x111111, tie: 0x1971c2 }), { pos: [-3.6, 0, .2], tail: '18%' }),
+  변호사: Object.assign(makePerson({ robe: 0x495057, hair: 0x3b2a1a, tie: 0xe03131 }), { pos: [3.6, 0, .2], tail: '82%' }),
+  증인: Object.assign(makePerson({ robe: 0xfab005, hair: 0x6b4f3a, tie: 0x2f9e44 }), { pos: [5.6, 0, -1.2], tail: '92%' }),
+  피고인: Object.assign(makePerson({ robe: 0x868e96, hair: 0x2b2b2b, tie: 0x495057 }), { pos: [-5.6, 0, -1.2], tail: '8%' }),
+};
+for (const c of Object.values(CAST)) { c.root.position.set(...c.pos); c.root.lookAt(0, c.pos[1], 4); }
+const gavel = new THREE.Group(); gavel.position.set(.8, 1.75, -1.8); scene.add(gavel);
+box(.07, .07, .5, 0x8d5a3b, 0, 0, .1, gavel); box(.18, .16, .16, 0x5c3a21, 0, 0, -.18, gavel);
+
+// ---------- cases ----------
+const CASES = [
+  { name: '🍗 치킨 도둑 사건', lines: [
+    ['판사', '지금부터 재판을 시작하겠습니다'], ['검사', '피고인은 그날 밤 치킨집에 있었습니까'], ['피고인', '저는 그냥 콜라만 사러 갔습니다'],
+    ['검사', '그런데 왜 손에 양념이 묻어 있었죠'], ['변호사', '이의 있습니다 유도 신문입니다'], ['판사', '이의를 받아들입니다'],
+    ['증인', '분명히 닭다리 두 개를 들고 뛰었어요'], ['피고인', '그 치킨은 원래 제 것이었습니다'] ] },
+  { name: '🍫 민트초코 테러 사건', lines: [
+    ['판사', '정숙해 주시기 바랍니다'], ['검사', '피고인은 회사 냉장고를 열었습니까'], ['피고인', '배가 너무 고파서 그랬습니다'],
+    ['증인', '팀장님 케이크가 민트초코로 바뀌었어요'], ['변호사', '제 의뢰인은 반민초파입니다'], ['검사', '증거물 1번 CCTV 영상을 제출합니다'],
+    ['판사', '피고인은 최후 진술을 하십시오'], ['피고인', '민트초코는 죄가 없습니다'] ] },
+  { name: '🐱 고양이 층간소음 사건', lines: [
+    ['판사', '원고 측 먼저 진술하십시오'], ['변호사', '새벽 세 시마다 우다다 소리가 납니다'], ['피고인', '그건 제가 아니라 고양이입니다'],
+    ['검사', '고양이 이름이 무엇입니까'], ['피고인', '이름은 왕자님이고 다섯 살입니다'], ['증인', '저도 그 고양이에게 간식을 줬습니다'],
+    ['변호사', '고양이에게는 죄를 물을 수 없습니다'], ['판사', '다음 공판은 일주일 뒤에 열겠습니다'] ] },
+  { name: '🎤 노래방 18번 사건', lines: [
+    ['판사', '사건 번호 십팔 번을 심리합니다'], ['검사', '피고인은 마이크를 독점했습니까'], ['피고인', '고음 부분만 잠깐 불렀습니다'],
+    ['증인', '세 시간 동안 같은 노래만 불렀어요'], ['변호사', '그 노래는 명곡이라 무죄입니다'], ['검사', '탬버린까지 압수했다는 증언이 있습니다'],
+    ['판사', '피고인에게 박수 세 번을 명합니다'] ] },
+];
+// plausible typos: tweak one vowel of one syllable, or swap a particle
+function typo(w) {
+  const sw = [['을', '를'], ['는', '은'], ['이', '가'], ['다', '댜'], ['니', '나']];
+  for (const [a, b] of shuffle(sw.slice())) { if (w.endsWith(a) && Math.random() < .5) return w.slice(0, -1) + b; }
+  const chars = [...w], idx = (Math.random() * chars.length) | 0, c = chars[idx].charCodeAt(0);
+  if (c < 0xAC00 || c > 0xD7A3) return w + '.';
+  const s = c - 0xAC00, cho = Math.floor(s / 588), jung = Math.floor((s % 588) / 28), jong = s % 28;
+  const nj = (jung + (Math.random() < .5 ? 1 : 20)) % 21;
+  chars[idx] = String.fromCharCode(0xAC00 + cho * 588 + nj * 28 + jong);
+  return chars.join('');
+}
+
+// ---------- state ----------
+const LIVES = 3;
+let state = 'ready', score = 0, lives = LIVES, caseNo = 0, lineNo = 0, words = [], spoken = 0, typed = 0, speakT = 0, wps = 1.1, speaker = '판사', overAt = 0, typing = Promise.resolve(), paperLines = [], curLine = '';
+let best = 0; try { best = +localStorage.getItem('court-best') || 0; } catch {}
+const $score = $('score'), $lives = $('lives'), $center = $('center'), $keys = $('keys'), $paper = $('paper'), $txt = $('txt'), $listen = $('listen');
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '⌨️', title: '법정 속기사', how: [
+  ['👨‍⚖️', '법정에서 하는 말을 <b>한 단어씩</b> 받아 적어요'],
+  ['⌨️', '타자기 <b>자판</b>에서 다음 단어를 골라 탁! (숫자키 1~6도 OK)'],
+  ['✏️', '비슷한 <b>오타 함정</b> 주의. 오타 3번이면 해고'],
+  ['🏃', '말이 점점 빨라져요. <b>5단어 이상 밀리면</b> 누락!'],
+] }));
+function updateHud() {
+  $score.innerHTML = `${score}<small>단어</small>`;
+  $lives.textContent = '🖋️'.repeat(lives) + '💥'.repeat(LIVES - lives);
+  $('case').textContent = `사건 ${caseNo + 1} · ${CASES[caseNo % CASES.length].name}`;
+}
+function renderSay() {
+  $txt.innerHTML = words.map((w, i) => `<span class="w ${i < spoken ? 'on' : ''} ${i < typed ? 'typed' : ''} ${i === typed ? 'next' : ''}">${w}</span>`).join(' ');
+  const back = spoken - typed;
+  $listen.innerHTML = typed >= spoken && spoken < words.length ? '👂 듣는 중…' : back >= 3 ? `⚠️ 밀리는 중<span id="backlog">${back}단어</span>` : '';
+}
+function renderPaper() {
+  const lines = [...paperLines.slice(-3), curLine + '<span class="cursor"></span>'];
+  $paper.innerHTML = lines.map(l => `<div class="ln">${l || '&nbsp;'}</div>`).join('');
+}
+function renderKeys() {
+  if (typed >= words.length) { $keys.innerHTML = ''; return; }
+  const w = words[typed], n = Math.min(6, 3 + Math.floor((caseNo * 8 + lineNo) / 6));
+  const pool = new Set([w]);
+  pool.add(typo(w)); if (n > 3) pool.add(typo(w));
+  const others = shuffle(CASES.flatMap(c => c.lines.flatMap(l => l[1].split(' '))).filter(x => x !== w));
+  for (const o of others) { if (pool.size >= n) break; pool.add(o); }
+  const opts = shuffle([...pool]);
+  $keys.innerHTML = opts.map((o, i) => `<button class="key" data-w="${o}">${o}</button>`).join('');
+  $keys.classList.toggle('wait', typed >= spoken);
+}
+function nextLine() {
+  const C = CASES[caseNo % CASES.length];
+  if (lineNo >= C.lines.length) {   // case closed
+    SND.gavel(); gavelT = .6; Arcade.toast(`🔨 ${C.name} 종결! 다음 사건`, '#7a5c3a'); Arcade.confetti({ y: innerHeight * .3, count: 50, emoji: ['📜', '⚖️', '⌨️'] });
+    caseNo++; lineNo = 0; wps = Math.min(3, wps + .3); updateHud();
+    setTimeout(nextLine, 1400); return;
+  }
+  const [who, line] = C.lines[lineNo++];
+  speaker = who; words = line.split(' '); spoken = 0; typed = 0; speakT = .35;
+  $('who').textContent = who; document.getElementById('say').style.setProperty('--tail', CAST[who].tail);
+  if (who === '판사' && lineNo === 1) { SND.gavel(); gavelT = .6; }
+  renderSay(); renderKeys();
+}
+let gavelT = 0;
+function typeOut(text, bad) {   // characters hit the paper one by one, each with its own clack
+  typing = typing.then(() => new Promise(res => {
+    const chars = [...text]; let i = 0;
+    const step = () => {
+      if (i < chars.length) { curLine += bad ? `<span class="bad">${chars[i]}</span>` : chars[i]; i++; SND.key(); renderPaper(); setTimeout(step, 38 + Math.random() * 22); }
+      else { curLine += ' '; SND.space(); renderPaper(); res(); }
+    };
+    step();
+  }));
+}
+function carriageReturn() {
+  typing = typing.then(() => new Promise(res => {
+    SND.carriage(); $paper.style.transform = 'translateX(-14px)';
+    setTimeout(() => { paperLines.push(curLine.trim()); curLine = ''; $paper.style.transform = ''; renderPaper(); res(); }, 360);
+  }));
+}
+function pick(w) {
+  if (state !== 'playing' || typed >= spoken) return;
+  const right = w === words[typed];
+  const btn = [...$keys.children].find(b => b.dataset.w === w);
+  if (right) {
+    typeOut(w, false); typed++; score++; updateHud(); Arcade.vibrate(8);
+    if (btn) { btn.classList.add('down'); setTimeout(() => btn.classList.remove('down'), 90); }
+  } else {
+    typeOut(w, true); lives--; updateHud(); SND.wrong(); Arcade.shake(.12); Arcade.vibrate([40, 30, 60]);
+    if (btn) btn.classList.add('wrong');
+    Arcade.toast(rnd(['✏️ 오타! 판사님이 째려봐요', '🙀 속기록 오류!', '😤 "다시 적으세요"']), '#e03131');
+    typed++;   // the wrong word stays crossed out; move on
+    if (lives <= 0) { setTimeout(finish, 600); return; }
+  }
+  renderSay();
+  if (typed >= words.length) { carriageReturn(); setTimeout(() => state === 'playing' && nextLine(), 650); }
+  else renderKeys();
+}
+$keys.addEventListener('pointerdown', e => { const b = e.target.closest('.key'); if (b) { e.preventDefault(); pick(b.dataset.w); } });
+function finish() {
+  if (state === 'over') return;
+  state = 'over'; overAt = performance.now();
+  const isBest = score > best;
+  if (isBest) { best = score; try { localStorage.setItem('court-best', best); } catch {} }
+  isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  SND.gavel();
+  const msg = score >= 80 ? '대법원에서 스카우트하러 왔어요' : score >= 40 ? '베테랑 속기사 인정' : score >= 15 ? '수습 딱지는 뗐어요' : '판사님: "속기사 바꿔주세요"';
+  showScreen(Arcade.resultScreen({ emoji: '⌨️', label: '받아 적은 단어', score, unit: '단어', msg, rows: [['처리한 사건', `${caseNo}건`], ['말 속도', `${wps.toFixed(1)}단어/초`]], isBest: isBest && score > 0, best }));
+  Arcade.gameOver(score);
+}
+function reset() { score = 0; lives = LIVES; caseNo = 0; lineNo = 0; wps = 1.1; paperLines = []; curLine = ''; words = []; spoken = typed = 0; renderPaper(); $keys.innerHTML = ''; $txt.innerHTML = ''; updateHud(); }
+function start() {
+  state = 'count'; $center.style.display = 'none';
+  Arcade.countdown({ final: '개정!', onTick: n => n ? SND.key() : SND.gavel(), onDone: () => { state = 'playing'; nextLine(); } });
+}
+function tapStart() {
+  if (state === 'ready') start();
+  else if (state === 'over' && performance.now() - overAt > 1200 && !Arcade.inRun()) { reset(); start(); }
+}
+addEventListener('pointerdown', e => { if (e.target.closest?.('.key, .arcade-btn')) return; if (state !== 'playing') tapStart(); });
+addEventListener('keydown', e => {
+  const n = +e.key; if (n >= 1 && n <= 6 && state === 'playing') { const b = $keys.children[n - 1]; if (b) pick(b.dataset.w); return; }
+  if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); tapStart(); }
+});
+
+function placeCamera() {
+  camera.aspect = innerWidth / innerHeight; camera.fov = camera.aspect < 1 ? 66 : 42; camera.updateProjectionMatrix();
+  camera.position.set(0, 2.6, camera.aspect < 1 ? 11 : 9); camera.lookAt(0, .6, -1);
+}
+placeCamera();
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
+
+// ---------- loop ----------
+let last = performance.now();
+reset(); showIntro();
+window.__court = { get state() { return state; }, get words() { return words; }, get spoken() { return spoken; }, get typed() { return typed; }, pick, get score() { return score; }, get lives() { return lives; } };
+
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
+  if (state === 'playing' && words.length && spoken < words.length) {
+    speakT -= dt;
+    if (speakT <= 0) {
+      spoken++; speakT = 1 / wps * (.8 + Math.random() * .4);
+      SND.blip(speaker === '판사' ? 180 : speaker === '증인' ? 420 : 300); renderSay();
+      if (typed < spoken && $keys.classList.contains('wait')) $keys.classList.remove('wait');
+      if (spoken - typed >= 5) {   // fell too far behind: those words are lost
+        lives--; updateHud(); SND.wrong(); Arcade.shake(.15);
+        Arcade.toast('📜 속기 누락! "(…청취 불가…)"', '#e03131');
+        typeOut('(누락)', true); typed = spoken; renderSay(); renderKeys();
+        if (lives <= 0) setTimeout(finish, 600);
+        else if (typed >= words.length) { carriageReturn(); setTimeout(() => state === 'playing' && nextLine(), 650); }
+      }
+    }
+  }
+  // speaker animation
+  for (const [name, c] of Object.entries(CAST)) {
+    const talking = state === 'playing' && name === speaker && spoken < words.length;
+    c.mouth.scale.y = talking ? 1 + Math.abs(Math.sin(t * 18)) * 2.5 : 1;
+    c.arms[1].rotation.x = talking ? -1 + Math.sin(t * 5) * .4 : -.1;
+    c.head.rotation.z = talking ? Math.sin(t * 4) * .06 : 0;
+  }
+  gavelT = Math.max(0, gavelT - dt); gavel.rotation.x = -Math.abs(Math.sin(gavelT * 18)) * .9 * (gavelT > 0 ? 1 : 0);
+  camera.position.x = Math.sin(t * .2) * .2;
+  Arcade.applyShake(camera, dt); camera.lookAt(0, .6, -1);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

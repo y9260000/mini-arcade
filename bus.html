@@ -125,7 +125,7 @@ let best = 0; try { best = +localStorage.getItem('bus-best') || 0; } catch {}
 const $score = $('score'), $center = $('center'), $warn = $('warn'), $needle = $('needle');
 const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
 const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🚌', title: '급정거 버티기', how: [
-  ['👆', '화면 <b>왼쪽/오른쪽</b>을 눌러 반대쪽으로 버텨요 (← → 키)'],
+  ['👆', '화면 <b>왼쪽/오른쪽</b>을 누르면 그쪽으로 몸을 기울여요 (← → 키)'],
   ['🚦', '창밖 <b>신호등·표지판</b>이 오면 곧 급정거·급출발·방지턱!'],
   ['📏', '아래 <b>균형 게이지</b>의 바늘을 초록 칸에 유지'],
   ['🤕', '빨간 칸 끝까지 기울면 꽈당! 정거장을 최대한 많이'],
@@ -240,7 +240,7 @@ function frame(now) {
     if (curveT > 0) { curveT -= dt; aBus += Math.sin(curveT * 5.5) * .9; }
     const lvl = Math.min(1, survived / 80);
     const noise = (Math.sin(t * 3.1) * .5 + Math.sin(t * 7.3) * .3) * (.25 + lvl * .35) * Math.min(1, speed / 30);
-    const alpha = (1.2 + lvl * .8) * Math.sin(theta) + aBus * 6.5 + noise - input * 7 - omega * 1.8;   // slightly unstable upright + bus push + your counter-lean
+    const alpha = (1.2 + lvl * .8) * Math.sin(theta) + aBus * 6.5 + noise + input * 7 - omega * 1.8;   // press toward the side you want to lean   // slightly unstable upright + bus push + your counter-lean
     omega += alpha * dt; theta += omega * dt;
     if (Math.abs(theta) > FALL) fall();
   } else if (state === 'fall') {

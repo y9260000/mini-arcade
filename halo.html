@@ -25,7 +25,7 @@
   <div class="hud-row"><span class="pill" id="lives"></span><span class="pill dark" id="bpm">♩ 96</span><span class="pill dark" id="combo" style="display:none"></span></div>
 </div>
 <div id="judge" class="hud-ctl"></div>
-<div id="hint" class="hud-ctl"><span class="pill">👆 사람이 천국 문 아래 올 때 박자 맞춰 탭!</span></div>
+<div id="hint" class="hud-ctl"><span class="pill">👆 원이 초록색일 때 탭!</span></div>
 <div class="screen" id="center"></div>
 
 <script type="module">
@@ -62,7 +62,7 @@ const gold = flat(0xffd43b, { metalness: .4, roughness: .35, emissive: 0x6b4e00,
 for (const s of [-1, 1]) box(.25, 4.4, .25, flat(0xfffaf0), s * 1.3, 2, -.6);
 const arch = new THREE.Mesh(new THREE.TorusGeometry(1.3, .14, 6, 20, Math.PI), gold); arch.position.set(0, 4.2, -.6); scene.add(arch);
 const beam = new THREE.Mesh(new THREE.CylinderGeometry(.55, .9, 4.6, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xfff3bf, transparent: true, opacity: .22, side: THREE.DoubleSide, depthWrite: false })); beam.position.set(0, 2, 0); scene.add(beam);
-const target = new THREE.Mesh(new THREE.RingGeometry(.35, .55, 28), new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: .8, side: THREE.DoubleSide, depthWrite: false })); target.rotation.x = -Math.PI / 2; target.position.set(0, .02, 0); scene.add(target);
+const target = new THREE.Mesh(new THREE.RingGeometry(.55, .75, 32), new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: .8, side: THREE.DoubleSide, depthWrite: false })); target.rotation.x = -Math.PI / 2; target.position.set(0, .02, 0); scene.add(target);
 // little cherub holding the halo
 const cherub = new THREE.Group(); cherub.position.set(0, 3.55, 0); scene.add(cherub);
 {
@@ -104,7 +104,7 @@ function makePerson(k) {
 
 // ---------- rhythm ----------
 // people walk right→left at a constant speed; each one reaches x=0 exactly on a beat slot.
-const FALL = .32, SPEED = 4.2;          // halo fall time (s), walking speed (units/s)
+const FALL = .32, SPEED = 3.8, ZONE = .7;   // ZONE = half-width of the yellow circle you tap inside          // halo fall time (s), walking speed (units/s)
 const PATTERNS = [                        // 8 eighth-note slots per bar (1 = someone arrives)
   [1, 0, 1, 0, 1, 0, 1, 0], [1, 0, 0, 0, 1, 0, 0, 0], [1, 0, 1, 0, 0, 0, 1, 0], [1, 0, 0, 0, 1, 0, 1, 0],
   [1, 0, 1, 1, 0, 0, 1, 0], [1, 1, 0, 0, 1, 0, 0, 0], [1, 0, 0, 1, 0, 0, 1, 0], [1, 0, 1, 0, 1, 1, 1, 0], [0, 0, 1, 0, 1, 0, 1, 1],
@@ -127,7 +127,7 @@ const $score = $('score'), $lives = $('lives'), $combo = $('combo'), $center = $
 const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
 const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '😇', title: '천사 만들기', how: [
   ['🚶', '사람들이 <b>박자에 맞춰</b> 천국 문 앞을 지나가요'],
-  ['👆', '문 아래 <b>노란 원</b>에 들어오는 박자에 맞춰 탭 → 헤일로 쏙!'],
+  ['👆', '사람이 <b>원 안에 들어와 초록색</b>이 되면 탭 → 헤일로 쏙!'],
   ['✨', '딱 맞으면 PERFECT 승천, 빗나가면 실패 (3번이면 끝)'],
   ['😈', '<b>악마</b>가 지나갈 땐 탭 금지! 점점 빨라져요'],
 ] }));
@@ -157,16 +157,17 @@ function miss(w, why) {
 function tap() {
   if (state !== 'playing') return;
   $hint.style.display = 'none';
-  // halo falls; whoever is under the gate when it lands decides the result
-  drops.push({ m: makeHalo(), t: 0 });
+  // judged right now: whoever is inside the yellow circle gets the halo instantly
+  const d = { m: makeHalo(), t: 0 }; d.m.position.set(0, 3.25, 0); drops.push(d);
   Arcade.sfx.whoosh(); Arcade.vibrate(10);
+  land(d);
 }
 function land(drop) {
   const landing = walkers.filter(w => !w.done).sort((a, b) => Math.abs(a.x) - Math.abs(b.x))[0];
   const dx = landing ? Math.abs(landing.x) : 99;
-  if (landing && dx < .5) {
+  if (landing && dx < ZONE) {
     if (landing.devil) { scene.remove(drop.m); landing.done = true; landing.laugh = 1; miss(null, '😈 악마한테 씌웠다!'); Arcade.sfx.crash(); return; }
-    const perfect = dx < .2;
+    const perfect = dx < ZONE * .4;
     landing.done = true; landing.angel = 0;
     landing.p.head.add(drop.m); drop.m.position.set(0, .82, 0); drop.m.rotation.set(Math.PI / 2, 0, 0); drop.m.scale.setScalar(1 / (landing.k.scale || 1));
     drops.splice(drops.indexOf(drop), 1);
@@ -263,7 +264,9 @@ function frame(now) {
   // gate pulses on the beat
   cherub.userData.bob = Math.max(0, (cherub.userData.bob || 0) - dt * 5);
   cherub.position.y = 3.55 + cherub.userData.bob * .08; target.scale.setScalar(1 + cherub.userData.bob * .25);
-  target.material.opacity = .5 + cherub.userData.bob * .4;
+  const inside = walkers.find(w => !w.done && w.angel === undefined && Math.abs(w.x) < ZONE);
+  target.material.color.setHex(inside ? (inside.devil ? 0xff6b6b : 0x51cf66) : 0xffd43b);
+  target.material.opacity = inside ? .95 : .5 + cherub.userData.bob * .4; beam.material.color.setHex(inside && !inside.devil ? 0xd3f9d8 : 0xfff3bf);
   cherub.userData['w-1'].rotation.z = -.4 - Math.sin(t * 12) * .3; cherub.userData['w1'].rotation.z = .4 + Math.sin(t * 12) * .3;
   beam.material.opacity = .18 + cherub.userData.bob * .15;
   walkway.position.x = -((songT * SPEED) % .9);

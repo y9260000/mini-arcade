@@ -196,17 +196,17 @@ function adPopup(opts = {}) {
   const wrap = mount(el);
   // clicking the ad itself = misclick
   el.addEventListener('click', e => { penalty(e.clientX, e.clientY, '광고 클릭 -1초'); if (openCount() < 7) adPopup(); });
-  const trap = stage >= 1 && Math.random() < .5;
+  const trap = stage >= 2 && Math.random() < .35;
   if (trap) { const f = document.createElement('div'); f.className = 'fakex'; f.textContent = '✕'; el.appendChild(f); }   // looks like X, is part of the ad
   const corners = [['left', 'top'], ['right', 'bottom'], ['left', 'bottom'], ['right', 'top']];
-  const x = btn(trap || stage >= 3 ? 'x tiny' : 'x', '✕', () => {
+  const x = btn(trap || stage >= 5 ? 'x tiny' : 'x', '✕', () => {
     if (x._runs > 0) { x._runs--; place(rnd(corners)); Arcade.sfx.boing(); return; }
     close(wrap);
   });
   const place = ([hx, vy]) => { x.style.left = x.style.right = x.style.top = x.style.bottom = ''; x.style[hx] = '6px'; x.style[vy] = '6px'; };
   place(trap ? rnd(corners.slice(1)) : ['right', 'top']);
-  x._runs = stage >= 3 && Math.random() < .35 ? 1 : 0;
-  const wait = stage >= 2 && Math.random() < .4;
+  x._runs = stage >= 5 && Math.random() < .3 ? 1 : 0;
+  const wait = stage >= 3 && Math.random() < .35;
   if (wait) {   // "광고 n초 후 닫기"
     let n = 2; const wv = document.createElement('div'); wv.className = 'wait'; wv.textContent = `${n}초 후 닫기`; el.appendChild(wv);
     const iv = setInterval(() => { n--; if (n <= 0 || !wrap.isConnected) { clearInterval(iv); wv.remove(); el.appendChild(x); } else wv.textContent = `${n}초 후 닫기`; }, 1000);
@@ -270,7 +270,7 @@ function survey() {
 }
 const POOL = [
   { f: adPopup, w: 5, from: 0 }, { f: cookieBanner, w: 2, from: 0 }, { f: notifAsk, w: 1.5, from: 0 },
-  { f: newsletter, w: 2, from: 1 }, { f: appSheet, w: 2, from: 1 }, { f: chatBubble, w: 2, from: 1 }, { f: survey, w: 1.5, from: 2 },
+  { f: newsletter, w: 2, from: 1 }, { f: appSheet, w: 2, from: 2 }, { f: chatBubble, w: 2, from: 3 }, { f: survey, w: 1.5, from: 4 },
 ];
 function spawnOne() {
   const pool = POOL.filter(p => p.from <= stage), tot = pool.reduce((a, p) => a + p.w, 0);
@@ -286,11 +286,11 @@ function robotCheck(onPass) {
   const step1 = () => {
     el.innerHTML = ''; const c = document.createElement('div'); c.className = 'chk';
     c.innerHTML = `<div class="box"></div><div>로봇이 아닙니다</div><div style="margin-left:auto;font-size:10px;color:#adb5bd;text-align:center">🔄<br>안심인증</div>`;
-    c.addEventListener('click', e => { e.stopPropagation(); c.querySelector('.box').textContent = '…'; Arcade.sfx.tap?.(); setTimeout(() => { if (stage >= 1) grid(); else pass(); }, 380); });
+    c.addEventListener('click', e => { e.stopPropagation(); c.querySelector('.box').textContent = '…'; Arcade.sfx.tap?.(); setTimeout(() => { if (stage >= 2) grid(); else pass(); }, 380); });
     el.appendChild(c);
   };
   const grid = () => {
-    const [tg, nm] = rnd(ROBO), n = 9, k = 2 + ((Math.random() * (stage >= 3 ? 3 : 2)) | 0);
+    const [tg, nm] = rnd(ROBO), n = 9, k = 2 + ((Math.random() * (stage >= 5 ? 3 : 2)) | 0);
     const idx = new Set(); while (idx.size < k) idx.add((Math.random() * n) | 0);
     el.innerHTML = `<div class="head">다음이 있는 칸을 모두 선택하세요<b>${tg} ${nm}</b></div>`;
     const g = document.createElement('div'); g.className = 'grid';
@@ -323,20 +323,20 @@ function setupStage() {
   option = null; const chips = document.querySelector('#opt .chips'); chips.innerHTML = '';
   opts.forEach(o => chips.appendChild(btn('', o, () => { option = o; Arcade.sfx.tick(); [...chips.children].forEach(c => c.classList.toggle('sel', c.textContent === o)); })));
   layer.innerHTML = ''; phase = 'shop';
-  timeMax = timeLeft = Math.max(9, 20 - stage * 1.6); stock = 3 + ((Math.random() * 6) | 0);
+  timeMax = timeLeft = Math.max(12, 22 - stage * 1.1); stock = 3 + ((Math.random() * 6) | 0);
   spawnT = 0;
 }
 function startStage() {
   setupStage(); state = 'playing';
-  const n = Math.min(7, 2 + stage);
+  const n = Math.min(6, 2 + Math.floor(stage / 2));
   for (let i = 0; i < n; i++) setTimeout(() => state === 'playing' && spawnOne(), i * 120);
 }
 $('buy').addEventListener('click', () => {
   if (state !== 'playing' || phase !== 'shop') return;
   if (!option) { const o = $('opt'); o.classList.remove('need'); void o.offsetWidth; o.classList.add('need'); Arcade.toast('옵션을 먼저 선택하세요!', '#e03131'); Arcade.sfx.miss(); return; }
   phase = 'checkout'; Arcade.sfx.coin();
-  robotCheck(() => { if (stage >= 2) upsell(success); else success(); });
-  if (stage >= 2) setTimeout(() => state === 'playing' && phase === 'checkout' && adPopup({ overBuy: false }), 500);   // one last ad on the payment page
+  robotCheck(() => { if (stage >= 3) upsell(success); else success(); });
+  if (stage >= 4) setTimeout(() => state === 'playing' && phase === 'checkout' && adPopup({ overBuy: false }), 500);   // one last ad on the payment page
 });
 $('heart').addEventListener('click', e => { $('heart').textContent = '♥'; $('heart').style.color = '#f03e3e'; });
 function success() {
@@ -387,8 +387,8 @@ function frame(now) {
     timeLeft -= dt;
     // more obstacles keep arriving while shopping
     spawnT += dt;
-    const every = Math.max(1.6, 4.2 - stage * .35);
-    if (phase === 'shop' && spawnT > every) { spawnT = 0; if (openCount() < 6) spawnOne(); }
+    const every = Math.max(2.3, 4.6 - stage * .22);
+    if (phase === 'shop' && spawnT > every) { spawnT = 0; if (openCount() < Math.min(6, 3 + Math.floor(stage / 2))) spawnOne(); }
     // stock ticks down with time
     if (Math.random() < .05) $('watch').textContent = (1000 + Math.random() * 3000 | 0).toLocaleString();
     const s = Math.max(1, Math.ceil(stock * timeLeft / timeMax)); $('stock').textContent = `남은 수량 ${s}개`;

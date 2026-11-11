@@ -195,6 +195,18 @@ export const M = {
     const cart = grp(.65, -.75, .55); box(.5, .3, .3, 0xffd43b, 0, 0, 0, 0, 0, 0, cart); cyl(.06, .06, .05, 0x212529, -.15, -.2, .15, Math.PI / 2, 0, 0, cart); cyl(.06, .06, .05, 0x212529, .15, -.2, .15, Math.PI / 2, 0, 0, cart);
     return t => { const k = (t * .8) % 2; ad.scale.setScalar(k < 1 ? Math.min(1, k * 4) : Math.max(0, 1 - (k - 1) * 4)); ad2.scale.setScalar(k > .5 && k < 1.5 ? Math.min(1, (k - .5) * 4) : Math.max(0, 1 - Math.abs(k - 1.5) * 4) * (k >= 1.5 ? 1 : 0)); cart.position.x = .65 + Math.sin(t * 3) * .08; cart.rotation.z = Math.sin(t * 6) * .08; };
   },
+  dice() {   // random-play die: rounded white cube with red/black pips
+    const d = grp(); d.rotation.set(.5, .7, .15);
+    box(1.6, 1.6, 1.6, 0xffffff, 0, 0, 0, 0, 0, 0, d);
+    for (const [x, y, z] of [[1, 1, 0], [1, -1, 0], [-1, 1, 0], [-1, -1, 0], [1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1], [0, 1, 1], [0, -1, 1], [0, 1, -1], [0, -1, -1]]) {
+      const e = new THREE.Mesh(new THREE.CylinderGeometry(.16, .16, 1.6, 8), mat(0xf1f3f5)); e.position.set(x * .8, y * .8, z * .8);
+      if (z === 0) e.rotation.set(0, 0, 0); else if (y === 0) e.rotation.set(0, 0, Math.PI / 2); else e.rotation.set(Math.PI / 2, 0, 0); d.add(e); }
+    const pip = (x, y, z, c = 0x212529) => { const p = sph(.17, c, x, y, z, d, 10, 8); p.scale.set(Math.abs(x) > .79 ? .35 : 1, Math.abs(y) > .79 ? .35 : 1, Math.abs(z) > .79 ? .35 : 1); };
+    pip(0, 0, .81, 0xf03e3e);                                                     // front: 1
+    pip(.81, .4, .4); pip(.81, -.4, -.4); pip(.81, 0, 0);                          // right: 3
+    for (const [a, b] of [[-.4, -.4], [-.4, .4], [.4, -.4], [.4, .4]]) pip(a, .81, b);   // top: 4
+    return t => { d.rotation.set(.5 + t * 2.2, .7 + t * 3, .15); };
+  },
   favicon() {   // little arcade joystick in brand blue
     box(1.8, .6, 1.4, 0x2d6ff0, 0, -.6, 0); box(1.82, .1, 1.42, 0x1f54c4, 0, -.3, 0);
     const stick = grp(-.3, -.3, 0); cyl(.09, .09, 1, 0x343a40, 0, .5, 0, 0, 0, 0, stick); sph(.32, 0xff5252, 0, 1.02, 0, stick); stick.rotation.z = -.25;

@@ -44,7 +44,9 @@
     { id: 'court', file: 'court.html', name: '법정 속기사', emoji: '⌨️', unit: '글자', bestKey: 'court-best',
       desc: '타자기 탁탁 드르륵 띵! 법정의 말을 진짜로 타이핑해 받아 적기' },
     { id: 'fight', file: 'fight.html', name: '커맨드 파이터', emoji: '🥋', unit: '점', bestKey: 'fight-best',
-      desc: '↓→👊! 커맨드를 시간 안에 입력해 필살기 발사. 갈수록 촉박해져요' },
+      desc: '랜덤 커맨드를 방향키로 입력해 필살기 발사! 갈수록 길고 촉박해져요' },
+    { id: 'checkout', file: 'checkout.html', name: '광고 뚫고 결제', emoji: '🛍️', unit: '개', bestKey: 'checkout-best',
+      desc: '광고·쿠키·앱설치·로봇인증… 방해요소를 다 닫고 품절 전에 구매하기' },
   ];
 
   const q = new URLSearchParams(location.search);

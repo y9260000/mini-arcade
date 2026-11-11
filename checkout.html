@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>광고 뚫고 결제</title>
+<script src="common.js?v=17"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#e9ecef;
+    user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  .hud{display:none!important}
+  #phone{position:absolute;left:50%;top:0;bottom:0;transform:translateX(-50%);width:min(430px,100%);background:#fff;overflow:hidden;font-family:"Noto Sans KR",sans-serif;color:#212529;box-shadow:0 0 40px rgba(0,0,0,.15)}
+  #top{position:absolute;left:0;right:0;top:0;padding:max(10px,env(safe-area-inset-top)) 14px 8px;background:#fff;border-bottom:1px solid #eee;z-index:2}
+  #top .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  #logo{font:22px "Jua",sans-serif;color:#f03e3e}
+  #stage{font:16px "Jua",sans-serif;color:#495057}
+  #stock{font:700 13px "Noto Sans KR",sans-serif;color:#e03131;background:#fff5f5;border-radius:999px;padding:3px 10px}
+  #tbar{height:8px;border-radius:4px;background:#f1f3f5;margin-top:8px;overflow:hidden}
+  #tbar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#ff6b6b,#fcc419);transform-origin:left}
+  #tbar.low i{animation:lw .3s infinite} @keyframes lw{50%{background:#e03131}}
+  #page{position:absolute;left:0;right:0;top:max(76px,calc(env(safe-area-inset-top) + 66px));bottom:max(86px,calc(env(safe-area-inset-bottom) + 80px));overflow:hidden;padding:0 16px}
+  #hero{height:min(34vh,240px);border-radius:18px;background:linear-gradient(135deg,#fff3bf,#ffd8a8);display:flex;align-items:center;justify-content:center;font-size:min(22vh,150px);margin-top:12px;position:relative}
+  #hero .tag{position:absolute;left:12px;top:12px;background:#e03131;color:#fff;font:15px "Jua",sans-serif;padding:4px 10px;border-radius:8px}
+  #pname{font:20px "Jua",sans-serif;margin:12px 0 2px}
+  #price{font:700 22px "Noto Sans KR",sans-serif} #price s{font-size:14px;color:#adb5bd;font-weight:400;margin-left:6px} #price b{color:#e03131;margin-right:6px}
+  #opt{margin-top:12px} #opt .lb{font:700 13px "Noto Sans KR",sans-serif;color:#495057;margin-bottom:6px}
+  #opt .chips{display:flex;gap:8px;flex-wrap:wrap}
+  #opt button{border:2px solid #dee2e6;background:#fff;border-radius:10px;padding:8px 14px;font:700 14px "Noto Sans KR",sans-serif;color:#495057;cursor:pointer}
+  #opt button.sel{border-color:#f03e3e;color:#f03e3e;background:#fff5f5}
+  #opt.need{animation:need .3s 2} @keyframes need{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+  #buybar{position:absolute;left:0;right:0;bottom:0;padding:12px 16px max(14px,env(safe-area-inset-bottom));background:#fff;border-top:1px solid #eee;z-index:2;display:flex;gap:10px}
+  #heart{width:56px;border:2px solid #dee2e6;border-radius:14px;background:#fff;font-size:22px}
+  #buy{flex:1;height:58px;border:0;border-radius:14px;background:#f03e3e;color:#fff;font:22px "Jua",sans-serif;cursor:pointer;box-shadow:0 4px 0 #c92a2a}
+  #buy:active{transform:translateY(3px);box-shadow:0 1px 0 #c92a2a}
+  #layer{position:absolute;inset:0;z-index:5;pointer-events:none}
+  #layer>*{pointer-events:auto}
+  .dim{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+  .pop{position:absolute;background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.35);overflow:hidden;animation:pin .18s ease-out}
+  @keyframes pin{from{transform:scale(.6);opacity:0}}
+  .pop.out{animation:pout .14s ease-in forwards} @keyframes pout{to{transform:scale(.5);opacity:0}}
+  .x{position:absolute;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.35);color:#fff;font:700 13px/22px sans-serif;text-align:center;cursor:pointer;z-index:2}
+  .x.tiny{width:16px;height:16px;font-size:10px;line-height:16px;background:rgba(0,0,0,.18)}
+  .x::after{content:"";position:absolute;inset:-6px}   /* fair hit area */
+  .ad{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;padding:18px 14px;box-sizing:border-box}
+  .ad .big{font-size:58px;line-height:1} .ad .t{font:24px "Jua",sans-serif;margin-top:6px} .ad .s{font:700 12px "Noto Sans KR",sans-serif;opacity:.85;margin-top:3px}
+  .ad .cta{margin-top:10px;background:#fff;color:#212529;border-radius:999px;padding:8px 18px;font:17px "Jua",sans-serif}
+  .ad .fakex{position:absolute;right:10px;top:10px;width:34px;height:34px;border-radius:50%;background:#fff;color:#212529;font:700 20px/34px sans-serif}
+  .ad .adlabel{position:absolute;left:8px;bottom:6px;font:700 9px sans-serif;opacity:.7}
+  .wait{position:absolute;right:8px;top:8px;background:rgba(0,0,0,.5);color:#fff;font:700 11px "Noto Sans KR",sans-serif;border-radius:999px;padding:4px 9px}
+  .modal{left:50%;top:50%;transform:translate(-50%,-50%);width:min(320px,84%);padding:20px 18px 16px;box-sizing:border-box;text-align:center}
+  .modal h3{margin:0 0 6px;font:22px "Jua",sans-serif} .modal p{margin:0 0 14px;font-size:13px;color:#495057}
+  .bt{display:block;width:100%;border:0;border-radius:12px;padding:12px;font:18px "Jua",sans-serif;cursor:pointer;background:#f03e3e;color:#fff}
+  .bt.gray{background:#f1f3f5;color:#495057}
+  .tiny-link{display:inline-block;margin-top:10px;font-size:10px;color:#adb5bd;text-decoration:underline;cursor:pointer;padding:4px}
+  .sheet{left:0;right:0;bottom:0;border-radius:20px 20px 0 0;padding:18px 18px max(18px,env(safe-area-inset-bottom));text-align:center;animation:sup .22s ease-out}
+  @keyframes sup{from{transform:translateY(100%)}}
+  .cookie{left:10px;right:10px;bottom:max(90px,calc(env(safe-area-inset-bottom) + 84px));padding:14px;font-size:12px;color:#495057;display:flex;flex-direction:column;gap:8px}
+  .cookie .r{display:flex;gap:8px;align-items:center;justify-content:flex-end}
+  .robot{left:50%;top:50%;transform:translate(-50%,-50%);width:min(320px,88%);box-sizing:border-box}
+  .robot .chk{display:flex;align-items:center;gap:12px;padding:18px;font-size:15px;cursor:pointer}
+  .robot .box{width:28px;height:28px;border:2px solid #868e96;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#2f9e44}
+  .robot .head{background:#4c6ef5;color:#fff;padding:12px 14px;font-size:13px} .robot .head b{display:block;font:22px "Jua",sans-serif}
+  .robot .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:8px}
+  .robot .grid div{aspect-ratio:1;background:#f1f3f5;display:flex;align-items:center;justify-content:center;font-size:clamp(30px,10vw,42px);cursor:pointer;border-radius:4px;position:relative}
+  .robot .grid div.on{outline:4px solid #4c6ef5;outline-offset:-4px;background:#dbe4ff}
+  .robot .grid div.on::after{content:"✓";position:absolute;left:4px;top:2px;font:700 14px sans-serif;color:#fff;background:#4c6ef5;border-radius:50%;width:18px;height:18px;line-height:18px;text-align:center}
+  .robot .ft{display:flex;justify-content:space-between;align-items:center;padding:0 10px 10px}
+  .robot .ft .ok{background:#4c6ef5;color:#fff;border:0;border-radius:6px;padding:10px 20px;font:16px "Jua",sans-serif;cursor:pointer}
+  .chat{right:12px;bottom:max(96px,calc(env(safe-area-inset-bottom) + 90px));width:220px;padding:12px 12px 12px;font-size:13px}
+  .chat .who{font:15px "Jua",sans-serif;color:#7048e8;margin-bottom:4px}
+  .notif{left:50%;top:max(80px,calc(env(safe-area-inset-top) + 70px));transform:translateX(-50%);width:min(300px,86%);padding:14px;font-size:13px}
+  .notif .r{display:flex;gap:8px;margin-top:10px} .notif .r button{flex:1;border:0;border-radius:8px;padding:9px;font:15px "Jua",sans-serif;cursor:pointer;background:#e7f5ff;color:#1971c2}
+  .stars{display:flex;justify-content:center;gap:4px;font-size:32px;margin:6px 0 4px} .stars span{cursor:pointer;filter:grayscale(1)}
+  #done{position:absolute;inset:0;z-index:50;background:rgba(43,138,62,.92);color:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;font:30px "Jua",sans-serif;text-align:center}
+  #done .e{font-size:90px}
+  .pen{position:absolute;z-index:60;pointer-events:none;font:20px "Jua",sans-serif;color:#e03131;background:#fff;border-radius:999px;padding:4px 10px;box-shadow:0 4px 12px rgba(0,0,0,.2);animation:pen .8s forwards}
+  @keyframes pen{to{transform:translateY(-50px);opacity:0}}
+</style>
+</head>
+<body>
+<div id="phone">
+  <div id="top"><div class="row"><span id="logo">🔥핫딜몰</span><span id="stage">1단계</span><span id="stock">남은 수량 7개</span></div><div id="tbar"><i id="tf"></i></div></div>
+  <div id="page">
+    <div id="hero"><span class="tag">타임딜</span><span id="pem">🐟</span></div>
+    <div id="pname">한정판 황금 붕어빵 키링</div>
+    <div id="price"><b>87%</b>2,900원<s>22,000원</s></div>
+    <div id="opt"><div class="lb">옵션 선택 (필수)</div><div class="chips"></div></div>
+  </div>
+  <div id="buybar"><button id="heart">♡</button><button id="buy">구매하기</button></div>
+  <div id="layer"></div>
+  <div id="done"><div class="e">🛍️</div><div id="dmsg">구매 성공!</div></div>
+</div>
+<div class="screen" id="center"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const rnd = a => a[(Math.random() * a.length) | 0];
+const R = (a, b) => a + Math.random() * (b - a);
+const layer = $('layer'), phone = $('phone');
+const PRODUCTS = [
+  ['🐟', '한정판 황금 붕어빵 키링', ['골드', '실버', '팥', '슈크림']],
+  ['👟', '리미티드 구름 운동화', ['240', '250', '260', '270']],
+  ['🧸', '단종 예정 곰돌이 인형', ['S', 'M', 'L']],
+  ['🎮', '품절대란 휴대용 게임기', ['화이트', '블랙', '민트']],
+  ['🍜', '1인 1개 한정 마라 라면 박스', ['순한맛', '보통맛', '지옥맛']],
+  ['🎧', '선착순 노이즈캔슬링 이어폰', ['블랙', '크림']],
+  ['🪴', '한정 수량 몬스테라 화분', ['소', '중', '대']],
+  ['🎫', '콘서트 티켓 (마지막 1석)', ['R석', 'S석']],
+];
+const AD_LOOKS = [
+  ['#7048e8', '🎰', '축하합니다!!', '당신은 100만 번째 방문자입니다', '상품 받기'],
+  ['#f76707', '💊', '뱃살 3일 컷', '의사들이 싫어하는 비밀', '자세히 보기'],
+  ['#1c7ed6', '📱', '최신폰 0원', '오늘만! 지금 바로 신청', '신청하기'],
+  ['#2b8a3e', '💰', '하루 10분 부업', '월 300 버는 법', '무료 강의'],
+  ['#e64980', '💘', '근처 싱글 3명', '지금 접속 중', '대화하기'],
+  ['#f59f00', '🧹', '폰 속도 300%', '바이러스 7개 발견!', '지금 청소'],
+  ['#212529', '🎲', '룰렛 돌리기', '꽝 없는 이벤트', '돌리기'],
+];
+
+let state = 'ready', stage = 0, timeLeft = 0, timeMax = 0, spawnT = 0, option = null, overAt = 0, buys = 0, zTop = 10, phase = 'shop', stock = 7, misclicks = 0, closed = 0;
+let best = 0; try { best = +localStorage.getItem('checkout-best') || 0; } catch {}
+const $center = $('center');
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+showScreen(Arcade.titleScreen({ emoji: '🛍️', title: '광고 뚫고 결제', how: [
+  ['🔥', '한정판 타임딜! 품절되기 전에 <b>구매하기</b>'],
+  ['❌', '광고·쿠키·앱설치·로봇인증… <b>방해요소를 다 닫아야</b> 눌려요'],
+  ['😱', '가짜 X나 광고를 누르면 광고가 더 뜨고 시간 -1초'],
+  ['⏱️', '단계가 오를수록 방해는 많고 시간은 짧아져요'],
+] }));
+
+// ---------- helpers ----------
+function penalty(x, y, text = '-1초') {
+  timeLeft -= 1; misclicks++; Arcade.sfx.miss(); Arcade.vibrate([30, 30, 30]);
+  const p = document.createElement('div'); p.className = 'pen'; p.textContent = text;
+  const r = phone.getBoundingClientRect(); p.style.left = (x - r.left - 20) + 'px'; p.style.top = (y - r.top - 20) + 'px';
+  phone.appendChild(p); setTimeout(() => p.remove(), 800);
+}
+function mount(el, dim = false) {
+  const wrap = document.createElement('div'); wrap.style.position = 'absolute'; wrap.style.inset = '0'; wrap.style.zIndex = ++zTop; wrap.style.pointerEvents = 'none';
+  if (dim) { const d = document.createElement('div'); d.className = 'dim'; d.style.pointerEvents = 'auto'; wrap.appendChild(d); }
+  el.style.pointerEvents = 'auto'; wrap.appendChild(el); layer.appendChild(wrap); wrap._pop = el; return wrap;
+}
+function close(wrap, sound = true) {
+  if (!wrap.isConnected || wrap._closing) return; wrap._closing = true;
+  wrap._pop.classList.add('out'); if (sound) { Arcade.sfx.pop(); closed++; }
+  setTimeout(() => wrap.remove(), 140);
+}
+const openCount = () => [...layer.children].filter(w => !w._closing).length;
+function btn(cls, html, fn) { const b = document.createElement(cls === 'x' || cls.startsWith('x ') ? 'div' : 'button'); b.className = cls; b.innerHTML = html; b.addEventListener('click', e => { e.stopPropagation(); fn(e); }); return b; }
+
+// ---------- obstacles ----------
+function adPopup(opts = {}) {
+  const [bg, em, t, s, cta] = rnd(AD_LOOKS);
+  const pw = phone.clientWidth, ph = phone.clientHeight;
+  const w = Math.min(pw - 30, R(220, 290)), h = R(220, 300);
+  const el = document.createElement('div'); el.className = 'pop ad'; el.style.background = bg; el.style.width = w + 'px'; el.style.height = h + 'px';
+  const overBuy = opts.overBuy ?? Math.random() < .45;
+  el.style.left = R(10, pw - w - 10) + 'px';
+  el.style.top = (overBuy ? ph - h - R(20, 60) : R(70, ph - h - 90)) + 'px';
+  el.innerHTML = `<div class="big">${em}</div><div class="t">${t}</div><div class="s">${s}</div><div class="cta">${cta}</div><div class="adlabel">AD</div>`;
+  const wrap = mount(el);
+  // clicking the ad itself = misclick
+  el.addEventListener('click', e => { penalty(e.clientX, e.clientY, '광고 클릭 -1초'); if (openCount() < 7) adPopup(); });
+  const trap = stage >= 1 && Math.random() < .5;
+  if (trap) { const f = document.createElement('div'); f.className = 'fakex'; f.textContent = '✕'; el.appendChild(f); }   // looks like X, is part of the ad
+  const corners = [['left', 'top'], ['right', 'bottom'], ['left', 'bottom'], ['right', 'top']];
+  const x = btn(trap || stage >= 3 ? 'x tiny' : 'x', '✕', () => {
+    if (x._runs > 0) { x._runs--; place(rnd(corners)); Arcade.sfx.boing(); return; }
+    close(wrap);
+  });
+  const place = ([hx, vy]) => { x.style.left = x.style.right = x.style.top = x.style.bottom = ''; x.style[hx] = '6px'; x.style[vy] = '6px'; };
+  place(trap ? rnd(corners.slice(1)) : ['right', 'top']);
+  x._runs = stage >= 3 && Math.random() < .35 ? 1 : 0;
+  const wait = stage >= 2 && Math.random() < .4;
+  if (wait) {   // "광고 n초 후 닫기"
+    let n = 2; const wv = document.createElement('div'); wv.className = 'wait'; wv.textContent = `${n}초 후 닫기`; el.appendChild(wv);
+    const iv = setInterval(() => { n--; if (n <= 0 || !wrap.isConnected) { clearInterval(iv); wv.remove(); el.appendChild(x); } else wv.textContent = `${n}초 후 닫기`; }, 1000);
+  } else el.appendChild(x);
+  return wrap;
+}
+function cookieBanner() {
+  if ([...layer.children].some(w => w._kind === 'cookie')) return adPopup();
+  const el = document.createElement('div'); el.className = 'pop cookie';
+  el.innerHTML = `<div>🍪 저희는 더 나은 경험을 위해 쿠키 37종과 파트너사 412곳의 추적을 사용합니다.</div>`;
+  const r = document.createElement('div'); r.className = 'r';
+  const wrap = mount(el); wrap._kind = 'cookie';
+  r.appendChild(btn('tiny-link', '필수만 허용', () => close(wrap)));
+  r.appendChild(btn('bt', '모두 동의', () => close(wrap)));
+  r.lastChild.style.width = 'auto'; r.lastChild.style.padding = '10px 18px'; r.lastChild.style.display = 'inline-block';
+  el.appendChild(r);
+}
+function newsletter() {
+  const el = document.createElement('div'); el.className = 'pop modal';
+  el.innerHTML = `<div style="font-size:46px">🎁</div><h3>잠깐만요! 10% 쿠폰</h3><p>이메일만 입력하면 바로 지급!</p>`;
+  const wrap = mount(el, true);
+  el.appendChild(btn('bt', '쿠폰 받기', e => { penalty(e.clientX, e.clientY, '이메일 입력창 -1초'); close(wrap, false); emailForm(); }));
+  el.appendChild(btn('tiny-link', '아니요, 저는 정가로 사는 게 좋아요', () => close(wrap)));
+}
+function emailForm() {
+  const el = document.createElement('div'); el.className = 'pop modal';
+  el.innerHTML = `<h3>✉️ 이메일 입력</h3><p>마케팅 수신 동의 (필수)</p><div style="height:40px;border:2px solid #dee2e6;border-radius:10px;margin-bottom:10px"></div>`;
+  const wrap = mount(el, true);
+  el.appendChild(btn('bt gray', '다음에 할게요', () => close(wrap)));
+}
+function appSheet() {
+  const el = document.createElement('div'); el.className = 'pop sheet';
+  el.innerHTML = `<div style="font-size:40px">📲</div><h3 style="margin:4px 0;font:22px Jua,sans-serif">앱에서 보면 10% 더 싸요!</h3><p style="margin:0 0 12px;font-size:13px;color:#868e96">지금 설치하고 혜택 받기</p>`;
+  const wrap = mount(el, true);
+  el.appendChild(btn('bt', '앱으로 보기', e => { penalty(e.clientX, e.clientY, '앱스토어로 이동 -1초'); }));
+  el.appendChild(btn('tiny-link', '괜찮아요, 모바일 웹으로 볼게요', () => close(wrap)));
+}
+function chatBubble() {
+  const el = document.createElement('div'); el.className = 'pop chat';
+  el.innerHTML = `<div class="who">🤖 상담봇 핫딜이</div>안녕하세요! 무엇을 도와드릴까요? 😊 혹시 이 상품 말고 다른 상품은 어떠세요?`;
+  el.style.bottom = '18px'; el.style.right = R(8, 60) + 'px';
+  const wrap = mount(el);
+  el.addEventListener('click', e => penalty(e.clientX, e.clientY, '상담 연결 중… -1초'));
+  const x = btn('x tiny', '✕', () => close(wrap)); x.style.right = '6px'; x.style.top = '6px'; el.appendChild(x);
+}
+function notifAsk() {
+  const el = document.createElement('div'); el.className = 'pop notif';
+  el.innerHTML = `<b>hotdeal.mall</b>에서 알림을 보내려고 합니다`;
+  const wrap = mount(el);
+  const r = document.createElement('div'); r.className = 'r';
+  r.appendChild(btn('', '차단', () => close(wrap))); r.appendChild(btn('', '허용', () => close(wrap)));
+  el.appendChild(r);
+}
+function survey() {
+  const el = document.createElement('div'); el.className = 'pop modal';
+  el.innerHTML = `<h3>⭐ 1초 만족도 조사</h3><p>오늘 쇼핑 경험은 어떠셨나요?</p>`;
+  const wrap = mount(el, true);
+  const st = document.createElement('div'); st.className = 'stars';
+  for (let i = 0; i < 5; i++) st.appendChild(btn('', '⭐', () => { [...st.children].forEach((s, j) => s.style.filter = j <= i ? 'none' : ''); setTimeout(() => close(wrap), 150); }));
+  el.appendChild(st);
+}
+const POOL = [
+  { f: adPopup, w: 5, from: 0 }, { f: cookieBanner, w: 2, from: 0 }, { f: notifAsk, w: 1.5, from: 0 },
+  { f: newsletter, w: 2, from: 1 }, { f: appSheet, w: 2, from: 1 }, { f: chatBubble, w: 2, from: 1 }, { f: survey, w: 1.5, from: 2 },
+];
+function spawnOne() {
+  const pool = POOL.filter(p => p.from <= stage), tot = pool.reduce((a, p) => a + p.w, 0);
+  let r = Math.random() * tot; for (const p of pool) { r -= p.w; if (r <= 0) return p.f(); }
+}
+
+// ---------- robot check at checkout ----------
+const ROBO = [['🚦', '신호등'], ['🚌', '버스'], ['🚲', '자전거'], ['🐈', '고양이'], ['🌭', '핫도그']];
+const DECOY = ['🌳', '🏠', '☁️', '🚗', '🛵', '🏢', '🐕', '🌻', '🍔', '🚕', '⛰️'];
+function robotCheck(onPass) {
+  const el = document.createElement('div'); el.className = 'pop robot';
+  const wrap = mount(el, true); wrap._kind = 'robot';
+  const step1 = () => {
+    el.innerHTML = ''; const c = document.createElement('div'); c.className = 'chk';
+    c.innerHTML = `<div class="box"></div><div>로봇이 아닙니다</div><div style="margin-left:auto;font-size:10px;color:#adb5bd;text-align:center">🔄<br>안심인증</div>`;
+    c.addEventListener('click', e => { e.stopPropagation(); c.querySelector('.box').textContent = '…'; Arcade.sfx.tap?.(); setTimeout(() => { if (stage >= 1) grid(); else pass(); }, 380); });
+    el.appendChild(c);
+  };
+  const grid = () => {
+    const [tg, nm] = rnd(ROBO), n = 9, k = 2 + ((Math.random() * (stage >= 3 ? 3 : 2)) | 0);
+    const idx = new Set(); while (idx.size < k) idx.add((Math.random() * n) | 0);
+    el.innerHTML = `<div class="head">다음이 있는 칸을 모두 선택하세요<b>${tg} ${nm}</b></div>`;
+    const g = document.createElement('div'); g.className = 'grid';
+    for (let i = 0; i < n; i++) { const d = document.createElement('div'); d.textContent = idx.has(i) ? tg : rnd(DECOY); d._t = idx.has(i); d.addEventListener('click', e => { e.stopPropagation(); d.classList.toggle('on'); Arcade.sfx.tick(); }); g.appendChild(d); }
+    el.appendChild(g);
+    const ft = document.createElement('div'); ft.className = 'ft'; ft.innerHTML = `<span style="font-size:18px;color:#868e96">🔄 🎧 ⓘ</span>`;
+    ft.appendChild(btn('ok', '확인', e => {
+      const ok = [...g.children].every(d => d.classList.contains('on') === d._t);
+      if (ok) pass(); else { penalty(e.clientX, e.clientY, '다시 시도하세요 -1초'); grid(); }
+    }));
+    el.appendChild(ft);
+  };
+  const pass = () => { Arcade.sfx.ding(); close(wrap, false); onPass(); };
+  step1();
+}
+function upsell(onDone) {
+  const el = document.createElement('div'); el.className = 'pop modal';
+  el.innerHTML = `<div style="font-size:42px">🛒</div><h3>함께 사면 좋은 상품!</h3><p>보험 · 연장보증 · 사은품 포장 (월 9,900원)</p>`;
+  const wrap = mount(el, true);
+  el.appendChild(btn('bt', '추가하고 결제', e => { penalty(e.clientX, e.clientY, '추가 상품 담김 -1초'); }));
+  el.appendChild(btn('tiny-link', '아니요, 그냥 결제할게요', () => { close(wrap); onDone(); }));
+}
+
+// ---------- shop ----------
+function setupStage() {
+  const [em, nm, opts] = rnd(PRODUCTS);
+  $('pem').textContent = em; $('pname').textContent = nm; $('stage').textContent = `${stage + 1}단계`;
+  const pct = (70 + Math.random() * 25) | 0, orig = (10 + Math.random() * 90 | 0) * 1000, now = Math.round(orig * (100 - pct) / 100 / 100) * 100;
+  $('price').innerHTML = `<b>${pct}%</b>${now.toLocaleString()}원<s>${orig.toLocaleString()}원</s>`;
+  option = null; const chips = document.querySelector('#opt .chips'); chips.innerHTML = '';
+  opts.forEach(o => chips.appendChild(btn('', o, () => { option = o; Arcade.sfx.tick(); [...chips.children].forEach(c => c.classList.toggle('sel', c.textContent === o)); })));
+  layer.innerHTML = ''; phase = 'shop';
+  timeMax = timeLeft = Math.max(9, 20 - stage * 1.6); stock = 3 + ((Math.random() * 6) | 0);
+  spawnT = 0;
+}
+function startStage() {
+  setupStage(); state = 'playing';
+  const n = Math.min(7, 2 + stage);
+  for (let i = 0; i < n; i++) setTimeout(() => state === 'playing' && spawnOne(), i * 120);
+}
+$('buy').addEventListener('click', () => {
+  if (state !== 'playing' || phase !== 'shop') return;
+  if (!option) { const o = $('opt'); o.classList.remove('need'); void o.offsetWidth; o.classList.add('need'); Arcade.toast('옵션을 먼저 선택하세요!', '#e03131'); Arcade.sfx.miss(); return; }
+  phase = 'checkout'; Arcade.sfx.coin();
+  robotCheck(() => { if (stage >= 2) upsell(success); else success(); });
+  if (stage >= 2) setTimeout(() => state === 'playing' && phase === 'checkout' && adPopup({ overBuy: false }), 500);   // one last ad on the payment page
+});
+$('heart').addEventListener('click', e => { $('heart').textContent = '♥'; $('heart').style.color = '#f03e3e'; });
+function success() {
+  if (state !== 'playing') return;
+  state = 'won'; buys++; Arcade.sfx.kaching(); Arcade.vibrate([30, 40, 60]); Arcade.confetti({ y: innerHeight * .4, count: 70, emoji: ['🛍️', '💸', '✨'] });
+  $('dmsg').innerHTML = `구매 성공!<div style="font-size:16px;margin-top:6px">남은 시간 ${timeLeft.toFixed(1)}초 · 다음 타임딜 오픈…</div>`;
+  $('done').style.display = 'flex';
+  setTimeout(() => { $('done').style.display = 'none'; stage++; startStage(); Arcade.sfx.go(); }, 1500);
+}
+function soldOut() {
+  state = 'over-anim'; Arcade.sfx.fail(); Arcade.shake(.3);
+  $('dmsg').innerHTML = `품절!<div style="font-size:16px;margin-top:6px">방해꾼들에게 졌다…</div>`; $('done').style.background = 'rgba(201,42,42,.92)'; $('done').querySelector('.e').textContent = '😭'; $('done').style.display = 'flex';
+  setTimeout(finish, 1500);
+}
+function finish() {
+  state = 'over'; overAt = performance.now(); $('done').style.display = 'none';
+  const score = buys, isBest = score > best;
+  if (isBest) { best = score; try { localStorage.setItem('checkout-best', best); } catch {} }
+  const msg = score >= 8 ? '광고 차단기가 사람이 됐다' : score >= 5 ? '타임딜 고인물' : score >= 2 ? '평범한 인터넷 생존자' : '광고에 지갑을 털릴 뻔';
+  showScreen(Arcade.resultScreen({ emoji: '🛍️', label: '구매 성공', score, unit: '개', msg, rows: [['닫은 방해요소', `${closed}개`], ['잘못 누름', `${misclicks}번`]], isBest: isBest && score > 0, best }));
+  Arcade.gameOver(score);
+}
+function reset() { stage = 0; buys = 0; misclicks = 0; closed = 0; $('done').style.background = ''; $('done').querySelector('.e').textContent = '🛍️'; setupStage(); }
+function start() {
+  reset(); state = 'count'; $center.style.display = 'none';
+  Arcade.countdown({ final: '오픈!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: startStage });
+}
+addEventListener('pointerdown', e => {
+  if (e.target.closest?.('.arcade-btn')) return;
+  if (state === 'ready') start();
+  else if (state === 'over' && performance.now() - overAt > 1200 && !Arcade.inRun()) start();
+});
+addEventListener('keydown', e => { if ((e.code === 'Space' || e.code === 'Enter') && (state === 'ready' || state === 'over')) { e.preventDefault(); if (state === 'ready' || (performance.now() - overAt > 1200 && !Arcade.inRun())) start(); } });
+setupStage(); layer.innerHTML = '';
+
+// ---------- loop ----------
+let last = performance.now(), lastTick = 0;
+window.__co = { get state() { return state; }, get stage() { return stage; }, get time() { return timeLeft; }, layer, spawnOne, robotCheck };
+function frame(now) {
+  const dt = Math.min(.1, (now - last) / 1000); last = now;
+  if (state === 'playing') {
+    timeLeft -= dt;
+    // more obstacles keep arriving while shopping
+    spawnT += dt;
+    const every = Math.max(1.6, 4.2 - stage * .35);
+    if (phase === 'shop' && spawnT > every) { spawnT = 0; if (openCount() < 6) spawnOne(); }
+    // stock ticks down with time
+    const s = Math.max(1, Math.ceil(stock * timeLeft / timeMax)); $('stock').textContent = `남은 수량 ${s}개`;
+    if (timeLeft < 3 && Math.ceil(timeLeft) !== lastTick) { lastTick = Math.ceil(timeLeft); Arcade.sfx.tick(); }
+    if (timeLeft <= 0) soldOut();
+  }
+  $('tf').style.transform = `scaleX(${Math.max(0, timeLeft / (timeMax || 1))})`;
+  $('tbar').classList.toggle('low', state === 'playing' && timeLeft < 4);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

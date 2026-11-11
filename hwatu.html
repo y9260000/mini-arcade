@@ -139,7 +139,7 @@ const showScreen = html => { $('center').innerHTML = html; $('center').style.dis
 showScreen(Arcade.titleScreen({ emoji: '🎴', title: '화투 짝맞추기', how: [
   ['🎴', '같은 <b>달(월)</b> 화투 두 장을 찾아 뒤집어요'],
   ['👀', '처음 <b>잠깐만</b> 패를 보여줘요. 순간 기억력 승부!'],
-  ['💡', '틀리면 <b>-2초</b> · 3단계부터 패가 섞여요 · 힌트는 2번'],
+  ['💡', '틀리면 <b>-2초</b> · 힌트는 단계마다 2번'],
   ['⏱', '시간 안에 다 맞추면 다음 단계. 연속으로 맞추면 점수 UP!'],
 ], cta: '시작하기' }));
 const PAIRS = [6, 8, 10, 12, 12, 12];
@@ -151,7 +151,7 @@ function say(t) { const e = $('say'); e.textContent = t; e.classList.remove('sho
 function flip(c, up) { c.from = c.g.rotation.z; c.to = up ? 0 : Math.PI; c.flipT = 0; c.up = up; }
 function setupStage() {
   matchedCount = 0;
-  cards.forEach(c => scene.remove(c.g)); cards = []; open = []; busy = false; combo = 0; hints = 2; shuffleAt = stage >= 2 ? 2 : 99;
+  cards.forEach(c => scene.remove(c.g)); cards = []; open = []; busy = false; combo = 0; hints = 2; shuffleAt = 99;   // no mid-stage reshuffles
   const n = PAIRS[Math.min(stage, PAIRS.length - 1)], months = shuffle([...Array(12).keys()]).slice(0, n);
   const deck = shuffle(months.flatMap(m => [makeCard(m, 0), makeCard(m, 1)]));
   cards = deck; pairsLeft = n; placeCards();

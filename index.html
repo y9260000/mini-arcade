@@ -11,7 +11,8 @@
   *{box-sizing:border-box}
   /* 얼마집 brand: blue #2D6FF0, charcoal, white */
   :root{--accent:#2d6ff0;--accent-dark:#1f54c4;--ink:#1e2532;--ink-soft:#5c6678;--tint:#eaf1fe}
-  body{margin:0;min-height:100vh;background:linear-gradient(180deg,#2d6ff0 0,#4d86f4 260px,#eaf1fe 520px,#f5f8ff 100%);color:var(--ink);display:flex;justify-content:center}
+  body{margin:0;min-height:100vh;background:#f3f6fc;color:var(--ink);display:flex;justify-content:center}
+  body::before{content:"";position:absolute;left:0;right:0;top:0;height:clamp(250px,34vh,320px);background:var(--accent);z-index:-1;border-radius:0 0 28px 28px}
   main{width:100%;max-width:1100px;padding:max(36px,5vh) max(16px,env(safe-area-inset-left)) 120px}
   .logo{text-align:center;margin-bottom:22px}
   .logo .t-title{margin:6px 0 4px}
@@ -23,11 +24,27 @@
     transform:perspective(700px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));will-change:transform}
   .card:active{transform:scale(.97)}
   @media(hover:hover){.card:hover{box-shadow:0 2px 0 rgba(30,37,50,.05),0 18px 34px rgba(45,111,240,.25)}}
-  .tile{aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;overflow:hidden;
-    background:radial-gradient(circle at 50% 38%,#ffffff 0,#f2f6ff 35%,#dce8fd 100%)}
-  .tile img{width:100%;height:100%;object-fit:contain;transition:transform .35s cubic-bezier(.2,.8,.3,1)}
-  @media(hover:hover){.card:hover .tile img{animation:bob 1.6s ease-in-out infinite}}
-  @keyframes bob{0%,100%{transform:translateY(-3%) scale(1.07) rotate(-1.5deg)}50%{transform:translateY(-7%) scale(1.09) rotate(1.5deg)}}
+  .tile{position:relative;aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--tint)}
+  .tile img{width:100%;height:100%;object-fit:contain}
+  .tile canvas.live{position:absolute;inset:0;width:100%!important;height:100%!important}
+  .tile.live-on img{visibility:hidden}
+  /* random roulette */
+  #roul{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;flex-direction:column;gap:18px;background:rgba(20,30,55,.72);backdrop-filter:blur(4px)}
+  #roul.on{display:flex}
+  #roul .win{position:relative;width:min(340px,82vw);height:min(300px,70vw);overflow:hidden;border-radius:26px;background:#fff;box-shadow:0 0 0 6px var(--accent),0 24px 60px rgba(0,0,0,.4)}
+  #roul .win::before,#roul .win::after{content:"";position:absolute;left:0;right:0;height:12%;z-index:2;pointer-events:none}
+  #roul .win::before{top:0;background:linear-gradient(#fff,rgba(255,255,255,0))} #roul .win::after{bottom:0;background:linear-gradient(rgba(255,255,255,0),#fff)}
+  #roul .item{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+  #roul .item img{width:76%;aspect-ratio:16/10;object-fit:contain;background:var(--tint);border-radius:16px}
+  #roul .item b{font:26px "Jua",sans-serif;color:var(--ink)}
+  #roul .item.in{animation:rin var(--d,.08s) linear}
+  @keyframes rin{from{transform:translateY(-100%)}}
+  #roul .item.out{animation:rout var(--d,.08s) linear forwards}
+  @keyframes rout{to{transform:translateY(100%)}}
+  #roul .ptr{position:absolute;top:50%;width:0;height:0;border:16px solid transparent;transform:translateY(-50%);z-index:3}
+  #roul .ptr.l{left:-6px;border-left-color:#ffd43b} #roul .ptr.r{right:-6px;border-right-color:#ffd43b}
+  #roul .cap{font:22px "Jua",sans-serif;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.3)}
+  #roul.done .win{animation:won .5s ease-out} @keyframes won{30%{transform:scale(1.08)}}
   .body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:4px;flex:1}
   .card h2{font-family:"Jua",sans-serif;font-weight:400;font-size:clamp(17px,4.6vw,21px);margin:0;line-height:1.2}
   .card p{margin:0;font-size:12.5px;line-height:1.4;color:var(--ink-soft);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -52,6 +69,7 @@
   <div id="list"></div>
 </main>
 <button class="run" id="run">🎲 랜덤 플레이</button>
+<div id="roul"><div class="cap" id="rcap">두구두구두구…</div><div class="win" id="rwin"><span class="ptr l"></span><span class="ptr r"></span></div></div>
 <script>
   const { GAMES } = Arcade;
   const TILE = { softserve: '#ffe3ec', skydive: '#d0ebff', stock: '#1b2240', moktak: '#f3d9c4', door: '#ffe8cc', elevator: '#dbe4ff', halo: '#fff3bf', cine: '#2b2438', cat: '#ffe8cc', soccer: '#d3f9d8', inventory: '#30251c', dialect: '#e5dbff', popcorn: '#3b2716', shop: '#fff0f6', sake: '#3b2416', radio: '#0b1030', tower: '#d0ebff', inspect: '#fff4e6', bus: '#d0ebff', court: '#3b2416', fight: '#2b1d3a', checkout: '#fff5f5' };
@@ -60,18 +78,61 @@
   const ORDER = [...GAMES.filter(g => HOT.includes(g.id)), ...GAMES.filter(g => !HOT.includes(g.id))];
   document.getElementById('sub').textContent = `3D 미니게임 ${GAMES.length}종 · 골라서 or 랜덤으로!`;
   document.getElementById('list').innerHTML = ORDER.map((g, i) => `
-    <a class="card ${HOT.includes(g.id) ? 'is-hot' : ''}" href="${g.file}">
+    <a class="card ${HOT.includes(g.id) ? 'is-hot' : ''}" data-id="${g.id}" href="${g.file}">
       <div class="tile"><img src="thumbs/${g.id}.png" alt="${g.name}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${g.emoji}',style:'font-size:56px'}))"></div>
       <span class="num">#${GAMES.indexOf(g) + 1}</span>${HOT.includes(g.id) ? '<span class="new hot">🔥 HOT</span>' : NEW.has(g.id) ? '<span class="new">NEW</span>' : ''}
       <div class="body"><h2>${g.name}</h2><p>${g.desc}</p>
       ${best(g.bestKey) ? `<span class="best">🏆 ${best(g.bestKey)}${g.unit}</span>` : ''}</div>
     </a>`).join('');
+  // 🎲 random play: slot-machine reel that slows down and lands on a game
+  let spinning = false;
   document.getElementById('run').onclick = () => {
+    if (spinning) return; spinning = true;
     let last = ''; try { last = sessionStorage.getItem('last-random') || ''; } catch {}
-    const pool = GAMES.filter(g => g.id !== last), g = pool[(Math.random() * pool.length) | 0];
-    try { sessionStorage.setItem('last-random', g.id); } catch {}
-    location.href = g.file;
+    const pool = GAMES.filter(g => g.id !== last), pick = pool[(Math.random() * pool.length) | 0];
+    try { sessionStorage.setItem('last-random', pick.id); } catch {}
+    const R = document.getElementById('roul'), win = document.getElementById('rwin'), cap = document.getElementById('rcap');
+    R.className = 'on'; cap.textContent = '두구두구두구…';
+    const steps = 26 + ((Math.random() * 6) | 0); let i = (Math.random() * GAMES.length) | 0, n = 0;
+    const show = (g, d) => {
+      win.querySelectorAll('.item').forEach(el => { el.classList.remove('in'); el.style.setProperty('--d', d + 's'); el.classList.add('out'); setTimeout(() => el.remove(), d * 1000); });
+      const el = document.createElement('div'); el.className = 'item in'; el.style.setProperty('--d', d + 's');
+      el.innerHTML = `<img src="thumbs/${g.id}.png" alt=""><b>${g.name}</b>`; win.appendChild(el);
+    };
+    const step = () => {
+      n++; const left = steps - n, g = left === 0 ? pick : GAMES[(i += 1 + ((Math.random() * 3) | 0)) % GAMES.length];
+      const d = .05 + Math.pow(1 - left / steps, 3) * .38;   // decelerate: 두두두둑
+      show(g, Math.min(.3, d)); Arcade.sfx.tick(); Arcade.vibrate(5);
+      if (left > 0) setTimeout(step, d * 1000);
+      else setTimeout(() => {
+        R.classList.add('done'); cap.textContent = `🎉 ${pick.name}!`; Arcade.sfx.fanfare(); Arcade.confetti({ y: innerHeight * .45, count: 70 });
+        setTimeout(() => { location.href = pick.file; }, 1300);
+      }, 250);
+    };
+    step();
   };
+  // live 3D on hover: the card's model comes alive in a shared WebGL canvas
+  if (matchMedia('(hover:hover)').matches) {
+    let mod = null, R3 = null, live = null;
+    const ensure = async () => {
+      if (mod) return;
+      mod = await import('./thumbs/models.js');
+      R3 = new mod.THREE.WebGLRenderer({ antialias: true, alpha: true }); R3.setPixelRatio(Math.min(devicePixelRatio, 2));
+      R3.outputColorSpace = mod.THREE.SRGBColorSpace; R3.shadowMap.enabled = true; R3.domElement.className = 'live';
+    };
+    const loop = now => { if (!live) return; live.st.tick((now - live.t0) / 1000); R3.render(live.st.scene, live.st.camera); requestAnimationFrame(loop); };
+    document.querySelectorAll('.card').forEach(card => {
+      const id = card.dataset.id, tile = card.querySelector('.tile');
+      card.addEventListener('pointerenter', async () => {
+        try { await ensure(); } catch { return; }
+        if (!card.matches(':hover')) return;
+        const w = tile.clientWidth, h = tile.clientHeight; R3.setSize(w, h, false);
+        live = { card, st: mod.stage(id, w, h), t0: performance.now() - 1000 };
+        tile.appendChild(R3.domElement); tile.classList.add('live-on'); requestAnimationFrame(loop);
+      });
+      card.addEventListener('pointerleave', () => { if (live?.card === card) live = null; tile.classList.remove('live-on'); if (R3?.domElement.parentNode === tile) R3.domElement.remove(); });
+    });
+  }
   // gentle 3D tilt toward the cursor
   if (matchMedia('(hover:hover)').matches) document.querySelectorAll('.card').forEach(c => {
     c.addEventListener('pointermove', e => { const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;

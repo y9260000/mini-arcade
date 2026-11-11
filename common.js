@@ -41,8 +41,10 @@
       desc: '곰팡이·누수·바퀴벌레… 매물의 하자를 찾아 집값 깎기' },
     { id: 'bus', file: 'bus.html', name: '급정거 버티기', emoji: '🚌', unit: '정거장', bestKey: 'bus-best',
       desc: '급정거·급출발·방지턱! 좌우로 버티며 안 넘어지고 최대한 많은 정거장' },
-    { id: 'court', file: 'court.html', name: '법정 속기사', emoji: '⌨️', unit: '단어', bestKey: 'court-best',
-      desc: '타자기 탁탁 드르륵 띵! 법정의 말을 단어 단위로 빠르게 받아 적기' },
+    { id: 'court', file: 'court.html', name: '법정 속기사', emoji: '⌨️', unit: '글자', bestKey: 'court-best',
+      desc: '타자기 탁탁 드르륵 띵! 법정의 말을 진짜로 타이핑해 받아 적기' },
+    { id: 'fight', file: 'fight.html', name: '커맨드 파이터', emoji: '🥋', unit: '점', bestKey: 'fight-best',
+      desc: '↓→👊! 커맨드를 시간 안에 입력해 필살기 발사. 갈수록 촉박해져요' },
   ];
 
   const q = new URLSearchParams(location.search);

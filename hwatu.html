@@ -118,17 +118,31 @@ function fitCamera() {
 }
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCards(); });
 
+// ---------- 찰진 화투 소리: a sharp card slap (crack + wood knock + low thud) ----------
+let AC = null, NB = null;
+function ac() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); NB = AC.createBuffer(1, AC.sampleRate * .3, AC.sampleRate); const d = NB.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; } catch {} } if (AC?.state === 'suspended') AC.resume(); return AC; }
+function slap(power = 1, delay = 0) {
+  const c = ac(); if (!c) return; const t = c.currentTime + delay;
+  const n = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(); n.buffer = NB; f.type = 'highpass'; f.frequency.value = 1800;
+  g.gain.setValueAtTime(.9 * power, t); g.gain.exponentialRampToValueAtTime(.001, t + .06); n.connect(f).connect(g).connect(c.destination); n.start(t, Math.random() * .2); n.stop(t + .08);
+  const o = c.createOscillator(), og = c.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(420, t); o.frequency.exponentialRampToValueAtTime(140, t + .07);
+  og.gain.setValueAtTime(.5 * power, t); og.gain.exponentialRampToValueAtTime(.001, t + .09); o.connect(og).connect(c.destination); o.start(t); o.stop(t + .1);
+  const b = c.createOscillator(), bg = c.createGain(); b.frequency.setValueAtTime(110, t); b.frequency.exponentialRampToValueAtTime(45, t + .12);
+  bg.gain.setValueAtTime(.7 * power, t); bg.gain.exponentialRampToValueAtTime(.001, t + .14); b.connect(bg).connect(c.destination); b.start(t); b.stop(t + .15);
+}
+addEventListener('pointerdown', ac, { capture: true });
 // ---------- game ----------
+let matchedCount = 0, shuffleAt = 99;
 let state = 'ready', stage = 0, score = 0, timeLeft = 60, open = [], busy = false, pairsLeft = 0, combo = 0, hints = 3, overAt = 0, preview = 0, misses = 0;
 let best = 0; try { best = +localStorage.getItem('hwatu-best') || 0; } catch {}
 const showScreen = html => { $('center').innerHTML = html; $('center').style.display = ''; };
 showScreen(Arcade.titleScreen({ emoji: '🎴', title: '화투 짝맞추기', how: [
   ['🎴', '같은 <b>달(월)</b> 화투 두 장을 찾아 뒤집어요'],
-  ['👀', '처음 몇 초 동안 모든 패를 보여드려요. 잘 기억하세요!'],
-  ['💡', '막히면 <b>힌트</b> 버튼 (단계마다 3번)'],
-  ['⏱', '시간 안에 다 맞추면 다음 단계. 천천히, 차근차근!'],
+  ['👀', '처음 <b>잠깐만</b> 패를 보여줘요. 순간 기억력 승부!'],
+  ['💡', '틀리면 <b>-2초</b> · 3단계부터 패가 섞여요 · 힌트는 2번'],
+  ['⏱', '시간 안에 다 맞추면 다음 단계. 연속으로 맞추면 점수 UP!'],
 ], cta: '시작하기' }));
-const PAIRS = [6, 8, 10, 12, 12];
+const PAIRS = [6, 8, 10, 12, 12, 12];
 function updateHud() {
   $('score').innerHTML = `${score}<small>점</small>`; $('stage').textContent = `${stage + 1}단계`;
   $('left').textContent = `남은 짝 ${pairsLeft}`; $('hint').textContent = `💡 힌트 ${hints}`; $('hint').disabled = hints <= 0 || state !== 'playing';
@@ -136,31 +150,41 @@ function updateHud() {
 function say(t) { const e = $('say'); e.textContent = t; e.classList.remove('show'); void e.offsetWidth; e.classList.add('show'); }
 function flip(c, up) { c.from = c.g.rotation.z; c.to = up ? 0 : Math.PI; c.flipT = 0; c.up = up; }
 function setupStage() {
-  cards.forEach(c => scene.remove(c.g)); cards = []; open = []; busy = false; combo = 0; hints = 3;
+  matchedCount = 0;
+  cards.forEach(c => scene.remove(c.g)); cards = []; open = []; busy = false; combo = 0; hints = 2; shuffleAt = stage >= 2 ? 2 : 99;
   const n = PAIRS[Math.min(stage, PAIRS.length - 1)], months = shuffle([...Array(12).keys()]).slice(0, n);
   const deck = shuffle(months.flatMap(m => [makeCard(m, 0), makeCard(m, 1)]));
   cards = deck; pairsLeft = n; placeCards();
   cards.forEach(c => { c.g.rotation.z = 0; c.up = true; c.to = 0; c.flipT = 1; });   // face up for the preview
-  preview = Math.max(3, 5 - stage * .5); timeLeft = 45 + n * 7 - stage * 4;
+  preview = Math.max(1.4, 3 - stage * .35); timeLeft = Math.max(20, 22 + n * 3.4 - stage * 3);
   state = 'preview'; updateHud(); say('잘 보세요! 👀');
+}
+// from stage 3: after a couple of matches the face-down cards swap places
+function shuffleRest() {
+  if (state !== 'playing') return;
+  const rest = cards.filter(c => !c.matched && !c.up); if (rest.length < 3) return;
+  const pos = shuffle(rest.map(c => c.g.position.clone()));
+  rest.forEach((c, i) => { c.slide = { from: c.g.position.clone(), to: pos[i], t: 0 }; });
+  say('🌀 패가 섞인다!'); slap(.6); slap(.6, .12); slap(.6, .24); Arcade.vibrate([20, 20, 20, 20, 20]);
 }
 function startPlay() { state = 'playing'; cards.forEach(c => flip(c, false)); Arcade.sfx.whoosh(); updateHud(); say('시작!'); }
 function pick(c) {
   if (state !== 'playing' || busy || c.up || c.matched) return;
-  flip(c, true); open.push(c); Arcade.sfx.thud(); Arcade.vibrate(15);
+  flip(c, true); open.push(c); slap(.7); Arcade.vibrate(18);
   if (open.length < 2) return;
   const [a, b] = open; busy = true;
   if (a.month === b.month) {
     setTimeout(() => {
       a.matched = b.matched = true; open = []; busy = false; combo++; pairsLeft--;
-      const pts = 100 + (combo - 1) * 50; score += pts; Arcade.sfx.coin(); Arcade.vibrate([20, 30, 40]);
+      const pts = 100 + (combo - 1) * 50; score += pts; slap(1.2); slap(1, .09); Arcade.sfx.coin(); Arcade.vibrate([30, 40, 70]); Arcade.shake(.18);
+      matchedCount++; if (matchedCount === shuffleAt) setTimeout(shuffleRest, 450);
       say(combo >= 2 ? `${combo}연속! 착착! +${pts}` : `짝! +${pts}`);
       if (pairsLeft === 0) stageClear();
       updateHud();
     }, 380);
   } else {
-    misses++; combo = 0;
-    setTimeout(() => { flip(a, false); flip(b, false); open = []; busy = false; Arcade.sfx.tap(); }, 1000);   // a full second to look before they turn back
+    misses++; combo = 0; timeLeft = Math.max(0, timeLeft - 2); Arcade.vibrate([60, 30, 60]); Arcade.sfx.miss(); say('땡! -2초');
+    setTimeout(() => { flip(a, false); flip(b, false); open = []; busy = false; slap(.4); }, 650);
   }
 }
 function stageClear() {
@@ -206,9 +230,10 @@ function frame(now) {
   if (state === 'playing') { timeLeft -= dt; if (timeLeft <= 0) { timeLeft = 0; finish(); } }
   $('time').textContent = `⏱ ${Math.ceil(Math.max(0, timeLeft))}`; $('time').classList.toggle('low', state === 'playing' && timeLeft < 10);
   for (const c of cards) {
-    if (c.flipT < 1) { c.flipT = Math.min(1, c.flipT + dt * 3.2); const e = c.flipT < .5 ? 2 * c.flipT * c.flipT : 1 - Math.pow(-2 * c.flipT + 2, 2) / 2; c.g.rotation.z = c.from + (c.to - c.from) * e; c.g.position.y = Math.sin(c.flipT * Math.PI) * .6; }
+    if (c.flipT < 1) { c.flipT = Math.min(1, c.flipT + dt * 4.6); const e = c.flipT < .5 ? 2 * c.flipT * c.flipT : 1 - Math.pow(-2 * c.flipT + 2, 2) / 2; c.g.rotation.z = c.from + (c.to - c.from) * e; c.g.position.y = Math.sin(c.flipT * Math.PI) * .6; }
     else c.g.position.y = c.matched ? .08 + Math.sin(t * 3 + c.month) * .03 : 0;
     if (c.matched) c.m.material[2].emissive?.setHex(0x332200);
+    if (c.slide) { c.slide.t = Math.min(1, c.slide.t + dt * 2); const k = c.slide.t; c.g.position.lerpVectors(c.slide.from, c.slide.to, k * k * (3 - 2 * k)); c.g.position.y = Math.sin(k * Math.PI) * .9; if (k >= 1) c.slide = null; }
     if (c.hint > 0) { c.hint -= dt; c.g.position.y = .25 + Math.abs(Math.sin(t * 10)) * .15; }   // hinted pair hops
   }
   renderer.render(scene, camera);

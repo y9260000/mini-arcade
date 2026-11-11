@@ -27,6 +27,8 @@
   .info .live{background:#fff5f5;color:#e03131;border-radius:10px;padding:8px 10px;font-weight:700;animation:lv 1.2s infinite}
   @keyframes lv{50%{background:#ffe3e3}}
   .rev{display:flex;gap:8px;overflow:hidden} .rev div{flex:0 0 46%;background:#f8f9fa;border-radius:12px;padding:9px;font-size:12px;line-height:1.4}
+  .hcv{position:absolute;left:-30%;top:0;width:160%;height:220%;pointer-events:none;transition:opacity .6s,transform 1.1s cubic-bezier(.65,0,.2,1)}
+  #scene:not(.far) .hcv{opacity:0;transform:translateY(35%)}
   .hand{pointer-events:none;transition:opacity .6s,transform 1.1s cubic-bezier(.65,0,.2,1)}
   #scene:not(.far) .hand{opacity:0;transform:translate(-50%,-30%)}
   .hand i{position:absolute;display:block;background:linear-gradient(90deg,#e8b48a,#f6cfa6 45%,#e3a87c);border:3px solid #c98d62;box-sizing:border-box}
@@ -104,7 +106,7 @@
 </style>
 </head>
 <body>
-<div id="scene" class="far"><div class="dev hand"><i class="palm"></i></div><div class="dev" id="device"><div id="phone">
+<div id="scene" class="far"><canvas id="hb" class="hcv"></canvas><div class="dev" id="device"><div id="phone">
   <div id="top"><div class="row"><span id="logo">🔥핫딜몰</span><span id="stage">1단계</span><span id="stock">남은 수량 7개</span></div><div id="tbar"><i id="tf"></i></div></div>
   <div id="page">
     <div id="hero"><span class="tag">타임딜</span><span id="pem">🐟</span></div>
@@ -122,7 +124,7 @@
   <div id="layer"></div>
   <div id="done"><div class="e">🛍️</div><div id="dmsg">구매 성공!</div></div>
 </div>
-</div><div class="dev hand"><i class="thumb"></i><i class="fg" style="bottom:46%"></i><i class="fg" style="bottom:37%"></i><i class="fg" style="bottom:28%"></i><i class="fg" style="bottom:19%;width:62px"></i></div></div>
+</div><canvas id="hf" class="hcv"></canvas></div>
 <div class="screen" id="center"></div>
 
 <script>
@@ -445,6 +447,38 @@ function loop() {
   draw();
   if (show > .02 || held) raf = requestAnimationFrame(loop); else raf = 0;
 }
+// ---- blocky 3D hand holding the phone (palm behind, thumb + fingers in front), lives inside #scene
+const hb = new THREE.WebGLRenderer({ canvas: document.getElementById('hb'), antialias: true, alpha: true });
+const hf = new THREE.WebGLRenderer({ canvas: document.getElementById('hf'), antialias: true, alpha: true });
+const backS = new THREE.Scene(), frontS = new THREE.Scene();
+for (const sc of [backS, frontS]) { sc.add(new THREE.HemisphereLight(0xffffff, 0xe0c2a8, 2.1)); const d = new THREE.DirectionalLight(0xffffff, 1.6); d.position.set(-300, 500, 800); sc.add(d); }
+const hcam = new THREE.OrthographicCamera(0, 1, 0, -1, -2000, 2000);
+function buildHold() {
+  const W = innerWidth, H = innerHeight, dev = document.getElementById('device'), dw = dev.offsetWidth, dh = dev.offsetHeight, cx = W / 2, cy = H / 2;
+  for (const r2 of [hb, hf]) { r2.setPixelRatio(Math.min(devicePixelRatio, 2)); r2.setSize(W * 1.6, H * 2.2, false); }
+  hcam.left = -W * .3; hcam.right = W * 1.3; hcam.bottom = -H * 2.2; hcam.updateProjectionMatrix();
+  for (const sc of [backS, frontS]) for (let i = sc.children.length - 1; i >= 0; i--) if (sc.children[i].isMesh || sc.children[i].isGroup) sc.remove(sc.children[i]);
+  const u = dw / 300;   // scale unit relative to the phone width
+  const P = (sc, w, h, d, m, x, y, z = 0, rz = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w * u, h * u, d * u), m); o.position.set(x, -y, z); o.rotation.set(-.18, .32, rz); sc.add(o); return o; };
+  const by = cy + dh * .5;   // phone bottom edge (screen y)
+  const L = cx - dw / 2, Rr = cx + dw / 2;
+  // behind: palm under the phone, fingers reaching to the right edge, wrist and sleeve going off-screen
+  P(backS, 340, 300, 90, skin, cx + 10 * u, by + 20 * u);
+  P(backS, 90, 330, 70, skin, Rr - 10 * u, by - 170 * u);
+  P(backS, 190, 150, 80, skin, cx + 20 * u, by + 230 * u);
+  P(backS, 250, 70, 100, cuff, cx + 20 * u, by + 320 * u);
+  P(backS, 240, 800, 90, sleeve, cx + 20 * u, by + 740 * u);
+  // front: thumb rising from the palm over the left edge, fingertips curling over the right edge
+  P(frontS, 64, 230, 56, skin, L + 2 * u, by - 150 * u, 0, -.28);
+  P(frontS, 40, 30, 58, nail, L + 32 * u, by - 250 * u, 30, -.28);
+  for (let i = 0; i < 4; i++) {
+    const y = by - (340 - i * 64) * u, w = i === 3 ? 48 : 56;
+    P(frontS, w, 50, 56, skin, Rr - 6 * u, y, 0, .06);
+    P(frontS, 8, 44, 58, skinD, Rr - 30 * u, y, 2, .06);
+  }
+  hb.render(backS, hcam); hf.render(frontS, hcam);
+}
+buildHold(); addEventListener('resize', buildHold);
 window.__hand = {
   down(x, y) { if (!hand.visible) show = 0; tx = x; ty = y; held = true; if (!raf) raf = requestAnimationFrame(loop); },
   up() { setTimeout(() => { held = false; if (!raf) raf = requestAnimationFrame(loop); }, 160); },

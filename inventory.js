@@ -81,7 +81,15 @@ function place(i,x,y){if(state!=='playing')return false;if(performance.now()>=de
   i.x=x;i.y=y;i.placed=true;i.drop=1;selected=null;drag=null;Arcade.sfx.kaching();Arcade.vibrate(i.cells.length>=4?50:30);shake=2.5;puzzle.items.forEach(shapeMeshes);updateHud();$('hint').textContent='착! 다음 장비도 딱 맞게 담아보세요';
   if(complete(puzzle)){state='solved';updateHud();Arcade.sfx.perfect(4);Arcade.vibrate([40,45,70]);shake=9;Arcade.confetti({x:innerWidth/2,y:layout.top+layout.height/2,colors:['#efc570','#e9a065','#b4c6e6']});$('hint').textContent='빈틈없이 딱 맞았다!';const left=Math.max(0,(deadline-performance.now())/1000);finishTimer=setTimeout(()=>finish(true,left),900);}return true;
 }
-function rotate(){if(state!=='playing'||!selected)return;const i=selected,cells=turn(i.cells);if(i.placed&&!canPlace(puzzle,i,i.x,i.y,cells)){reject();return;}i.cells=cells;i.drop=.5;shapeMeshes(i);Arcade.sfx.whoosh(true);Arcade.vibrate(18);$('hint').textContent='빙글! 빈칸의 모양과 맞춰보세요';}
+function rotate(){if(state!=='playing'||!selected)return;const i=selected,cells=turn(i.cells);let msg='빙글! 빈칸의 모양과 맞춰보세요';
+  if(i.placed&&!canPlace(puzzle,i,i.x,i.y,cells)){
+    // a placed item can always be rotated: nudge it to the nearest spot where the new shape fits, otherwise lift it back out (still rotated)
+    const tries=[];for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)tries.push([dx,dy]);tries.sort((a,b)=>Math.abs(a[0])+Math.abs(a[1])-Math.abs(b[0])-Math.abs(b[1]));
+    const spot=tries.find(([dx,dy])=>canPlace(puzzle,i,i.x+dx,i.y+dy,cells));
+    if(spot){i.x+=spot[0];i.y+=spot[1];msg='빙글! 옆으로 살짝 옮겨서 돌렸어요';}
+    else{i.placed=false;i.x=null;i.y=null;msg='빙글! 그 자리엔 안 맞아서 꺼냈어요. 다른 곳에 놓아보세요';}
+  }
+  i.cells=cells;i.drop=.5;puzzle.items.forEach(shapeMeshes);updateHud();Arcade.sfx.whoosh(true);Arcade.vibrate(18);$('hint').textContent=msg;}
 function remove(){if(state!=='playing'||!selected?.placed)return;selected.placed=false;selected.x=null;selected.y=null;selected.drop=.5;Arcade.sfx.pop(.8);Arcade.vibrate(22);updateHud();$('hint').textContent='다시 꺼냈어요. 회전해서 다른 곳에 놓아보세요';}
 $('rotate').onclick=rotate;$('remove').onclick=remove;
 addEventListener('pointermove',e=>{if(!drag||state!=='playing')return;drag.x=e.clientX;drag.y=e.clientY;if(!drag.moved&&Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)>6){drag.moved=true;Arcade.vibrate(10);}if(drag.moved){e.preventDefault();showPreview();}},{passive:false});
@@ -113,4 +121,5 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
   puzzle.items.forEach(i=>{const t=targetFor(i),v=world(t.x,t.y,t.z);if(!i.pos)i.pos=v.clone();const blend=1-Math.exp(-dt*22);i.pos.lerp(v,blend);i.drop=Math.max(0,i.drop-dt*4);i.group.position.copy(i.pos);i.group.position.z+=Math.sin(i.drop*Math.PI)*14;i.group.scale.setScalar(t.scale*(1+Math.sin(i.drop*Math.PI*2)*.05));i.group.rotation.z=selected===i?Math.sin(now*.005)*.025:0;i.group.visible=true;});
   camera.position.x=(Math.random()-.5)*shake;camera.position.y=(Math.random()-.5)*shake;shake*=Math.exp(-dt*18);renderer.render(scene,camera);requestAnimationFrame(frame);
 }
-setupItems();buildControls();resize();showIntro();requestAnimationFrame(frame);
+setupItems();buildControls();resize();showIntro();window.__inv={get puzzle(){return puzzle;},get state(){return state;},choose,place,rotate,get selected(){return selected;}};
+requestAnimationFrame(frame);

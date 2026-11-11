@@ -208,12 +208,24 @@ export const M = {
     G.userData.noShadow = true;
     return t => { d.rotation.set(.55 + (t - 1) * 2.2, .75 + (t - 1) * 3, .1); };
   },
-  favicon() {   // little arcade joystick in brand blue
-    box(1.8, .6, 1.4, 0x2d6ff0, 0, -.6, 0); box(1.82, .1, 1.42, 0x1f54c4, 0, -.3, 0);
-    const stick = grp(-.3, -.3, 0); cyl(.09, .09, 1, 0x343a40, 0, .5, 0, 0, 0, 0, stick); sph(.32, 0xff5252, 0, 1.02, 0, stick); stick.rotation.z = -.25;
-    const b1 = sph(.18, 0xffd43b, .45, -.22, .2, G, 10, 6); b1.scale.y = .5; const b2 = sph(.18, 0x51cf66, .45, -.22, -.25, G, 10, 6); b2.scale.y = .5;
-    return t => { stick.rotation.z = Math.sin(t * 4) * .35; stick.rotation.x = Math.cos(t * 3) * .25; b1.position.y = -.22 - (Math.sin(t * 8) > .5 ? .05 : 0); b2.position.y = -.22 - (Math.sin(t * 8 + 2) > .5 ? .05 : 0); };
+  favicon() {   // 콩알 mascot: a chubby blue bean with a face, holding a tiny gamepad
+    const b = grp(); b.rotation.z = -.32;
+    const bodyG = new THREE.SphereGeometry(1, 32, 24), p = bodyG.attributes.position, v = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); v.x *= .82; v.y *= 1.12; v.z *= .78; v.x -= Math.max(0, v.y) * .0 + (1 - v.y * v.y) * .12 * Math.sign(v.x) * (v.x < 0 ? 1.4 : 0); p.setXYZ(i, v.x, v.y, v.z); }
+    bodyG.computeVertexNormals();
+    b.add(new THREE.Mesh(bodyG, new THREE.MeshStandardMaterial({ color: 0x2d6ff0, roughness: .35 })));
+    const shine = sph(.16, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .75 }), .32, .62, .58, b, 12, 8); shine.scale.set(1, 1.6, .5);
+    for (const sx of [-1, 1]) { const e = sph(.11, 0x16171a, sx * .26, .18, .74, b, 12, 8); e.scale.set(1, 1.35, .6); sph(.035, glow(0xffffff), sx * .26 + .03, .24, .8, b, 6, 4);
+      const ch = sph(.1, new THREE.MeshBasicMaterial({ color: 0xff8fab, transparent: true, opacity: .8 }), sx * .44, -.05, .66, b, 10, 6); ch.scale.set(1.3, .7, .4); }
+    tor(.1, .025, 0x16171a, 0, .0, .76, 0, 0, Math.PI, b, Math.PI);   // smile
+    const pad = grp(0, -.75, .72, b); pad.rotation.x = -.3; box(.86, .34, .18, 0xffffff, 0, 0, 0, 0, 0, 0, pad);
+    box(.18, .06, .04, 0x343a40, -.2, 0, .1, 0, 0, 0, pad); box(.06, .18, .04, 0x343a40, -.2, 0, .1, 0, 0, 0, pad);
+    sph(.05, 0xff5252, .18, .05, .1, pad, 8, 6); sph(.05, 0xffd43b, .28, -.05, .1, pad, 8, 6);
+    for (const sx of [-1, 1]) { const h = sph(.14, 0x2d6ff0, sx * .48, -.7, .7, b, 12, 8); h.scale.set(1, .85, .8); }   // little hands
+    G.userData.noShadow = true; G.userData.front = true;
+    return t => { b.position.y = Math.abs(Math.sin(t * 3)) * .12; b.rotation.z = -.32 + Math.sin(t * 2) * .08; };
   },
+
 };
 
 
@@ -227,7 +239,7 @@ export function stage(id, w, h) {
   G = new THREE.Group(); scene.add(G); const anim = M[id]();
   const model = G, bb = new THREE.Box3().setFromObject(G), size = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
   const pivot = new THREE.Group(); scene.remove(G); pivot.add(G); G.position.sub(c);
-  const outer = new THREE.Group(); outer.add(pivot); scene.add(outer); outer.rotation.set(.32, -.45, 0);
+  const outer = new THREE.Group(); outer.add(pivot); scene.add(outer); outer.rotation.set(G.userData.front ? .08 : .32, G.userData.front ? -.15 : -.45, 0);
   const sh = new THREE.Mesh(new THREE.CircleGeometry(1, 32), new THREE.MeshBasicMaterial({ color: 0x0b1a3a, transparent: true, opacity: .16 }));
   sh.visible = !G.userData.noShadow; sh.rotation.x = -Math.PI / 2; sh.scale.set(size.x * .55, size.z * .55 + .2, 1); sh.position.y = -size.y / 2 - .02; outer.add(sh);
   const aspect = w / h, cam = new THREE.PerspectiveCamera(30, aspect, .1, 100);
@@ -239,7 +251,7 @@ export function stage(id, w, h) {
     model.position.set(0, 0, 0); model.rotation.set(0, 0, 0);
     if (anim) anim(t);
     model.position.sub(base);
-    outer.rotation.y = -.45 + Math.sin(t * 1.3) * .32;
+    outer.rotation.y = (G.userData.front ? -.15 : -.45) + Math.sin(t * 1.3) * .32;
   };
   return { scene, camera: cam, tick };
 }

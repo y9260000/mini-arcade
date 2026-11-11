@@ -89,7 +89,7 @@
 <script>
   const { GAMES } = Arcade;
   const best = k => { try { return +localStorage.getItem(k) || 0; } catch { return 0; } };
-  const NEW = new Set(GAMES.slice(-4).map(g => g.id)), HOT = ['soccer', 'fight', 'checkout', 'court'];
+  const NEW = new Set(GAMES.slice(-4).map(g => g.id)), HOT = ['soccer', 'fight', 'checkout', 'court', 'stock', 'tower'];
   const TABS = [
     ['전체', () => GAMES],
     ['인기', () => GAMES.filter(g => HOT.includes(g.id))],

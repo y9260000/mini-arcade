@@ -195,17 +195,18 @@ export const M = {
     const cart = grp(.65, -.75, .55); box(.5, .3, .3, 0xffd43b, 0, 0, 0, 0, 0, 0, cart); cyl(.06, .06, .05, 0x212529, -.15, -.2, .15, Math.PI / 2, 0, 0, cart); cyl(.06, .06, .05, 0x212529, .15, -.2, .15, Math.PI / 2, 0, 0, cart);
     return t => { const k = (t * .8) % 2; ad.scale.setScalar(k < 1 ? Math.min(1, k * 4) : Math.max(0, 1 - (k - 1) * 4)); ad2.scale.setScalar(k > .5 && k < 1.5 ? Math.min(1, (k - .5) * 4) : Math.max(0, 1 - Math.abs(k - 1.5) * 4) * (k >= 1.5 ? 1 : 0)); cart.position.x = .65 + Math.sin(t * 3) * .08; cart.rotation.z = Math.sin(t * 6) * .08; };
   },
-  dice() {   // random-play die: rounded white cube with red/black pips
-    const d = grp(); d.rotation.set(.5, .7, .15);
-    box(1.6, 1.6, 1.6, 0xffffff, 0, 0, 0, 0, 0, 0, d);
-    for (const [x, y, z] of [[1, 1, 0], [1, -1, 0], [-1, 1, 0], [-1, -1, 0], [1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1], [0, 1, 1], [0, -1, 1], [0, 1, -1], [0, -1, -1]]) {
-      const e = new THREE.Mesh(new THREE.CylinderGeometry(.16, .16, 1.6, 8), mat(0xf1f3f5)); e.position.set(x * .8, y * .8, z * .8);
-      if (z === 0) e.rotation.set(0, 0, 0); else if (y === 0) e.rotation.set(0, 0, Math.PI / 2); else e.rotation.set(Math.PI / 2, 0, 0); d.add(e); }
-    const pip = (x, y, z, c = 0x212529) => { const p = sph(.17, c, x, y, z, d, 10, 8); p.scale.set(Math.abs(x) > .79 ? .35 : 1, Math.abs(y) > .79 ? .35 : 1, Math.abs(z) > .79 ? .35 : 1); };
-    pip(0, 0, .81, 0xf03e3e);                                                     // front: 1
-    pip(.81, .4, .4); pip(.81, -.4, -.4); pip(.81, 0, 0);                          // right: 3
-    for (const [a, b] of [[-.4, -.4], [-.4, .4], [.4, -.4], [.4, .4]]) pip(a, .81, b);   // top: 4
-    return t => { d.rotation.set(.5 + t * 2.2, .7 + t * 3, .15); };
+  dice() {   // random-play die: rounded white cube with pips
+    const d = grp(); d.rotation.set(.55, .75, .1);
+    const g = new THREE.BoxGeometry(1.6, 1.6, 1.6, 10, 10, 10), p = g.attributes.position, v = new THREE.Vector3(), cl = new THREE.Vector3(), A = .56, RR = .24;
+    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); cl.set(Math.max(-A, Math.min(A, v.x)), Math.max(-A, Math.min(A, v.y)), Math.max(-A, Math.min(A, v.z))); v.sub(cl).normalize().multiplyScalar(RR).add(cl); p.setXYZ(i, v.x, v.y, v.z); }
+    g.computeVertexNormals();
+    d.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .35 })));
+    const pip = (x, y, z, c = 0x212529) => { const m = sph(.15, c, x, y, z, d, 12, 8); m.scale.set(Math.abs(x) > .7 ? .3 : 1, Math.abs(y) > .7 ? .3 : 1, Math.abs(z) > .7 ? .3 : 1); };
+    pip(0, 0, .79, 0xf03e3e);                                                       // front: 1
+    pip(.79, .36, .36); pip(.79, 0, 0); pip(.79, -.36, -.36);                      // right: 3
+    for (const [a, b] of [[-.34, -.34], [-.34, .34], [.34, -.34], [.34, .34]]) pip(a, .79, b);   // top: 4
+    G.userData.noShadow = true;
+    return t => { d.rotation.set(.55 + (t - 1) * 2.2, .75 + (t - 1) * 3, .1); };
   },
   favicon() {   // little arcade joystick in brand blue
     box(1.8, .6, 1.4, 0x2d6ff0, 0, -.6, 0); box(1.82, .1, 1.42, 0x1f54c4, 0, -.3, 0);
@@ -228,7 +229,7 @@ export function stage(id, w, h) {
   const pivot = new THREE.Group(); scene.remove(G); pivot.add(G); G.position.sub(c);
   const outer = new THREE.Group(); outer.add(pivot); scene.add(outer); outer.rotation.set(.32, -.45, 0);
   const sh = new THREE.Mesh(new THREE.CircleGeometry(1, 32), new THREE.MeshBasicMaterial({ color: 0x0b1a3a, transparent: true, opacity: .16 }));
-  sh.rotation.x = -Math.PI / 2; sh.scale.set(size.x * .55, size.z * .55 + .2, 1); sh.position.y = -size.y / 2 - .02; outer.add(sh);
+  sh.visible = !G.userData.noShadow; sh.rotation.x = -Math.PI / 2; sh.scale.set(size.x * .55, size.z * .55 + .2, 1); sh.position.y = -size.y / 2 - .02; outer.add(sh);
   const aspect = w / h, cam = new THREE.PerspectiveCamera(30, aspect, .1, 100);
   const r = Math.max(size.x, size.y, size.z) * .62, dist = r / Math.tan(THREE.MathUtils.degToRad(15)) * (aspect < 1.2 ? 1.2 : 1.12);
   cam.position.set(0, -size.y * .06, dist); cam.lookAt(0, -size.y * .06, 0);

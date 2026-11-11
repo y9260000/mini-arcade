@@ -25,14 +25,19 @@
   #atk .bar{height:10px;border-radius:5px;background:rgba(255,255,255,.2);overflow:hidden;margin-top:3px}
   #atk .bar i{display:block;height:100%;width:100%;background:#ff6b6b;transform-origin:left}
   #atk.danger .bar i{animation:dg .2s infinite} @keyframes dg{50%{background:#fff}}
-  #cmd{position:fixed;left:50%;transform:translateX(-50%);top:max(104px,calc(env(safe-area-inset-top) + 96px));z-index:3;pointer-events:none;text-align:center;width:min(640px,calc(100% - 24px))}
+  #cmd{position:fixed;left:50%;transform:translateX(-50%);top:max(100px,calc(env(safe-area-inset-top) + 92px));z-index:3;pointer-events:none;text-align:center;width:fit-content;max-width:calc(100% - 24px);box-sizing:border-box;padding:10px 18px 14px;border-radius:20px;background:rgba(18,12,30,.9);border:2px solid rgba(255,255,255,.14);box-shadow:0 10px 26px rgba(0,0,0,.45)}
+  #cmd:empty{display:none}
+  #cmd .jinx{display:inline-block;margin-top:6px;font:700 12px "Noto Sans KR",sans-serif;color:#2b2438;background:#ffd43b;border-radius:999px;padding:3px 10px;animation:jx .5s infinite alternate} @keyframes jx{to{transform:scale(1.08)}}
+  #cmd.blink .seq span:not(.hit){animation:blk .9s steps(1) infinite} @keyframes blk{0%,55%{opacity:1}56%,100%{opacity:0}}
+  #cmd .seq span.hide{color:transparent;background:#3b2d52;border-color:#6c5a8a}
+  #cmd .seq span.hide::after{content:"?";color:#b197fc}
   #cmd .nm{font:clamp(22px,5.5vw,32px) "Jua",sans-serif;color:#fff;text-shadow:0 3px 0 #5f3dc4}
   #cmd .lv{font:700 12px "Noto Sans KR",sans-serif;color:#d0bfff;margin-bottom:2px}
   #cmd .seq{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:8px}
-  #cmd .seq span{width:clamp(36px,9vw,52px);height:clamp(36px,9vw,52px);border-radius:12px;background:rgba(255,255,255,.18);border:3px solid rgba(255,255,255,.5);color:#fff;display:flex;align-items:center;justify-content:center;font:clamp(24px,6vw,34px) "Jua",sans-serif;transition:background .06s,transform .06s}
-  #cmd .seq span.cur{border-color:#ffd43b;background:rgba(255,212,59,.25);transform:scale(1.12);animation:cu .5s infinite}
+  #cmd .seq span{width:clamp(36px,9vw,52px);height:clamp(36px,9vw,52px);border-radius:12px;background:#fff;border:3px solid #fff;color:#2b2438;box-shadow:0 4px 0 #8f86a8;display:flex;align-items:center;justify-content:center;font:clamp(24px,6vw,34px) "Jua",sans-serif;transition:background .06s,transform .06s}
+  #cmd .seq span.cur{border-color:#ffd43b;background:#fff9db;transform:scale(1.12);animation:cu .5s infinite}
   @keyframes cu{50%{transform:scale(1.02)}}
-  #cmd .seq span.hit{background:#ffd43b;border-color:#ffd43b;color:#2b2438;transform:scale(.92)}
+  #cmd .seq span.hit{background:#51cf66;border-color:#51cf66;color:#fff;transform:scale(.92);box-shadow:0 2px 0 #2b8a3e}
   #cmd.bad .seq span{background:#e03131;border-color:#e03131;animation:bd .25s}
   @keyframes bd{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
   #cmd.go .seq span{background:#fff;color:#e8590c}
@@ -274,15 +279,21 @@ function newCommand() {
   const len = cmdLen(), seq = [];
   for (let i = 0; i < len; i++) { let a; do a = rnd(ARR); while (i >= 2 && a === seq[i - 1] && a === seq[i - 2]); seq.push(a); }
   const pool = MOVES.filter(m => m.min <= len), move = rnd(pool.filter(m => m !== lastMove)) || rnd(pool); lastMove = move;
-  cur = { move, seq, idx: 0 };
+  // penalties kick in as you progress: blinking arrows, memory (arrows hide), fog (only the next arrow shows)
+  const jc = lv < 5 ? 0 : Math.min(.55, (lv - 4) * .07), jinx = Math.random() < jc ? rnd(lv < 9 ? ['blink', 'memory'] : ['blink', 'memory', 'fog']) : null;
+  cur = { move, seq, idx: 0, jinx, born: performance.now() };
   const perKey = Math.max(.26, .8 - lv * .022 - round * .03);              // seconds per arrow, shrinking
-  atkMax = .5 + len * perKey; atkT = atkMax;
+  atkMax = .5 + len * perKey + (jinx === 'memory' ? .6 : jinx ? .3 : 0); atkT = atkMax;
   renderCmd();
 }
 function renderCmd(cls = '') {
   if (!cur) { $cmd.innerHTML = ''; return; }
-  $cmd.className = 'hud-ctl ' + cls;
-  $cmd.innerHTML = `<div class="lv">커맨드 ${cur.seq.length}개 · 데미지 ${dmgOf(cur.seq.length)}</div><div class="nm">${cur.move.name}</div><div class="seq">${cur.seq.map((a, i) => `<span class="${i < cur.idx ? 'hit' : i === cur.idx ? 'cur' : ''}">${ICON[a]}</span>`).join('')}</div>`;
+  $cmd.className = 'hud-ctl ' + cls + (cur.jinx === 'blink' && !cls ? ' blink' : '');
+  const memHidden = cur.jinx === 'memory' && performance.now() - cur.born > 1100;
+  const hidden = i => i >= cur.idx && !cls && ((cur.jinx === 'fog' && i > cur.idx) || memHidden);
+  const tag = { blink: '⚡ 깜빡임!', memory: '🧠 외워라! 곧 사라짐', fog: '🌫️ 안개! 다음 칸만 보임' }[cur.jinx];
+  $cmd.innerHTML = `<div class="lv">커맨드 ${cur.seq.length}개 · 데미지 ${dmgOf(cur.seq.length)}${cur.jinx ? ' · 보너스 ×1.5' : ''}</div><div class="nm">${cur.move.name}</div><div class="seq">${cur.seq.map((a, i) => `<span class="${i < cur.idx ? 'hit' : i === cur.idx ? 'cur' : ''}${hidden(i) ? ' hide' : ''}">${ICON[a]}</span>`).join('')}</div>${tag ? `<div class="jinx">${tag}</div>` : ''}`;
+  if (cur.jinx === 'memory' && !memHidden && !cur.memT) cur.memT = setTimeout(() => { if (cur && cur.jinx === 'memory') renderCmd(); }, 1150);
 }
 const dmgOf = len => Math.round(len * len * 1.1 + len * 2);   // 3→16, 5→38, 7→68
 function updateBars() {
@@ -314,12 +325,12 @@ function input(k) {
 }
 function failCmd(why) { enemyAttack(why); cur = null; gap = .8; setTimeout(() => { if (!cur) renderCmd(); }, 320); }
 function fire() {
-  const m = cur.move, len = cur.seq.length; renderCmd('go'); cur = null; gap = .55; lv++; combo++;
+  const m = cur.move, len = cur.seq.length, jinxed = !!cur.jinx; renderCmd('go'); cur = null; gap = .55; lv++; combo++;
   setTimeout(() => { if (!cur) renderCmd(); }, 380);
   me.pose = m.fx; me.poseT = 0;
   shout(m.name.replace(/^\S+\s/, '') + '!!');
   Arcade.sfx.whoosh(true); Arcade.vibrate([20, 30, 40]);
-  const dmg = Math.round(dmgOf(len) * (1 + Math.min(.5, combo * .05)));
+  const dmg = Math.round(dmgOf(len) * (1 + Math.min(.5, combo * .05)) * (jinxed ? 1.5 : 1));
   me.pose = POSE_OF[m.fx] || m.fx;
   if (FX[m.fx]) FX[m.fx](dmg, m);
   else if (m.fx === 'ball' || m.fx === 'ramen' || m.fx === 'storm') {
@@ -506,7 +517,7 @@ function animate(f, t, dt, dir) {
 // ---------- loop ----------
 let last = performance.now();
 reset(); showIntro();
-window.__fight = { get state() { return state; }, input, get hpE() { return hpE; }, get hpP() { return hpP; }, get round() { return round; }, get atkT() { return atkT; }, get cur() { return cur; }, get lv() { return lv; }, MOVES, FX, get foe() { return foe; }, setCombo(n) { combo = n; showCombo(); } };
+window.__fight = { get state() { return state; }, input, get hpE() { return hpE; }, get hpP() { return hpP; }, get round() { return round; }, get atkT() { return atkT; }, get cur() { return cur; }, get lv() { return lv; }, setLv(n) { lv = n; }, MOVES, FX, get foe() { return foe; }, setCombo(n) { combo = n; showCombo(); } };
 
 function frame(now) {
   let dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>사투리 통역사</title>
-<script src="common.js?v=18"></script>
+<script src="common.js?v=19"></script>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#cfe6ff;
     user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -117,6 +117,22 @@ const QS = [
   ['jj', '무사 경 햄수과?', ['왜', '그렇게', '하세요?'], ['무사히', '드세요?'], '무사 = 왜, 경 = 그렇게'],
   ['jj', '고맙수다', ['고맙습니다'], ['고마워요?', '죄송합니다'], '-수다 = -습니다'],
   ['jj', '놀멍 쉬멍 갑서', ['놀면서', '쉬면서', '가세요'], ['일하면서', '오세요'], '-멍 = -면서'],
+  ['gs', '내 쫌 보래이', ['나', '좀', '봐'], ['쫌', '봐라이'], '쫌 = 좀, 보래이 = 봐'],
+  ['gs', '니 와 이리 늦었노', ['너', '왜', '이렇게', '늦었니'], ['저렇게', '빨리'], '이리 = 이렇게'],
+  ['gs', '우짜노, 큰일 났데이', ['어떡해,', '큰일', '났어'], ['우짜', '작은일'], '우짜노 = 어떡해'],
+  ['gs', '그거 쫌 파이다', ['그거', '좀', '별로다'], ['파이다', '좋다'], '파이다 = 별로다'],
+  ['jl', '거시기, 그거 있잖여', ['그', '그거', '있잖아'], ['거시기', '없잖아'], '거시기 = 말이 안 떠오를 때 그거'],
+  ['jl', '쪼까 기다려 보랑께', ['조금', '기다려', '봐'], ['쪼까', '빨리'], '쪼까 = 조금'],
+  ['jl', '느그 집 어디여?', ['너희', '집', '어디야?'], ['느그', '누구'], '느그 = 너희'],
+  ['jl', '징하게 춥다잉', ['지독하게', '춥다'], ['징그럽게', '덥다'], '징하게 = 지독하게, 엄청'],
+  ['cc', '이거 얼마여유?', ['이거', '얼마예요?'], ['어디예요?', '저거'], '-여유 = -예요'],
+  ['cc', '개갈 안 나유', ['시원찮아요'], ['개가', '좋아요'], '개갈 안 나다 = 시원찮다'],
+  ['cc', '그려, 알았어', ['그래,', '알았어'], ['그려', '몰랐어'], '그려 = 그래'],
+  ['gw', '감재 마이 캤나?', ['감자', '많이', '캤니?'], ['감재', '심었니?'], '감재 = 감자'],
+  ['gw', '강냉이 좀 먹어봐요', ['옥수수', '좀', '먹어 봐요'], ['강냉이', '팔아요'], '강냉이 = 옥수수'],
+  ['jj', '이거 하르방 거우꽈?', ['이거', '할아버지', '거예요?'], ['하르방', '할머니'], '하르방 = 할아버지'],
+  ['jj', '정지에 이서', ['부엌에', '있어'], ['정자에', '없어'], '정지 = 부엌'],
+  ['jj', '저 낭 보라', ['저', '나무', '봐'], ['낭떠러지', '꽃'], '낭 = 나무'],
 ];
 // longer sentences (2 points), unlocked after a few correct answers
 const QH = [
@@ -132,6 +148,13 @@ const QH = [
   ['jj', '이디 와봅서, 이거 맛 좋수다', ['여기', '와 보세요,', '이거', '맛', '좋습니다'], ['이디', '나쁩니다'], '이디 = 여기'],
   ['jj', '무사 경 고만이 이서?', ['왜', '그렇게', '가만히', '있어?'], ['무사히', '고마워?'], '고만이 = 가만히'],
   ['jj', '혼저 옵서, 하영 먹읍서', ['어서', '오세요,', '많이', '드세요'], ['혼자', '하얗게'], '혼저 = 어서, 하영 = 많이'],
+  ['gs', '니 그거 우째 알았노? 내만 알았는데', ['너', '그거', '어떻게', '알았니?', '나만', '알았는데'], ['우째', '너만'], '우째 = 어떻게'],
+  ['gs', '마 됐다, 고마 집에 가자', ['아', '됐다,', '그만', '집에', '가자'], ['고마', '학교에'], '고마 = 그만'],
+  ['jl', '아따 겁나게 덥구마잉, 쪼까 쉬었다 가', ['아', '엄청', '덥네,', '조금', '쉬었다', '가'], ['쪼까', '춥네'], '쪼까 = 조금'],
+  ['jl', '느그 엄마 시방 어디 가셨당가?', ['너희', '엄마', '지금', '어디', '가셨니?'], ['느그', '언제'], '시방 = 지금, 느그 = 너희'],
+  ['cc', '천천히 혀, 그러다 넘어지겄어유', ['천천히', '해,', '그러다', '넘어지겠어요'], ['빨리', '일어나겠어요'], '-겄어유 = -겠어요'],
+  ['gw', '어여 와서 감자떡 마이 먹으래요', ['어서', '와서', '감자떡', '많이', '먹어요'], ['어여', '조금'], '어여 = 어서, 마이 = 많이'],
+  ['jj', '삼춘, 어디 감수광? 혼저 옵서', ['아저씨,', '어디', '가세요?', '어서', '오세요'], ['혼자', '삼춘'], '삼춘 = 이웃 어른 호칭'],
 ];
 // hidden guest: a tourist mixing English with dialect (3 points)
 const QF = [
@@ -216,10 +239,17 @@ function makePerson({ top = 0x37415a, bottom = 0x2b2f3a, skin = 0xffd2a8, hair =
 // reporter (static) with a mic
 const reporter = makePerson({ top: 0x1b1f3a, bottom: 0x1b1f3a, hair: 0x3b2a1a });
 reporter.root.position.set(-.9, 0, 0); reporter.root.rotation.y = .7; scene.add(reporter.root);
-const mic = new THREE.Group(); box(.05, .35, .05, flat(0x212529), 0, -.1, 0, mic); const mh = new THREE.Mesh(new THREE.IcosahedronGeometry(.08, 0), flat(0x495057)); mh.position.y = .1; mic.add(mh);
-const micFlag = box(.12, .1, .12, flat(0xe03131), 0, -.02, 0, mic);
-mic.position.set(0, -.6, .15); reporter.arms[1].add(mic);
+// mic sits in the fist and points out past the hand toward the interviewee (head at the far end)
+const mic = new THREE.Group(); box(.05, .34, .05, flat(0x212529), 0, -.12, 0, mic);
+const mh = new THREE.Mesh(new THREE.IcosahedronGeometry(.085, 1), flat(0x495057)); mh.position.y = -.33; mic.add(mh);
+const micFlag = box(.12, .1, .12, flat(0xe03131), 0, -.2, 0, mic);
+mic.position.set(0, -.68, .02); mic.rotation.x = -.45; reporter.arms[1].add(mic);
 let resident = null;
+// 꿀밤 fx on the reporter: a bump that swells up + stars circling the head
+const bump = new THREE.Mesh(new THREE.SphereGeometry(.09, 8, 6), flat(0xffb4a8)); bump.position.set(.04, .58, .05); bump.visible = false; reporter.head.add(bump);
+const stars = new THREE.Group(); stars.position.y = .75; stars.visible = false; reporter.head.add(stars);
+for (let i = 0; i < 3; i++) { const st = new THREE.Mesh(new THREE.OctahedronGeometry(.07, 0), new THREE.MeshBasicMaterial({ color: 0xffd43b })); const a = i / 3 * Math.PI * 2; st.position.set(Math.cos(a) * .3, 0, Math.sin(a) * .3); stars.add(st); }
+let bonked = false;
 const STYLES = { gs: [{ top: 0x868e96, hat: 'cap' }, { top: 0x1971c2, hat: 'cap' }, { top: 0xe64980 }], jl: [{ top: 0xae3ec9, gray: true, hat: 'scarf' }, { top: 0x2f9e44 }, { top: 0xf76707 }],
   cc: [{ top: 0x8d5a3b, gray: true, hat: 'straw' }, { top: 0xe03131, hat: 'straw' }, { top: 0xf783ac, gray: true, hat: 'scarf' }], gw: [{ top: 0x495057, gray: true }, { top: 0x5c940d, hat: 'scarf' }, { top: 0x1c7ed6 }],
   jj: [{ top: 0x212529, hat: 'haenyeo' }, { top: 0xfd7e14, gray: true, hat: 'straw' }, { top: 0x0ca678, hat: 'scarf' }],
@@ -267,21 +297,24 @@ function updateHud() {
   $lives.textContent = '🎙️'.repeat(lives) + '🔇'.repeat(LIVES - lives);
   $combo.style.display = combo >= 3 ? '' : 'none'; $combo.textContent = `🔥 ${combo}연속`;
 }
-function reset() { correctN = 0; score = 0; lives = LIVES; combo = 0; maxCombo = 0; order = shuffle(QS.map((_, i) => i)); qi = 0; updateHud(); }
+// draw without repeats: each pool is a shuffled bag that refills only when empty
+const bags = new Map(); let lastLine = '';
+function draw(pool) { let b = bags.get(pool); if (!b || !b.length) { b = shuffle([...pool]); if (b[b.length - 1]?.[1] === lastLine) b.unshift(b.pop()); bags.set(pool, b); } const x = b.pop(); lastLine = x[1]; return x; }
+function reset() { correctN = 0; score = 0; lives = LIVES; combo = 0; maxCombo = 0; bags.clear(); updateHud(); }
 function nextQ() {
   if (state !== 'playing') return;
   $fb.className = ''; $ans.classList.remove('shake', 'good', 'bad');
-  if (qi >= order.length) { order = shuffle(order); qi = 0; }
-  let src = QS[order[qi++]], pts = 1;
-  if (score >= 3 && Math.random() < .09) { src = rnd(QF); pts = 3; }
-  else if (score >= 4 && Math.random() < .55) { src = rnd(QH); pts = 2; }
+  let src, pts = 1;
+  if (score >= 3 && Math.random() < .1) { src = draw(QF); pts = 3; }
+  else if (score >= 2 && Math.random() < .5) { src = draw(QH); pts = 2; }
+  else src = draw(QS);
   const [rg, line, correct, wrong, note] = src;
   const R = REGIONS[rg], wi = (Math.random() * R.who.length) | 0;
   q = { rg, line, correct, note, pts, picked: [], tiles: shuffle([...correct, ...wrong].map((t, i) => ({ t, i }))), done: false };
   // more distractors later on
   // trap cards: the dialect words themselves + generic look-alikes; more as you go
   const literal = line.replace(/[?!.,~“”]/g, '').split(/\s+/).filter(w => w && !/[a-z]/i.test(w) && !correct.includes(w) && !wrong.includes(w));
-  const extra = [...shuffle(literal).slice(0, score >= 6 ? 2 : 1), ...trapsFor(correct, wrong, score >= 10 ? 4 : score >= 5 ? 3 : 2)];
+  const extra = [...shuffle(literal).slice(0, 2), ...trapsFor(correct, wrong, score >= 10 ? 5 : score >= 4 ? 4 : 3)];
   q.tiles.push(...extra.map((t, k) => ({ t, i: 100 + k })));
   shuffle(q.tiles);
   $('place').textContent = `${R.place} · ${R.name}`;
@@ -291,7 +324,7 @@ function nextQ() {
   else if (pts === 2) $('q').firstElementChild.textContent = '🎤 리포터: 긴 문장! (+2점)';
   if (pts === 1) $('q').firstElementChild.textContent = '🎤 리포터: 표준어로 통역하면?';
   scene.background.setHex(R.sky); groundMat.color.setHex(R.ground); buildProps(R.prop); setResident(rg, wi);
-  tMax = Math.max(6, 13 - score * .35) + (q.correct.length - 2) * 1.2; tLeft = tMax; react = null;
+  tMax = Math.max(5, 11 - score * .35) + (q.correct.length - 2) * 1.1; tLeft = tMax; react = null;
   voice?.stop(); const face = R.who[wi][0];
   voice = Arcade.babble(line, { pitch: FACE_PITCH[face] ?? 1, rate: 15 }); talkT = Math.max(1.2, voice.dur);
   renderTiles(); Arcade.sfx.tap(); placeCamera();
@@ -303,8 +336,8 @@ function renderTiles() {
   $bank.innerHTML = q.tiles.map((o, k) => `<button class="tile ${q.picked.includes(k) ? 'used' : ''}" data-b="${k}">${o.t}</button>`).join('');
   $check.classList.toggle('ready', q.picked.length > 0);
 }
-$bank.addEventListener('click', e => { const b = e.target.closest('[data-b]'); if (!b || !q || q.done || state !== 'playing') return; const k = +b.dataset.b; if (q.picked.includes(k)) return; q.picked.push(k); justAdded = q.picked.length - 1; Arcade.sfx.pop(1.1 + q.picked.length * .06); Arcade.vibrate(14); renderTiles(); });
-$ans.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (!b || !q || q.done) return; q.picked.splice(+b.dataset.a, 1); Arcade.sfx.tap(); Arcade.vibrate(6); renderTiles(); });
+$bank.addEventListener('click', e => { const b = e.target.closest('[data-b]'); if (!b || !q || q.done || state !== 'playing') return; const k = +b.dataset.b; if (q.picked.includes(k)) return; q.picked.push(k); justAdded = q.picked.length - 1; Arcade.sfx.pop(1.1 + q.picked.length * .06); Arcade.vibrate(28); renderTiles(); });
+$ans.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (!b || !q || q.done) return; q.picked.splice(+b.dataset.a, 1); Arcade.sfx.tap(); Arcade.vibrate(16); renderTiles(); });
 $check.addEventListener('click', () => { if (q && !q.done && q.picked.length && state === 'playing') judge(false); });
 function judge(timeout) {
   voice?.stop();
@@ -374,8 +407,24 @@ function frame(now) {
     if (react) {
       react.t += dt;
       if (react.k === 'ok') { resident.head.rotation.x = Math.sin(react.t * 14) * .2 * Math.max(0, 1 - react.t); resident.arms[1].rotation.x = -2.6 * Math.max(0, 1 - react.t); }
-      else { resident.head.rotation.y = Math.sin(react.t * 12) * .35 * Math.max(0, 1 - react.t * .6); }
-    } else { resident.head.rotation.set(0, 0, 0); resident.arms[1].rotation.x = 0; }
+      else {   // 꿀밤: step in, wind up, bonk the reporter's head, step back
+        const k = react.t, A = resident.arms[0];
+        const step = k < .3 ? k / .3 : k < .9 ? 1 : Math.max(0, 1 - (k - .9) / .4);
+        resident.root.position.x = .9 - step * .75;
+        A.rotation.x = k < .3 ? -3.0 * (k / .3) : k < .45 ? -3.0 + (k - .3) / .15 * 1.6 : k < .9 ? -1.4 : -1.4 * Math.max(0, 1 - (k - .9) / .3);
+        A.rotation.z = -.5 * step;
+        resident.head.rotation.y = 0;
+        if (k >= .44 && !bonked) { bonked = true; Arcade.sfx.thud(); Arcade.sfx.boing(); Arcade.shake(.25); Arcade.vibrate([40, 20, 80]); bump.visible = stars.visible = true; }
+      }
+    } else { resident.head.rotation.set(0, 0, 0); resident.arms[1].rotation.x = 0; resident.arms[0].rotation.set(0, 0, 0); resident.root.position.x = .9; }
+    // reporter's reaction to the bonk
+    if (bonked) {
+      const k = react ? react.t - .44 : 9;
+      reporter.head.scale.set(1 + Math.max(0, .2 - k) , 1 - Math.max(0, .25 - k * 1.2), 1);
+      bump.scale.setScalar(Math.min(1.3, Math.max(.3, k * 6)));
+      stars.rotation.y += dt * 6; stars.visible = k < 1.6;
+      if (k > 1.6) { bonked = false; bump.visible = false; reporter.head.scale.set(1, 1, 1); }
+    }
   }
   reporter.arms[1].rotation.x = -1.2 + Math.sin(t * 1.5) * .05;   // holding the mic out
   reporter.arms[1].rotation.z = .5;

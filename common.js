@@ -34,7 +34,7 @@
     { id: 'sake', file: 'sake.html', name: '찰랑찰랑 사케', emoji: '🍶', unit: '점', bestKey: 'sake-best',
       desc: '도레미파솔라시도~ 넘치기 직전까지 꽉! 표면장력의 한계에 도전' },
     { id: 'radio', file: 'radio.html', name: '우주 전파 배달', emoji: '📡', unit: '점', bestKey: 'radio-best',
-      desc: '반사판 위성으로 전파를 튕겨 달·화성·목성까지 메시지 배달' },
+      desc: '돌고 있는 위성이 초록 구역에 들어온 순간 탭! 전파를 이어 행성까지 배달' },
     { id: 'tower', file: 'tower.html', name: '영끌 타워', emoji: '🏢', unit: '층', bestKey: 'tower-best',
       desc: '흔들리는 크레인에서 아파트 한 층씩 쿵! 금리 인상만 조심하면 시세는 우상향' },
     { id: 'inspect', file: 'inspect.html', name: '임장 매의 눈', emoji: '🔍', unit: '만원', bestKey: 'inspect-best',

@@ -28,7 +28,7 @@
   #cmd{position:fixed;left:50%;transform:translateX(-50%);top:max(100px,calc(env(safe-area-inset-top) + 92px));z-index:3;pointer-events:none;text-align:center;width:fit-content;max-width:calc(100% - 24px);box-sizing:border-box;padding:10px 18px 14px;border-radius:20px;background:rgba(18,12,30,.9);border:2px solid rgba(255,255,255,.14);box-shadow:0 10px 26px rgba(0,0,0,.45)}
   #cmd:empty{display:none}
   #cmd .jinx{display:inline-block;margin-top:6px;font:700 12px "Noto Sans KR",sans-serif;color:#2b2438;background:#ffd43b;border-radius:999px;padding:3px 10px;animation:jx .5s infinite alternate} @keyframes jx{to{transform:scale(1.08)}}
-  #cmd.blink .seq span:not(.hit){animation:blk .9s steps(1) infinite} @keyframes blk{0%,55%{opacity:1}56%,100%{opacity:0}}
+  #cmd.blink .seq span:not(.hit){animation:blk 1.2s steps(1) infinite} @keyframes blk{0%,72%{opacity:1}73%,100%{opacity:.08}}
   #cmd .seq span.hide{color:transparent;background:#3b2d52;border-color:#6c5a8a}
   #cmd .seq span.hide::after{content:"?";color:#b197fc}
   #cmd .nm{font:clamp(22px,5.5vw,32px) "Jua",sans-serif;color:#fff;text-shadow:0 3px 0 #5f3dc4}
@@ -274,26 +274,26 @@ const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🥋', title: '�
   ['♾️', '끝없이 몰려오는 상대! 쓰러뜨릴수록 촉박해져요. 몇 명까지?'],
 ] }));
 const ARR = ['U', 'D', 'L', 'R'];
-function cmdLen() { return Math.min(9, 3 + Math.floor(lv / 3)); }           // 3,3,3,4,4,4,5…
+function cmdLen() { return Math.min(8, 3 + Math.floor(lv / 4)); }           // 3,3,3,4,4,4,5…
 function newCommand() {
   const len = cmdLen(), seq = [];
   for (let i = 0; i < len; i++) { let a; do a = rnd(ARR); while (i >= 2 && a === seq[i - 1] && a === seq[i - 2]); seq.push(a); }
   const pool = MOVES.filter(m => m.min <= len), move = rnd(pool.filter(m => m !== lastMove)) || rnd(pool); lastMove = move;
   // penalties kick in as you progress: blinking arrows, memory (arrows hide), fog (only the next arrow shows)
-  const jc = lv < 5 ? 0 : Math.min(.55, (lv - 4) * .07), jinx = Math.random() < jc ? rnd(lv < 9 ? ['blink', 'memory'] : ['blink', 'memory', 'fog']) : null;
+  const jc = lv < 8 ? 0 : Math.min(.35, (lv - 7) * .04), jinx = Math.random() < jc ? rnd(lv < 14 ? ['blink', 'memory'] : ['blink', 'memory', 'fog']) : null;
   cur = { move, seq, idx: 0, jinx, born: performance.now() };
-  const perKey = Math.max(.26, .8 - lv * .022 - round * .03);              // seconds per arrow, shrinking
-  atkMax = .5 + len * perKey + (jinx === 'memory' ? .6 : jinx ? .3 : 0); atkT = atkMax;
+  const perKey = Math.max(.4, .95 - lv * .016 - round * .02);              // seconds per arrow, shrinking
+  atkMax = .5 + len * perKey + (jinx === 'memory' ? 1.2 : jinx ? .6 : 0); atkT = atkMax;
   renderCmd();
 }
 function renderCmd(cls = '') {
   if (!cur) { $cmd.innerHTML = ''; return; }
   $cmd.className = 'hud-ctl ' + cls + (cur.jinx === 'blink' && !cls ? ' blink' : '');
-  const memHidden = cur.jinx === 'memory' && performance.now() - cur.born > 1100;
+  const memHidden = cur.jinx === 'memory' && performance.now() - cur.born > 2200;
   const hidden = i => i >= cur.idx && !cls && ((cur.jinx === 'fog' && i > cur.idx) || memHidden);
   const tag = { blink: '⚡ 깜빡임!', memory: '🧠 외워라! 곧 사라짐', fog: '🌫️ 안개! 다음 칸만 보임' }[cur.jinx];
   $cmd.innerHTML = `<div class="lv">커맨드 ${cur.seq.length}개 · 데미지 ${dmgOf(cur.seq.length)}${cur.jinx ? ' · 보너스 ×1.5' : ''}</div><div class="nm">${cur.move.name}</div><div class="seq">${cur.seq.map((a, i) => `<span class="${i < cur.idx ? 'hit' : i === cur.idx ? 'cur' : ''}${hidden(i) ? ' hide' : ''}">${ICON[a]}</span>`).join('')}</div>${tag ? `<div class="jinx">${tag}</div>` : ''}`;
-  if (cur.jinx === 'memory' && !memHidden && !cur.memT) cur.memT = setTimeout(() => { if (cur && cur.jinx === 'memory') renderCmd(); }, 1150);
+  if (cur.jinx === 'memory' && !memHidden && !cur.memT) cur.memT = setTimeout(() => { if (cur && cur.jinx === 'memory') renderCmd(); }, 2250);
 }
 const dmgOf = len => Math.round(len * len * 1.1 + len * 2);   // 3→16, 5→38, 7→68
 function updateBars() {

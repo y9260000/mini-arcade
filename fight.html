@@ -204,7 +204,7 @@ const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🥋', title: '�
   ['🎴', '기술이 뜨면 <b>랜덤 커맨드</b>를 방향키로 그대로 입력!'],
   ['🕹️', '처음엔 3개, 점점 길어져요. 길수록 데미지 큼'],
   ['⏳', '빨간 <b>공격 게이지</b>가 다 닳거나 <b>틀리면</b> 반격! 체력 3칸'],
-  ['🏆', '상대를 쓰러뜨릴수록 시간이 촉박해져요. 5연승 도전!'],
+  ['♾️', '끝없이 몰려오는 상대! 쓰러뜨릴수록 촉박해져요. 몇 명까지?'],
 ] }));
 const ARR = ['U', 'D', 'L', 'R'];
 function cmdLen() { return Math.min(9, 3 + Math.floor(lv / 3)); }           // 3,3,3,4,4,4,5…
@@ -225,12 +225,17 @@ function renderCmd(cls = '') {
 const dmgOf = len => Math.round(len * len * 1.1 + len * 2);   // 3→16, 5→38, 7→68
 function updateBars() {
   document.querySelectorAll('#hpP .bar i').forEach((el, i) => el.classList.toggle('gone', i >= hpP));
-  $('hpEf').style.transform = `scaleX(${Math.max(0, hpE) / FOES[Math.min(round, FOES.length - 1)].hp})`;
+  $('hpEf').style.transform = `scaleX(${Math.max(0, hpE) / foeAt(round).hp})`;
   $('ko').textContent = `R${round + 1}`;
 }
 function shout(text) { const el = $('shout'); el.textContent = text; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }
+// endless: the five foes cycle, tougher every lap
+function foeAt(r) {
+  const b = FOES[r % FOES.length], lap = Math.floor(r / FOES.length);
+  return { look: b.look, hp: Math.round(b.hp * (1 + lap * .6)), name: lap ? `${b.name.replace(' (전설)', '')} · ${lap + 1}회차` : b.name };
+}
 function setupRound() {
-  const F = FOES[Math.min(round, FOES.length - 1)];
+  const F = foeAt(round);
   if (foe) scene.remove(foe.root);
   foe = makeFighter(F.look, true); foe.root.position.set(2.2, 0, 0);
   hpE = F.hp; cur = null; gap = .8;
@@ -359,8 +364,7 @@ function ko() {
   foe.pose = 'down'; foe.poseT = 0; score += 100 + hpP * 30;
   setTimeout(() => {
     round++;
-    if (round >= FOES.length) { shout('🏆 전설 등극!'); setTimeout(finish, 1200); return; }
-    hpP = Math.min(3, hpP + 1); setupRound(); state = 'playing'; Arcade.toast(`🔔 ROUND ${round + 1} · ${FOES[round].name}`, '#5f3dc4'); Arcade.sfx.go();
+    hpP = Math.min(3, hpP + 1); setupRound(); state = 'playing'; Arcade.toast(`🔔 ROUND ${round + 1} · ${foeAt(round).name}`, '#5f3dc4'); Arcade.sfx.go();
   }, 1800);
 }
 function enemyAttack(why = '시간 초과') {
@@ -382,8 +386,8 @@ function finish() {
   const isBest = score > best;
   if (isBest) { best = score; try { localStorage.setItem('fight-best', best); } catch {} }
   if (isBest && score > 0) Arcade.sfx.fanfare();
-  const msg = round >= 5 ? '시장 할머니까지 쓰러뜨렸다! 전설의 파이터' : round >= 3 ? '동네 최강자 등극' : round >= 1 ? '첫 승은 거뒀다!' : '관장님께 한 수 배워야겠어요';
-  showScreen(Arcade.resultScreen({ emoji: '🥋', label: '파이트 점수', score, unit: '점', msg, rows: [['이긴 라운드', `${round}승`]], isBest: isBest && score > 0, best }));
+  const msg = round >= 10 ? '동네 전체를 평정한 전설의 파이터' : round >= 5 ? '시장 할머니까지 쓰러뜨렸다!' : round >= 3 ? '동네 최강자 등극' : round >= 1 ? '첫 승은 거뒀다!' : '관장님께 한 수 배워야겠어요';
+  showScreen(Arcade.resultScreen({ emoji: '🥋', label: '파이트 점수', score, unit: '점', msg, rows: [['쓰러뜨린 상대', `${round}명`]], isBest: isBest && score > 0, best }));
   Arcade.gameOver(score);
 }
 function reset() { round = 0; lv = 0; hpP = 3; score = 0; combo = 0; me.pose = 'idle'; setupRound(); }

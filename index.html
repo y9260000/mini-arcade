@@ -29,16 +29,18 @@
   @keyframes rise{from{opacity:0;transform:translateY(10px)}}
   #sec{transition:opacity .2s}
   /* featured row */
-  .feat{display:flex;align-items:center;gap:14px;margin:18px 0 10px;padding:16px;border-radius:20px;background:#f2f4f7;border:1px solid #eaedf1;text-decoration:none;color:inherit}
-  .feat .ic{width:60px;height:60px;border-radius:16px}
-  .feat b{font-size:17px}
+  .feat{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;margin:18px 0 10px;padding:8px;border-radius:20px;background:#f2f4f7;border:1px solid #eaedf1}
+  @media(min-width:760px){.feat{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  .fi{display:flex;align-items:center;gap:12px;padding:10px;border-radius:14px;text-decoration:none;color:inherit;min-width:0;transition:background .15s}
+  .fi .ic{width:56px;height:56px;border-radius:15px;background:#fff}
+  .fi b{font-size:16px}
   /* list */
   .sec{margin:22px 0 4px;font-size:15px;font-weight:600;color:var(--ink-2)}
   #list{display:grid;grid-template-columns:minmax(0,1fr);column-gap:28px;align-content:start;min-height:calc(100vh - 160px)}
   @media(min-width:640px){#list{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
   .empty{grid-column:1/-1}
   .gi{display:flex;align-items:center;gap:14px;padding:12px 8px;min-width:0;border-radius:16px;text-decoration:none;color:inherit;transition:background .15s}
-  @media(hover:hover){.gi:hover{background:#f5f7fa}.feat:hover{background:#eceff3}}
+  @media(hover:hover){.gi:hover{background:#f5f7fa}.fi:hover{background:#e7eaef}}
   .gi:active{background:#eef1f5}
   .ic{position:relative;flex:none;width:56px;height:56px;border-radius:15px;background:var(--tile);overflow:hidden}
   .ic img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(1.25)}
@@ -50,7 +52,7 @@
   .tag.new{background:#e8f0fe;color:var(--accent)} .tag.hot{background:#ffebec;color:#f04452}
   .best{font-size:12.5px;color:var(--accent);font-weight:600}
   .go{flex:none;border:0;border-radius:999px;padding:8px 14px;font:600 14px Pretendard,sans-serif;background:#e8f0fe;color:var(--accent)}
-  .feat .go{background:var(--accent);color:#fff;padding:10px 16px}
+  .fi .go{background:var(--accent);color:#fff}
   .empty{padding:40px 0;text-align:center;color:var(--ink-3);font-size:14px}
   .run{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(480px,calc(100% - 40px));
     border:0;border-radius:16px;padding:17px;font:700 17px Pretendard,sans-serif;background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
@@ -79,7 +81,7 @@
 <main>
   <header><img src="thumbs/favicon.png" alt=""><div><h1>콩알겜</h1><p id="sub">3D 미니게임</p></div></header>
   <nav class="tabs" id="tabs"></nav>
-  <a class="feat" id="feat"></a>
+  <div class="feat" id="feat"></div>
   <div class="sec" id="sec">전체 게임</div>
   <div id="list"></div>
 </main>
@@ -100,10 +102,9 @@
   $('sub').textContent = `3D 미니게임 ${GAMES.length}종`;
   const icon = g => `<div class="ic" data-ic="${g.id}"><img src="thumbs/${g.id}.png" alt=""></div>`;
   const tags = g => HOT[0] === g.id ? '<span class="tag hot">HOT</span>' : NEW.has(g.id) ? '<span class="tag new">NEW</span>' : '';
-  // featured: the HOT pick
-  const F = GAMES.find(g => g.id === HOT[0]);
-  $('feat').href = F.file; $('feat').dataset.id = F.id;
-  $('feat').innerHTML = `${icon(F)}<div class="tx"><b>${F.name}<span class="tag hot">HOT</span></b><small>${F.desc}</small></div><span class="go">시작</span>`;
+  // featured: three hot picks
+  const FEAT = ['soccer', 'stock', 'tower'].map(id => GAMES.find(g => g.id === id)).filter(Boolean);
+  $('feat').innerHTML = FEAT.map(F => `<a class="fi" data-id="${F.id}" href="${F.file}">${icon(F)}<div class="tx"><b>${F.name}<span class="tag hot">HOT</span></b><small>${F.desc}</small></div><span class="go">시작</span></a>`).join('');
   let tab = 0;
   function renderList() {
     const items = TABS[tab][1]();
@@ -161,7 +162,7 @@
   const loop = now => { if (!live) return; live.st.tick((now - live.t0) / 1000); R3.render(live.st.scene, live.st.camera); requestAnimationFrame(loop); };
   function bindLive() {
     if (!canHover) return;
-    document.querySelectorAll('.gi, .feat').forEach(row => {
+    document.querySelectorAll('.gi, .fi').forEach(row => {
       if (row.dataset.bound) return; row.dataset.bound = 1;
       const id = row.dataset.id, ic = row.querySelector('.ic');
       row.addEventListener('pointerenter', async () => {

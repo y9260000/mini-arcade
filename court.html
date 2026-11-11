@@ -37,6 +37,8 @@
   #brand{font:800 11px "Nanum Myeongjo",serif;letter-spacing:3px;color:#c9a96e;text-align:center}
   #deco{display:flex;gap:6px;justify-content:center;margin-top:8px}
   #deco span{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 50% 35%,#fffdf5,#d8cfbb);box-shadow:0 4px 0 #6b6152,0 0 0 3px #1c1c24;transition:transform .04s}
+  /* phones: lift the typewriter right under the speech bubble so it stays above the on-screen keyboard */
+  #tw.lift{bottom:auto} #tw.lift #deco{display:none} #tw.lift #body{padding:6px 12px 8px;border-radius:0 0 16px 16px}
   #deco span.down{transform:translateY(4px);box-shadow:0 0 0 #6b6152,0 0 0 3px #1c1c24}
   #strikes{font-family:"Jua",sans-serif}
   #speed{font-family:"Jua",sans-serif;min-width:96px;justify-content:center;transition:background .2s,color .2s}
@@ -57,6 +59,21 @@
 </div>
 <div class="screen" id="center"></div>
 
+<script>
+  // keep the typing paper visible on phones: pin it under the speech bubble (portrait) and above the keyboard
+  (() => {
+    const tw = document.getElementById('tw'), say = document.getElementById('say');
+    const place = () => {
+      const portrait = innerWidth < innerHeight * .85, vv = window.visualViewport;
+      if (!portrait) { tw.classList.remove('lift'); tw.style.top = ''; tw.style.bottom = ''; return; }
+      tw.classList.add('lift');
+      const top = say.getBoundingClientRect().bottom + 16 + (vv ? vv.offsetTop : 0);
+      tw.style.top = Math.round(top) + 'px';
+    };
+    addEventListener('resize', place); window.visualViewport?.addEventListener('resize', place); window.visualViewport?.addEventListener('scroll', place);
+    new ResizeObserver(place).observe(say); setTimeout(place, 0);
+  })();
+</script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 let voice = null; const VOICE = { '판사': .72, '검사': 1.0, '변호사': 1.12, '피고인': 1.3, '증인': 1.22, '원고': 1.15 };

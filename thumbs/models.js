@@ -19,6 +19,18 @@ function person(x, y, z, { body = 0x4dabf7, skin = 0xffd2a8, hair = 0x2b2b2b, s 
   return g;
 }
 
+function soccerBall(r) {   // white sphere with 12 black pentagon patches (at the icosahedron vertices)
+  const g = new THREE.IcosahedronGeometry(r, 3).toNonIndexed(), pos = g.attributes.position, col = [];
+  const P = (1 + Math.sqrt(5)) / 2, V = [[0, 1, P], [0, -1, P], [0, 1, -P], [0, -1, -P], [1, P, 0], [-1, P, 0], [1, -P, 0], [-1, -P, 0], [P, 0, 1], [-P, 0, 1], [P, 0, -1], [-P, 0, -1]].map(v => new THREE.Vector3(...v).normalize());
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i += 3) {
+    a.fromBufferAttribute(pos, i); b.fromBufferAttribute(pos, i + 1); c.fromBufferAttribute(pos, i + 2);
+    const m = a.add(b).add(c).normalize(), dark = V.some(v => v.dot(m) > .93);
+    const k = dark ? .13 : 1; for (let j = 0; j < 3; j++) col.push(k, k, k);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .5, flatShading: true }));
+}
 export const M = {
   softserve() {
     cone(.55, 1.5, 0xd9a05b, 0, -.55, 0, Math.PI, 0, 0);
@@ -84,9 +96,7 @@ export const M = {
     return t => { tail.rotation.z = .8 + Math.sin(t * 6) * .4; c.rotation.z = Math.sin(t * 1.5) * .06; const k = (t * .5) % 1; cup.position.x = .55 + Math.max(0, k - .6) * 4; cup.rotation.z = -Math.max(0, k - .6) * 6; };
   },
   soccer() {
-    const bg = grp(.2, -.1, 0); const ball = sph(.75, 0xffffff, 0, 0, 0, bg, 8, 6);
-    for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; const pn = sph(.2, 0x212529, Math.cos(a) * .55, Math.sin(a) * .55, .45, bg, 5, 3); pn.scale.z = .3; }
-    sph(.2, 0x212529, 0, 0, .74, bg, 5, 3).scale.z = .3;
+    const bg = grp(.2, -.1, 0); const ball = soccerBall(.75); ball.castShadow = true; bg.add(ball);
     const net = grp(-.7, .2, -.8); box(2, .08, .08, 0xffffff, 0, 1, 0, 0, 0, 0, net); box(.08, 1.6, .08, 0xffffff, -1, .2, 0, 0, 0, 0, net); box(.08, 1.6, .08, 0xffffff, 1, .2, 0, 0, 0, 0, net);
     const stars = []; for (let s = 0; s < 3; s++) stars.push(cone(.06, .3, 0xffd43b, -.6 + s * .3, .9 + s * .1, .3, 0, 0, 0, G, 4));
     return t => { bg.rotation.z = -t * 3; bg.position.y = -.1 + Math.abs(Math.sin(t * 3)) * .35; stars.forEach((s, i) => s.scale.setScalar(.6 + Math.abs(Math.sin(t * 5 + i)) * .8)); };

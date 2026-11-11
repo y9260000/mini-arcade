@@ -260,8 +260,19 @@ function pickStriker() {
 const keeper = makePlayer(0xfcc419, 0x212529); scene.add(keeper.root);
 for (const a of keeper.arms) { const glove = new THREE.Mesh(new THREE.DodecahedronGeometry(.13, 0), flat(0x51cf66)); glove.position.y = -.68; a.add(glove); }
 const defender = makePlayer(0x1971c2, 0x1971c2); scene.add(defender.root);
-const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(.17, 0), flat(0xffffff)); ball.castShadow = true; scene.add(ball);
-{ const patches = new THREE.Mesh(new THREE.IcosahedronGeometry(.172, 0), new THREE.MeshBasicMaterial({ color: 0x222222, wireframe: true })); ball.add(patches); }
+function soccerBall(r) {   // white sphere with 12 black pentagon patches (at the icosahedron vertices)
+  const g = new THREE.IcosahedronGeometry(r, 3).toNonIndexed(), pos = g.attributes.position, col = [];
+  const P = (1 + Math.sqrt(5)) / 2, V = [[0, 1, P], [0, -1, P], [0, 1, -P], [0, -1, -P], [1, P, 0], [-1, P, 0], [1, -P, 0], [-1, -P, 0], [P, 0, 1], [-P, 0, 1], [P, 0, -1], [-P, 0, -1]].map(v => new THREE.Vector3(...v).normalize());
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i += 3) {
+    a.fromBufferAttribute(pos, i); b.fromBufferAttribute(pos, i + 1); c.fromBufferAttribute(pos, i + 2);
+    const m = a.add(b).add(c).normalize(), dark = V.some(v => v.dot(m) > .93);
+    const k = dark ? .13 : 1; for (let j = 0; j < 3; j++) col.push(k, k, k);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .5, flatShading: true }));
+}
+const ball = soccerBall(.17); ball.castShadow = true; scene.add(ball);
 
 // ---------- caster lines ----------
 const SHOUTS = ['슛!!!', '슛!!!!!', '때려요!!', '지금!! 슛!!', '슈우우웃!!', '차요 차!!'];

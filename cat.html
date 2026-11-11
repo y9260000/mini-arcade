@@ -77,7 +77,11 @@ const DESK_W = 4.4, DESK_D = 1.6, DESK_Y = 1, EDGE = DESK_D / 2;
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
   const rug = new THREE.Mesh(new THREE.CircleGeometry(1.6, 20), flat(0x74c0fc)); rug.rotation.x = -Math.PI / 2; rug.position.set(0, .005, 1.8); rug.receiveShadow = true; scene.add(rug);
   box(30, 6, .2, flat(0xfff4e6), 0, 3, -4.2);                                  // back wall
-  box(1.6, 1.1, .05, flat(0x99e9f2, { emissive: 0x66d9e8, emissiveIntensity: .3 }), 2.6, 3, -4.08);   // window
+  box(1.6, 1.1, .05, flat(0x99e9f2, { emissive: 0x66d9e8, emissiveIntensity: .3 }), 2.6, 3, -4.08);   // window glass
+  for (const [w, h, x, y] of [[1.8, .1, 2.6, 3.58], [1.8, .1, 2.6, 2.42], [.1, 1.26, 1.75, 3], [.1, 1.26, 3.45, 3], [1.7, .06, 2.6, 3], [.06, 1.1, 2.6, 3]]) box(w, h, .1, flat(0xffffff), x, y, -4.04);   // frame + cross bars
+  box(1.95, .1, .35, flat(0xffffff), 2.6, 2.36, -3.9);   // sill
+  for (const s of [-1, 1]) box(.38, 1.35, .06, flat(0xffc9c9), 2.6 + s * 1.02, 3.02, -3.98);   // curtains
+  box(.35, .22, .25, flat(0xd9480f), 2.15, 2.53, -3.9); box(.3, .3, .3, flat(0x51cf66), 2.15, 2.78, -3.9);   // tiny plant on the sill
   // the cat's desk
   const wood = flat(0xb5835a);
   box(DESK_W, .08, DESK_D, wood, 0, DESK_Y - .04, 0);

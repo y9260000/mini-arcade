@@ -11,7 +11,7 @@
   *{box-sizing:border-box}
   /* 얼마집 brand: blue #2D6FF0, charcoal, white */
   :root{--accent:#2d6ff0;--accent-dark:#1f54c4;--ink:#1e2532;--ink-soft:#5c6678;--tint:#eaf1fe}
-  body{margin:0;min-height:100vh;background:#f3f6fc;color:var(--ink);display:flex;justify-content:center}
+  body{margin:0;min-height:100vh;background:#dde6f4;color:var(--ink);display:flex;justify-content:center}
   body::before{content:"";position:absolute;left:0;right:0;top:0;height:clamp(250px,34vh,320px);background:var(--accent);z-index:-1;border-radius:0 0 28px 28px}
   main{width:100%;max-width:1100px;padding:max(36px,5vh) max(16px,env(safe-area-inset-left)) 120px}
   .logo{text-align:center;margin-bottom:22px}
@@ -20,11 +20,11 @@
   #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:14px}
   @media(min-width:640px){#list{grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:16px}}
   .card{position:relative;display:flex;flex-direction:column;background:#fff;border-radius:22px;overflow:hidden;min-width:0;
-    text-decoration:none;color:inherit;box-shadow:0 2px 0 rgba(30,37,50,.05),0 10px 24px rgba(45,111,240,.12);transition:transform .25s cubic-bezier(.2,.8,.3,1),box-shadow .25s;
+    text-decoration:none;color:inherit;box-shadow:0 1px 0 rgba(20,40,90,.06),0 10px 26px rgba(20,45,110,.16);border:1px solid rgba(255,255,255,.9);transition:transform .25s cubic-bezier(.2,.8,.3,1),box-shadow .25s;
     transform:perspective(700px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));will-change:transform}
   .card:active{transform:scale(.97)}
-  @media(hover:hover){.card:hover{box-shadow:0 2px 0 rgba(30,37,50,.05),0 18px 34px rgba(45,111,240,.25)}}
-  .tile{position:relative;aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--tint)}
+  @media(hover:hover){.card:hover{box-shadow:0 1px 0 rgba(20,40,90,.06),0 20px 38px rgba(20,45,110,.28)}}
+  .tile{position:relative;aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#f4f8ff;border-bottom:1px solid #e3eaf6}
   .tile img{width:100%;height:100%;object-fit:contain}
   .tile canvas.live{position:absolute;inset:0;width:100%!important;height:100%!important}
   .tile.live-on img{visibility:hidden}

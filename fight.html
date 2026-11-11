@@ -49,7 +49,13 @@
   .dn.me{color:#ff6b6b;text-shadow:0 5px 0 #2b1d3a}
   @keyframes dn{0%{transform:translate(-50%,0) scale(2.4)}15%{transform:translate(-50%,0) scale(1)}100%{transform:translate(-50%,-90px) scale(.9);opacity:0}}
   #combo{position:fixed;left:max(16px,env(safe-area-inset-left));top:40%;z-index:3;pointer-events:none;font:30px "Jua",sans-serif;color:#ffd43b;text-shadow:0 3px 0 #e03131;opacity:0;transition:opacity .2s}
-  #combo b{display:block;font-size:56px;line-height:1}
+  #combo b{display:block;font-size:56px;line-height:1;transition:font-size .15s}
+  #combo.t1 b{font-size:70px;color:#ff922b} #combo.t2 b{font-size:84px;color:#4dabf7;text-shadow:0 4px 0 #1864ab,0 0 24px #74c0fc}
+  #combo.t3 b{font-size:100px;background:linear-gradient(90deg,#ff6b6b,#ffd43b,#69db7c,#4dabf7,#da77f2);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;animation:rb .6s linear infinite;filter:drop-shadow(0 4px 0 #2b1d3a)}
+  @keyframes rb{50%{filter:drop-shadow(0 4px 0 #2b1d3a) hue-rotate(180deg)}}
+  #combo.pop b{animation:cpop .18s ease-out} @keyframes cpop{from{transform:scale(1.6) rotate(-8deg)}}
+  #fever{position:fixed;inset:0;z-index:2;pointer-events:none;opacity:0;transition:opacity .4s;box-shadow:inset 0 0 90px 10px var(--fc,#ff922b)}
+  #fever.on{opacity:1;animation:fv .5s infinite alternate} @keyframes fv{to{box-shadow:inset 0 0 140px 20px var(--fc,#ff922b)}}
 </style>
 </head>
 <body>
@@ -58,7 +64,7 @@
 <div id="cmd" class="hud-ctl"></div>
 <div id="pad" class="hud-ctl"><span></span><button class="b" data-k="U">↑</button><span></span><button class="b" data-k="L">←</button><span class="mid"></span><button class="b" data-k="R">→</button><span></span><button class="b" data-k="D">↓</button><span></span></div>
 <div id="shout" class="hud-ctl"></div>
-<div id="flash"></div><div id="combo" class="hud-ctl"><b>0</b>HIT COMBO</div>
+<div id="flash"></div><div id="fever"></div><div id="combo" class="hud-ctl"><b>0</b>HIT COMBO</div>
 <div class="screen" id="center"></div>
 
 <script type="module">
@@ -191,7 +197,39 @@ function dmgNum(n, worldPos, mine) {
   el.style.left = (v.x * .5 + .5) * innerWidth + 'px'; el.style.top = (-v.y * .5 + .5) * innerHeight - 40 + 'px';
   document.body.appendChild(el); setTimeout(() => el.remove(), 850);
 }
-function showCombo() { const el = $('combo'); el.querySelector('b').textContent = combo; el.style.opacity = combo >= 2 ? 1 : 0; }
+const TIER_AT = [0, 4, 8, 15], TIER_COL = [0xffd43b, 0xff922b, 0x4dabf7, 0xda77f2], TIER_NAME = ['', '🔥 불타오른다!', '⚡ 각성!!', '🌈 FEVER!!!'];
+let tierShown = 0;
+const tier = () => combo >= 15 ? 3 : combo >= 8 ? 2 : combo >= 4 ? 1 : 0;
+function showCombo() {
+  const el = $('combo'), T = tier(); el.querySelector('b').textContent = combo; el.style.opacity = combo >= 2 ? 1 : 0;
+  el.className = 'hud-ctl t' + T; void el.offsetWidth; if (combo >= 2) el.classList.add('pop');
+  const fv = $('fever'); fv.classList.toggle('on', T >= 1); fv.style.setProperty('--fc', '#' + TIER_COL[T].toString(16).padStart(6, '0'));
+  if (T > tierShown) { setTimeout(() => shout(`${combo}콤보 ${TIER_NAME[T]}`), 350); Arcade.sfx.fanfare(); }
+  tierShown = T;
+}
+// ---- combo aura: flame shards circling the player, colour and size by tier
+const aura = new THREE.Group(); scene.add(aura); const auraBits = [];
+for (let i = 0; i < 18; i++) { const m = new THREE.Mesh(new THREE.ConeGeometry(.16, .7, 5), new THREE.MeshBasicMaterial({ color: 0xff922b, transparent: true, opacity: .7 })); m.userData = { a: i / 18 * Math.PI * 2, h: Math.random() * 2, sp: 1 + Math.random() }; aura.add(m); auraBits.push(m); }
+const auraLight = new THREE.PointLight(0xff922b, 0, 6); auraLight.position.y = 1.5; aura.add(auraLight);
+function shockwave(pos, color, big) {
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.5, .08, 6, 28), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .9 }));
+  ring.position.copy(pos); ring.rotation.y = Math.PI / 2; scene.add(ring); let t = 0;
+  efx.push(dt => { t += dt; ring.scale.setScalar(1 + t * (big ? 14 : 9)); ring.material.opacity = Math.max(0, .9 - t * 2.4); if (t > .4) { scene.remove(ring); return false; } });
+}
+function comboBurst(pos) {
+  const T = tier(); if (!T) return;
+  const col = T === 3 ? rnd([0xff6b6b, 0xffd43b, 0x69db7c, 0x4dabf7, 0xda77f2]) : TIER_COL[T];
+  shockwave(pos, col, T >= 2); if (T >= 2) setTimeout(() => shockwave(pos, 0xffffff, true), 80);
+  spark(pos, col, 14 * T, 7 + T * 2);
+  if (T >= 2) for (let k = 0; k < T; k++) setTimeout(() => FX.bolt && miniBolt(foe.root.position.x + (Math.random() - .5) * 2), k * 90);
+  const f = $('flash'); f.style.background = '#' + col.toString(16).padStart(6, '0'); flash(.25 + T * .1); setTimeout(() => f.style.background = '#fff', 200);
+  scene.background.setHex(T === 3 ? rnd([0x3b1d4a, 0x1d2b4a, 0x4a1d2b]) : 0x2b1d3a);
+}
+function miniBolt(x0) {
+  let y = 7, x = x0; const pts = [];
+  while (y > .3) { pts.push(new THREE.Vector3(x, y, -.5)); y -= .9; x = x0 + (Math.random() - .5); }
+  for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1]; const seg = new THREE.Mesh(new THREE.BoxGeometry(.08, a.distanceTo(b), .08), new THREE.MeshBasicMaterial({ color: 0xd0ebff, transparent: true, opacity: 1 })); seg.position.copy(a).lerp(b, .5); seg.lookAt(b); seg.rotateX(Math.PI / 2); scene.add(seg); let t = 0; efx.push(dt => { t += dt; seg.material.opacity = 1 - t / .25; if (t > .25) { scene.remove(seg); return false; } }); }
+}
 
 // ---------- state ----------
 let lv = 0, cur = null, gap = 0, lastMove = null;
@@ -355,7 +393,7 @@ function hit(dmg, m) {
   spark(new THREE.Vector3(foe.root.position.x - .3, 1.6, 0), 0xffffff, 10, 9); spark(new THREE.Vector3(foe.root.position.x - .3, 1.6, 0), rnd([0xffd43b, 0xff922b]), big ? 34 : 18, big ? 10 : 6);
   thump(.6 + dmg / 30, big ? .8 : 1); if (big) setTimeout(() => thump(1.2, .6), 90);
   hitstop = big ? .16 : .08; zoomKick = big ? 1 : .5; flash(big ? .85 : .45);
-  Arcade.shake(.2 + dmg / 90); slowmo = big ? .45 : 0; dmgNum(dmg, hp0, false); showCombo();
+  Arcade.shake(.2 + dmg / 90 + tier() * .08); slowmo = big ? .45 : 0; dmgNum(dmg, hp0, false); showCombo(); comboBurst(hp0.clone().setX(foe.root.position.x - .3));
   Arcade.toast(`${m.name} -${dmg}${combo >= 3 ? ` · ${combo}콤보!` : ''}`, '#e8590c');
   if (hpE <= 0) ko();
 }
@@ -390,7 +428,7 @@ function finish() {
   showScreen(Arcade.resultScreen({ emoji: '🥋', label: '파이트 점수', score, unit: '점', msg, rows: [['쓰러뜨린 상대', `${round}명`]], isBest: isBest && score > 0, best }));
   Arcade.gameOver(score);
 }
-function reset() { round = 0; lv = 0; hpP = 3; score = 0; combo = 0; me.pose = 'idle'; setupRound(); }
+function reset() { round = 0; lv = 0; hpP = 3; score = 0; combo = 0; tierShown = 0; showCombo(); me.pose = 'idle'; setupRound(); }
 function start() {
   state = 'count'; $center.style.display = 'none';
   Arcade.countdown({ final: 'FIGHT!', onTick: n => n ? Arcade.sfx.tick() : (Arcade.sfx.go(), Arcade.shake(.2)), onDone: () => { state = 'playing'; gap = .2; } });
@@ -444,7 +482,7 @@ function animate(f, t, dt, dir) {
 // ---------- loop ----------
 let last = performance.now();
 reset(); showIntro();
-window.__fight = { get state() { return state; }, input, get hpE() { return hpE; }, get hpP() { return hpP; }, get round() { return round; }, get atkT() { return atkT; }, get cur() { return cur; }, get lv() { return lv; }, MOVES, FX, get foe() { return foe; } };
+window.__fight = { get state() { return state; }, input, get hpE() { return hpE; }, get hpP() { return hpP; }, get round() { return round; }, get atkT() { return atkT; }, get cur() { return cur; }, get lv() { return lv; }, MOVES, FX, get foe() { return foe; }, setCombo(n) { combo = n; showCombo(); } };
 
 function frame(now) {
   let dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
@@ -468,7 +506,12 @@ function frame(now) {
   for (let i = efx.length - 1; i >= 0; i--) if (efx[i](dt) === false) efx.splice(i, 1);
   for (let i = fxs.length - 1; i >= 0; i--) { const f = fxs[i]; f.t += dt; f.v.y -= 9 * dt; f.m.position.addScaledVector(f.v, dt); f.m.scale.setScalar(Math.max(.01, 1 - f.t / f.life)); if (f.t > f.life) { scene.remove(f.m); fxs.splice(i, 1); } }
   animate(me, t, dt); if (foe) animate(foe, t + 1.3, dt);
-  for (const c of crowd) c.position.y = Math.abs(Math.sin(t * (state === 'ko' ? 14 : 4) + c.userData.ph)) * (state === 'ko' ? .4 : .08);
+  { const T = state === 'playing' || state === 'ko' ? tier() : 0, col = T === 3 ? new THREE.Color().setHSL((t * .6) % 1, .9, .6).getHex() : TIER_COL[T];
+    aura.visible = T > 0; aura.position.copy(me.root.position); auraLight.intensity = T * 6; auraLight.color.setHex(col);
+    for (const m of auraBits) { const u = m.userData; u.h += dt * u.sp * (1 + T * .6); if (u.h > 2.2) u.h = 0; const r = .55 + T * .12;
+      m.position.set(Math.cos(u.a + t * 2) * r, u.h, Math.sin(u.a + t * 2) * r); m.scale.setScalar((1 - u.h / 2.4) * (.7 + T * .35)); m.material.color.setHex(T === 3 ? new THREE.Color().setHSL((u.a / 6.28 + t) % 1, .9, .6).getHex() : col); }
+    if (T < 3 && scene.background.getHex() !== 0x2b1d3a) scene.background.setHex(0x2b1d3a); }
+  for (const c of crowd) c.position.y = Math.abs(Math.sin(t * (state === 'ko' ? 14 : 4 + tier() * 3) + c.userData.ph)) * (state === 'ko' ? .4 : .08 + tier() * .1);
   const portrait = innerWidth < innerHeight;
   camera.position.set(0, portrait ? 2.8 : 2.5, (portrait ? 12.5 : 10.5) - zoomKick * 1.4); Arcade.applyShake(camera, dt); camera.lookAt(0, portrait ? 1.9 : 1.75, 0);
   renderer.render(scene, camera);

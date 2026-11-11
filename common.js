@@ -35,6 +35,10 @@
       desc: '도레미파솔라시도~ 넘치기 직전까지 꽉! 표면장력의 한계에 도전' },
     { id: 'radio', file: 'radio.html', name: '우주 전파 배달', emoji: '📡', unit: '점', bestKey: 'radio-best',
       desc: '반사판 위성으로 전파를 튕겨 달·화성·목성까지 메시지 배달' },
+    { id: 'tower', file: 'tower.html', name: '영끌 타워', emoji: '🏢', unit: '층', bestKey: 'tower-best',
+      desc: '흔들리는 크레인에서 아파트 한 층씩 쿵! 금리 인상만 조심하면 시세는 우상향' },
+    { id: 'inspect', file: 'inspect.html', name: '임장 매의 눈', emoji: '🔍', unit: '만원', bestKey: 'inspect-best',
+      desc: '곰팡이·누수·바퀴벌레… 매물의 하자를 찾아 집값 깎기' },
   ];
 
   const q = new URLSearchParams(location.search);

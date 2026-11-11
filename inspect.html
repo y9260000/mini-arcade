@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>임장 매의 눈</title>
+<script src="common.js?v=17"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#f1e3cc;
+    user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  .hud-score{font-size:40px}
+  #room{font-family:"Jua",sans-serif}
+  #timer{width:min(260px,60vw);height:12px;border-radius:999px;background:rgba(43,36,56,.2);overflow:hidden;box-shadow:inset 0 2px 3px rgba(0,0,0,.2)}
+  #timer i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#ff6b6b,#ffd43b 40%,#51cf66);transform-origin:left;border-radius:999px}
+  #found{font-family:"Jua",sans-serif}
+  .mark{position:fixed;z-index:4;pointer-events:none;transform:translate(-50%,-50%);width:56px;height:56px;border:4px solid #e03131;border-radius:50%;box-shadow:0 0 0 3px #fff;animation:mk .3s cubic-bezier(.2,1.6,.4,1)}
+  .mark.missed{border-color:#fab005;border-style:dashed;animation:blink .5s infinite}
+  @keyframes mk{from{transform:translate(-50%,-50%) scale(2);opacity:0}}
+  @keyframes blink{50%{opacity:.3}}
+  .lbl{position:fixed;z-index:4;pointer-events:none;transform:translate(-50%,-150%);white-space:nowrap;font-family:"Jua",sans-serif;font-size:16px;color:#fff;background:#e03131;border-radius:999px;padding:3px 10px}
+  .lbl.missed{background:#e8590c}
+  .xmark{position:fixed;z-index:4;pointer-events:none;transform:translate(-50%,-50%);font-family:"Jua",sans-serif;font-size:30px;color:#868e96;animation:xm .6s forwards}
+  @keyframes xm{to{opacity:0;transform:translate(-50%,-90%)}}
+  #hint{position:fixed;bottom:max(12vh,76px);left:0;right:0;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
+  #hint .pill{font-size:15px;padding:10px 18px}
+  .toast{top:30%}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>만원</small></div>
+  <div class="hud-row"><span class="pill" id="lives"></span><span class="pill dark" id="room">원룸</span><span class="pill" id="found">🔍 0/0</span></div>
+  <div class="hud-row"><div id="timer"><i id="tfill"></i></div></div>
+</div>
+<div id="hint" class="hud-ctl"><span class="pill">👆 하자를 찾아 탭! 아무 데나 누르면 시간 -2초</span></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const $ = id => document.getElementById(id);
+const rnd = a => a[(Math.random() * a.length) | 0];
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+// ---------- three: a cut-away room seen from the doorway corner ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf1e3cc);
+const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, .05, 60);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xcab89a, 1.3));
+const lamp = new THREE.PointLight(0xfff1d6, 14, 14, 1.6); lamp.position.set(0, 2.6, 0); lamp.castShadow = true; scene.add(lamp);
+const win = new THREE.DirectionalLight(0xdbeeff, .9); win.position.set(-4, 3, -2); scene.add(win);
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .85, flatShading: true, ...extra });
+const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
+const W = 6, Dp = 5, Hh = 2.8;   // room size
+
+let room = new THREE.Group(); scene.add(room);
+const ROOMS = [
+  { name: '🏠 원룸', wall: 0xfff4e6, floor: 0xd9a066, n: 4, time: 22 },
+  { name: '🏠 투룸 빌라', wall: 0xf3f0ff, floor: 0xc69c6d, n: 5, time: 24 },
+  { name: '🏢 구축 아파트', wall: 0xe7f5ff, floor: 0xb08968, n: 6, time: 26 },
+  { name: '🏚️ 반지하', wall: 0xe9ecef, floor: 0x8d7b68, n: 7, time: 27 },
+  { name: '🏢 신축(?) 오피스텔', wall: 0xffffff, floor: 0xdee2e6, n: 7, time: 25 },
+];
+// every defect type: where it can appear + how it looks
+const DEFECTS = [
+  { key: 'mold', name: '곰팡이', cost: 300 }, { key: 'leak', name: '누수 자국', cost: 500 }, { key: 'crack', name: '벽 균열', cost: 400 },
+  { key: 'window', name: '깨진 창문', cost: 200 }, { key: 'roach', name: '바퀴벌레', cost: 150 }, { key: 'socket', name: '그을린 콘센트', cost: 250 },
+  { key: 'drip', name: '물 새는 수도', cost: 200 }, { key: 'floor', name: '들뜬 장판', cost: 300 }, { key: 'door', name: '삐뚤어진 문', cost: 350 },
+  { key: 'stain', name: '벽지 얼룩', cost: 100 }, { key: 'noise', name: '층간소음 (쿵쿵)', cost: 600 },
+];
+let defects = [], hits = [], marks = [], doorG = null;
+function blot(color, size, opacity) {   // irregular stain made of a few overlapping discs
+  const g = new THREE.Group();
+  for (let i = 0; i < 5; i++) { const d = new THREE.Mesh(new THREE.CircleGeometry(size * (.4 + Math.random() * .5), 9), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false })); d.position.set((Math.random() - .5) * size, (Math.random() - .5) * size, i * .002); g.add(d); }
+  return g;
+}
+function buildRoom(def, level) {
+  scene.remove(room); room = new THREE.Group(); scene.add(room);
+  defects = []; hits = [];
+  const wallM = flat(def.wall), floorM = flat(def.floor);
+  // floor, ceiling, back wall (−z), left wall (−x), right wall (+x)
+  const floor = box(W, .1, Dp, floorM, 0, -.05, 0, room);
+  for (let i = -2; i <= 2; i++) box(.02, .101, Dp, flat(new THREE.Color(def.floor).multiplyScalar(.85).getHex()), i * 1.2, -.05, 0, room);
+  box(W, .1, Dp, flat(0xffffff), 0, Hh, 0, room);
+  box(W, Hh, .1, wallM, 0, Hh / 2, -Dp / 2, room);
+  box(.1, Hh, Dp, wallM, -W / 2, Hh / 2, 0, room);
+  box(.1, Hh, Dp, wallM, W / 2, Hh / 2, 0, room);
+  box(W, .12, .12, flat(0xe9ecef), 0, .06, -Dp / 2 + .1, room);   // baseboard
+  // window on the left wall, door on the right wall, ceiling light
+  const glass = new THREE.MeshStandardMaterial({ color: 0xbfe3ff, transparent: true, opacity: .55, roughness: .05 });
+  box(.06, 1.1, 1.6, glass, -W / 2 + .06, 1.6, -.6, room); box(.1, 1.2, .08, flat(0xffffff), -W / 2 + .07, 1.6, -1.42, room); box(.1, 1.2, .08, flat(0xffffff), -W / 2 + .07, 1.6, .22, room);
+  box(.1, .08, 1.7, flat(0xffffff), -W / 2 + .07, 2.18, -.6, room); box(.1, .08, 1.7, flat(0xffffff), -W / 2 + .07, 1.02, -.6, room);
+  const doorBase = new THREE.Group(); doorBase.position.set(1.9, 0, -Dp / 2 + .1); room.add(doorBase);   // door on the back wall
+  doorG = new THREE.Group(); doorBase.add(doorG);
+  box(.95, 2.1, .06, flat(0x8d5a3b), 0, 1.05, 0, doorG); const knob = new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 6), flat(0xfab005, { metalness: .6 })); knob.position.set(.35, 1, .06); doorG.add(knob);
+  box(1.1, .08, .08, flat(0x6b4f3a), 0, 2.14, 0, doorBase);   // frame top stays level, so a tilted door shows
+  const lightFix = new THREE.Mesh(new THREE.CylinderGeometry(.35, .35, .06, 16), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3bf, emissiveIntensity: .6 })); lightFix.position.set(0, Hh - .06, 0); room.add(lightFix);
+  // furniture
+  box(1.5, .4, .9, flat(0x748ffc), 2.3, .2, -.4, room); box(.2, .5, .9, flat(0x5c7cfa), 2.85, .55, -.4, room);   // sofa against the right wall   // bed/sofa
+  box(.9, .75, .5, flat(0xc69c6d), -1.8, .375, -2.1, room);   // drawer
+  box(1, .05, .6, flat(0xdeb887), .1, .75, .6, room); for (const [x, z] of [[-.35, .35], [.55, .35], [-.35, .85], [.55, .85]]) box(.05, .75, .05, flat(0x8d5a3b), x, .375, z, room);   // table
+  // sink cabinet (for the dripping tap)
+  box(.55, .85, 1, flat(0xf8f9fa), -2.65, .425, .1, room); box(.06, .25, .06, flat(0xced4da, { metalness: .7 }), -2.82, 1.0, .1, room); box(.2, .06, .06, flat(0xced4da, { metalness: .7 }), -2.72, 1.12, .1, room);
+  // outlet plate on the back wall
+  box(.18, .25, .03, flat(0xffffff), -.6, .45, -Dp / 2 + .07, room);
+  // choose this room's defects
+  const pick = shuffle(DEFECTS.slice()).slice(0, Math.min(DEFECTS.length, def.n));
+  for (const d of pick) placeDefect(d, level);
+}
+function placeDefect(d, level) {
+  const subtle = Math.min(.45, level * .07);   // later rooms hide things better
+  let obj, at;
+  switch (d.key) {
+    case 'mold': obj = blot(0x2b8a3e, .28, .75 - subtle); obj.position.set(-W / 2 + .07, 2.1, -Dp / 2 + .45); obj.rotation.y = Math.PI / 2; at = obj.position.clone(); break;
+    case 'leak': obj = blot(0x8d6e40, .4, .6 - subtle); obj.position.set(.75, 2.45, -Dp / 2 + .07); at = obj.position.clone(); break;   // water stain spreading down from the ceiling line
+    case 'crack': { obj = new THREE.Group(); let x = 0, y = 0; for (let i = 0; i < 6; i++) { const seg = new THREE.Mesh(new THREE.PlaneGeometry(.025, .22), new THREE.MeshBasicMaterial({ color: 0x343a40, transparent: true, opacity: .9 - subtle })); seg.position.set(x, y, 0); seg.rotation.z = (Math.random() - .5) * 1.2; obj.add(seg); x += (Math.random() - .5) * .14; y -= .18; }
+      obj.position.set(-1.2, 2.25, -Dp / 2 + .06); at = new THREE.Vector3(-1.2, 1.8, -Dp / 2 + .06); break; }
+    case 'window': { obj = new THREE.Group(); for (let i = 0; i < 5; i++) { const l = new THREE.Mesh(new THREE.PlaneGeometry(.02, .45), new THREE.MeshBasicMaterial({ color: 0xffffff })); l.rotation.z = i * 1.25; obj.add(l); }
+      obj.position.set(-W / 2 + .1, 1.75, -.25); obj.rotation.y = Math.PI / 2; at = obj.position.clone(); break; }
+    case 'roach': { obj = new THREE.Group(); const b = new THREE.Mesh(new THREE.SphereGeometry(.07, 8, 6), flat(0x3b2416)); b.scale.set(1, .5, 1.6); obj.add(b); for (const s of [-1, 1]) { const ant = new THREE.Mesh(new THREE.BoxGeometry(.005, .005, .12), flat(0x3b2416)); ant.position.set(s * .03, .02, .14); ant.rotation.y = s * .4; obj.add(ant); }
+      obj.position.set(-.6, .04, -.4); obj.userData.roach = true; at = obj.position; break; }
+    case 'socket': obj = blot(0x212529, .1, .85 - subtle); obj.position.set(-.6, .55, -Dp / 2 + .09); at = obj.position.clone(); break;
+    case 'drip': { obj = new THREE.Mesh(new THREE.SphereGeometry(.03, 8, 6), new THREE.MeshStandardMaterial({ color: 0x74c0fc, transparent: true, opacity: .9 })); obj.position.set(-2.62, 1.05, .1); obj.userData.drip = true; at = new THREE.Vector3(-2.62, 1.0, .1); break; }
+    case 'floor': { obj = new THREE.Mesh(new THREE.BoxGeometry(.8, .08, .6), flat(0xc69c6d)); obj.position.set(-.3, .03, -.6); obj.rotation.z = .08; obj.rotation.x = -.05; at = obj.position.clone(); break; }
+    case 'door': { obj = new THREE.Group(); doorG.rotation.z = .07 - subtle * .05; at = new THREE.Vector3(1.9, 1.1, -Dp / 2 + .1); break; }
+    case 'stain': obj = blot(0xe9c46a, .22, .55 - subtle * .8); obj.position.set(.4, 1.5, -Dp / 2 + .07); at = obj.position.clone(); break;
+    case 'noise': obj = new THREE.Group(); at = new THREE.Vector3(-.8, Hh - .06, -2); obj.userData.noise = true; break;
+  }
+  if (obj) room.add(obj);
+  // generous invisible hit target
+  const hit = new THREE.Mesh(new THREE.SphereGeometry(.42, 8, 6), new THREE.MeshBasicMaterial({ visible: false })); hit.position.copy(at); room.add(hit);
+  const rec = { ...d, obj, hit, at, found: false };
+  hit.userData.def = rec; defects.push(rec); hits.push(hit);
+}
+
+// ---------- state ----------
+const LIVES = 3;
+let state = 'ready', score = 0, lives = LIVES, roomNo = 0, timeLeft = 20, timeMax = 20, overAt = 0, roomDef = ROOMS[0], noiseT = 0;
+let best = 0; try { best = +localStorage.getItem('inspect-best') || 0; } catch {}
+const $score = $('score'), $lives = $('lives'), $center = $('center'), $hint = $('hint');
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🔍', title: '임장 매의 눈', how: [
+  ['🏠', '매물 방에 숨은 <b>하자</b>를 찾아 탭하세요'],
+  ['🦟', '곰팡이·누수·균열·바퀴벌레… <b>쿵쿵 소리</b>는 천장을!'],
+  ['💰', '찾은 하자만큼 <b>집값을 깎아요</b> (점수 = 깎은 금액)'],
+  ['⏱️', '헛클릭은 -2초. 절반도 못 찾으면 계약 후회 (-1❤️)'],
+] }));
+function updateHud() {
+  $score.innerHTML = `${score.toLocaleString('ko-KR')}<small>만원</small>`;
+  $lives.textContent = '❤️'.repeat(lives) + '🤍'.repeat(LIVES - lives);
+  $('room').textContent = `${roomNo + 1}번째 · ${roomDef.name}`;
+  $('found').textContent = `🔍 ${defects.filter(d => d.found).length}/${defects.length}`;
+}
+function clearMarks() { for (const m of marks) m.el.remove(); marks = []; }
+function nextRoom() {
+  clearMarks();
+  roomDef = ROOMS[roomNo % ROOMS.length];
+  buildRoom(roomDef, roomNo);
+  timeMax = Math.max(14, roomDef.time - Math.floor(roomNo / ROOMS.length) * 3); timeLeft = timeMax; noiseT = 1;
+  state = 'playing'; updateHud();
+  Arcade.toast(`🔑 ${roomDef.name} 임장 시작! 하자 ${defects.length}개`, '#2b2438');
+}
+function reset() { score = 0; lives = LIVES; roomNo = 0; roomDef = ROOMS[0]; buildRoom(roomDef, 0); updateHud(); }
+function start() {
+  state = 'count'; $center.style.display = 'none'; $hint.style.display = '';
+  Arcade.countdown({ final: '임장!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { nextRoom(); } });
+}
+const tmpV = new THREE.Vector3();
+function screenOf(v) { tmpV.copy(v).project(camera); return [(tmpV.x * .5 + .5) * innerWidth, (-tmpV.y * .5 + .5) * innerHeight]; }
+function addMark(rec, missed) {
+  const el = document.createElement('div'); el.className = 'mark' + (missed ? ' missed' : '');
+  const lb = document.createElement('div'); lb.className = 'lbl' + (missed ? ' missed' : ''); lb.textContent = missed ? `놓침: ${rec.name}` : `${rec.name} -${rec.cost}만`;
+  document.body.append(el, lb); marks.push({ el, rec }, { el: lb, rec });
+}
+function endRoom() {
+  state = 'summary';
+  const found = defects.filter(d => d.found), missed = defects.filter(d => !d.found);
+  missed.forEach(d => addMark(d, true));
+  const saved = found.reduce((a, d) => a + d.cost, 0);
+  const ok = found.length >= Math.ceil(defects.length / 2);
+  if (!ok) { lives--; Arcade.sfx.fail(); Arcade.shake(.2); Arcade.toast(`😭 계약 후회… 놓친 하자 ${missed.length}개`, '#e03131'); }
+  else if (!missed.length) { score += 500; Arcade.sfx.fanfare(); Arcade.confetti({ y: innerHeight * .35, count: 80, emoji: ['🔍', '💰', '🏠'] }); Arcade.toast(`🦅 완벽 임장! 급매 협상 성공 -${(saved + 500).toLocaleString()}만`, '#2b8a3e'); }
+  else { Arcade.sfx.coin(); Arcade.toast(`🤝 ${saved.toLocaleString()}만원 깎았어요 (놓침 ${missed.length})`, '#1971c2'); }
+  updateHud();
+  setTimeout(() => { if (lives <= 0) finish(); else { roomNo++; nextRoom(); } }, 2600);
+}
+function finish() {
+  state = 'over'; overAt = performance.now(); clearMarks();
+  const isBest = score > best;
+  if (isBest) { best = score; try { localStorage.setItem('inspect-best', best); } catch {} }
+  isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  showScreen(Arcade.resultScreen({ emoji: '🔍', label: '깎은 집값', score, unit: '만원', msg: score >= 8000 ? '공인중개사가 당신을 두려워합니다' : score >= 3000 ? '임장 고수 인정' : '다음엔 손전등을 챙기세요',
+    rows: [['임장한 집', `${roomNo}곳`]], isBest: isBest && score > 0, best }));
+  Arcade.gameOver(score);
+}
+function tapStart() {
+  if (state === 'ready') start();
+  else if (state === 'over' && performance.now() - overAt > 1200 && !Arcade.inRun()) { reset(); start(); }
+}
+
+// ---------- input ----------
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+addEventListener('pointerdown', e => {
+  if (e.target.closest?.('.arcade-btn')) return;
+  if (state !== 'playing') { tapStart(); return; }
+  $hint.style.display = 'none';
+  ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(hits.filter(h => !h.userData.def.found), false)[0];
+  if (hit) {
+    const rec = hit.object.userData.def; rec.found = true;
+    score += rec.cost; addMark(rec, false); updateHud();
+    Arcade.sfx.perfect(defects.filter(d => d.found).length); Arcade.vibrate(25);
+    if (defects.every(d => d.found)) endRoom();
+  } else {
+    timeLeft = Math.max(0, timeLeft - 2);
+    const x = document.createElement('div'); x.className = 'xmark'; x.textContent = '✕ -2초'; x.style.left = e.clientX + 'px'; x.style.top = e.clientY + 'px'; document.body.appendChild(x); setTimeout(() => x.remove(), 650);
+    Arcade.sfx.miss(); Arcade.vibrate(40);
+  }
+});
+addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); tapStart(); } });
+
+function placeCamera() {
+  camera.aspect = innerWidth / innerHeight; camera.fov = camera.aspect < 1 ? 84 : 66; camera.updateProjectionMatrix();
+  camera.position.set(1.5, 1.6, 2.45); camera.lookAt(-.2, 1.25, -1.5);
+}
+placeCamera();
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
+
+// ---------- loop ----------
+let last = performance.now();
+reset(); showIntro();
+window.__insp = { door: () => { const b = new THREE.Box3().setFromObject(doorG); return [b.min.toArray().map(v=>+v.toFixed(2)), b.max.toArray().map(v=>+v.toFixed(2))]; }, allDefects() { buildRoom({ ...ROOMS[0], n: 99 }, 0); },  get state() { return state; }, get defects() { return defects; }, get score() { return score; }, get lives() { return lives; }, screenOf };
+
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
+  if (state === 'playing') { timeLeft -= dt; if (timeLeft <= 0) { timeLeft = 0; endRoom(); } }
+  $('tfill').style.transform = `scaleX(${timeLeft / timeMax})`;
+  // living defects: the roach scuttles, the tap drips, the ceiling thumps
+  for (const d of defects) {
+    if (d.found) continue;
+    if (d.obj?.userData.roach) { const o = d.obj; o.position.x = -.6 + Math.sin(t * .9) * 1.1; o.position.z = -.4 + Math.sin(t * 1.7) * .5; o.rotation.y = Math.atan2(Math.cos(t * .9) * 1.2 * .9, Math.cos(t * 1.7) * .4 * 1.7); d.hit.position.copy(o.position); }
+    if (d.obj?.userData.drip) { const k = (t * 1.2) % 1; d.obj.position.y = 1.05 - k * k * .25; d.obj.scale.setScalar(k < .9 ? 1 : 0); }
+    if (d.obj?.userData.noise && state === 'playing') { noiseT -= dt; if (noiseT <= 0) { noiseT = 2.4 + Math.random() * 1.5; Arcade.sfx.thud(); setTimeout(() => state === 'playing' && Arcade.sfx.thud(), 180); Arcade.shake(.05); lampShake = .5; } }
+  }
+  lampShake = Math.max(0, lampShake - dt); room.children.forEach(c => { if (c.geometry?.type === 'CylinderGeometry' && c.position.y > 2.5) c.position.x = Math.sin(t * 40) * .03 * lampShake; });
+  // keep markers glued to their spots
+  for (const m of marks) { const [x, y] = screenOf(m.rec.obj?.userData.roach ? m.rec.obj.position : m.rec.at); m.el.style.left = x + 'px'; m.el.style.top = y + 'px'; }
+  camera.position.set(1.5, 1.6, 2.45); Arcade.applyShake(camera, dt); camera.lookAt(-.2, 1.25, -1.5);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+let lampShake = 0;
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

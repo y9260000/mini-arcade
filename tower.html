@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>영끌 타워</title>
+<script src="common.js?v=17"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#9fd3ff;
+    user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  #price{font-family:"Jua",sans-serif;font-size:18px}
+  #price.up{animation:pu .3s}
+  @keyframes pu{50%{transform:scale(1.15);background:#d3f9d8}}
+  #event{position:fixed;left:50%;top:max(118px,calc(env(safe-area-inset-top) + 108px));transform:translateX(-50%);z-index:3;pointer-events:none;display:none;
+    font-family:"Jua",sans-serif;font-size:18px;color:#fff;border-radius:999px;padding:6px 16px;box-shadow:0 6px 16px rgba(0,0,0,.25);white-space:nowrap}
+  #hint{position:fixed;bottom:max(12vh,76px);left:0;right:0;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
+  #hint .pill{font-size:15px;padding:10px 18px}
+  .toast{top:36%}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>층</small></div>
+  <div class="hud-row"><span class="pill dark" id="price">시세 3.0억</span><span class="pill" id="combo" style="display:none"></span></div>
+</div>
+<div id="event" class="hud-ctl"></div>
+<div id="hint" class="hud-ctl"><span class="pill">👆 탭해서 층을 떨어뜨려요. 딱 맞추면 PERFECT!</span></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const $ = id => document.getElementById(id);
+const rnd = a => a[(Math.random() * a.length) | 0];
+
+// ---------- three ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const SKY_LOW = new THREE.Color(0x9fd3ff), SKY_HIGH = new THREE.Color(0x2a2f6e);
+scene.background = SKY_LOW.clone();
+scene.fog = new THREE.Fog(0x9fd3ff, 30, 90);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .1, 300);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8fb0d0, 1.5));
+const sun = new THREE.DirectionalLight(0xfff4e0, 1.6); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 50 }); scene.add(sun, sun.target);
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, flatShading: true, ...extra });
+const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
+
+// ground + city skyline
+{
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), flat(0x8ce99a)); g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(200, 3), flat(0x495057)); road.rotation.x = -Math.PI / 2; road.position.set(0, .01, 5); scene.add(road);
+  const COLS = [0xdee2e6, 0xced4da, 0xadb5bd, 0xe9ecef, 0xfff4e6];
+  for (let i = 0; i < 40; i++) {
+    const x = (Math.random() - .5) * 70, z = -10 - Math.random() * 30; if (Math.abs(x) < 4 && z > -14) continue;
+    const h = 3 + Math.random() * 14; box(2 + Math.random() * 3, h, 2 + Math.random() * 3, flat(rnd(COLS)), x, h / 2, z);
+  }
+  for (let i = 0; i < 10; i++) { const t = new THREE.Mesh(new THREE.IcosahedronGeometry(.7, 0), flat(0x40c057)); t.position.set((Math.random() - .5) * 20, .9, 3 + Math.random() * 4); scene.add(t); }
+  // foundation + sales office sign
+  box(5, .4, 4, flat(0x868e96), 0, .2, 0);
+  const sign = box(2.6, .9, .1, flat(0xe03131), -4, 1.6, 2); box(.1, 1.2, .1, flat(0x495057), -4, .6, 2);
+}
+// window texture for floors
+function floorTex(color) {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = color; g.fillRect(0, 0, 128, 64);
+  for (let i = 0; i < 4; i++) { g.fillStyle = '#9ad1ff'; g.fillRect(8 + i * 30, 14, 20, 30); g.fillStyle = 'rgba(255,255,255,.6)'; g.fillRect(8 + i * 30, 14, 6, 30); g.fillStyle = '#f1f3f5'; g.fillRect(4 + i * 30, 46, 28, 6); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const FLOOR_COLORS = ['#f8f0e3', '#ffe8cc', '#e7f5ff', '#fff0f6', '#ebfbee', '#f3f0ff'];
+const TEX = FLOOR_COLORS.map(floorTex);
+const H = .8, D = 2.4;
+function makeFloor(w, idx) {
+  const tex = TEX[idx % TEX.length].clone(); tex.needsUpdate = true; tex.repeat.set(Math.max(.5, w / 1.6), 1);
+  const side = new THREE.MeshStandardMaterial({ map: tex, roughness: .7 }), top = flat(0xced4da);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, H, D), [side, side, top, top, side, side]);
+  m.castShadow = true; m.receiveShadow = true; scene.add(m); return m;
+}
+
+// crane
+const crane = new THREE.Group(); scene.add(crane);
+const mast = box(.35, 30, .35, flat(0xfab005), -6.5, 15, -6, crane);   // tucked behind the tower
+const jib = box(14, .3, .3, flat(0xfab005), 0, 30, 0, crane);
+const arm = box(.3, .3, 6, flat(0xfab005), -6.5, 30, -3, crane);
+const trolley = new THREE.Group(); crane.add(trolley);
+const cable = box(.04, 1, .04, flat(0x212529), 0, 0, 0, trolley);
+const hook = box(.3, .2, .3, flat(0x495057), 0, 0, 0, trolley);
+
+// ---------- state ----------
+let state = 'ready', floors = [], cur = null, falling = null, debris = [], overAt = 0, combo = 0, perfects = 0, price = 3, eventT = 0, ev = null, swingT = 0, nextW = null;
+let best = 0; try { best = +localStorage.getItem('tower-best') || 0; } catch {}
+const $score = $('score'), $price = $('price'), $combo = $('combo'), $center = $('center'), $event = $('event'), $hint = $('hint');
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🏢', title: '영끌 타워', how: [
+  ['👆', '크레인에 매달린 층을 <b>탭</b>해서 떨어뜨려요'],
+  ['✂️', '삐져나온 부분은 잘려나가요 (하자 보수비)'],
+  ['✨', '딱 맞추면 <b>PERFECT</b>! 시세 프리미엄 + 폭이 회복돼요'],
+  ['📉', '<b>금리 인상</b>·<b>규제</b> 이벤트 조심. 완전히 빗나가면 분양 실패'],
+] }));
+const topY = () => .4 + floors.length * H;
+const topFloor = () => floors[floors.length - 1];
+function fmtPrice(p) { return p >= 10 ? `${p.toFixed(1)}억` : `${p.toFixed(2)}억`; }
+function updateHud(up) {
+  $score.innerHTML = `${floors.length - 1}<small>층</small>`;
+  $price.textContent = `시세 ${fmtPrice(price)}`; if (up) { $price.classList.remove('up'); void $price.offsetWidth; $price.classList.add('up'); }
+  $combo.style.display = combo >= 2 ? '' : 'none'; $combo.textContent = `✨ ${combo}연속 PERFECT`;
+}
+function reset() {
+  for (const f of floors) scene.remove(f.m); for (const d of debris) scene.remove(d.m);
+  if (cur) scene.remove(cur.m); if (falling) scene.remove(falling.m);
+  floors = []; debris = []; cur = null; falling = null; combo = 0; perfects = 0; price = 3; ev = null; eventT = 0; nextW = null;
+  const base = makeFloor(3, 0); base.position.set(0, .4 + H / 2, 0); floors.push({ m: base, x: 0, w: 3 });   // ground floor (lobby)
+  spawn(); updateHud();
+}
+function spawn() {
+  const w = nextW ?? topFloor().w; nextW = null;
+  cur = { m: makeFloor(w, floors.length), w, x: 0 };
+  swingT = Math.random() * Math.PI * 2;
+}
+function start() { state = 'playing'; $center.style.display = 'none'; $hint.style.display = ''; Arcade.sfx.go(); }
+function drop() {
+  if (state !== 'playing' || !cur || falling) return;
+  $hint.style.display = 'none';
+  falling = { ...cur, y: cur.m.position.y, vy: 0 }; cur = null;
+  Arcade.sfx.whoosh();
+}
+function land() {
+  const f = falling, below = topFloor();
+  const left = Math.max(f.x - f.w / 2, below.x - below.w / 2), right = Math.min(f.x + f.w / 2, below.x + below.w / 2);
+  const overlap = right - left;
+  if (overlap <= .05) { return miss(); }
+  const off = Math.abs(f.x - below.x);
+  let w = overlap, x = (left + right) / 2;
+  if (off < .09) {   // perfect: snap, keep width, regrow a little
+    combo++; perfects++; x = below.x; w = Math.min(3, below.w + (combo >= 3 ? .15 : 0));
+    price *= 1.06 + Math.min(.06, combo * .01);
+    Arcade.sfx.perfect(Math.min(combo, 12)); Arcade.vibrate(combo >= 3 ? [20, 30, 50] : 30); Arcade.shake(.1);
+    Arcade.toast(combo >= 3 ? `✨ ${combo}연속 PERFECT! 프리미엄 붙는다` : '✨ PERFECT!', '#e8590c');
+    ring(x, topY());
+  } else {
+    combo = 0;
+    // cut the overhang off as debris
+    const cutW = f.w - overlap, cutX = f.x > below.x ? right + cutW / 2 : left - cutW / 2;
+    const piece = makeFloor(cutW, floors.length); piece.position.set(cutX, topY() + H / 2, 0);
+    debris.push({ m: piece, vy: 0, vx: (f.x > below.x ? 1 : -1) * 1.2, rz: (f.x > below.x ? -1 : 1) * 2, t: 0 });
+    price *= 1.03; price -= cutW * .15;   // repair costs
+    Arcade.sfx.pop(.8 + floors.length * .02); Arcade.sfx.thud(); Arcade.vibrate(15); Arcade.shake(.06);
+  }
+  scene.remove(f.m);
+  const m = makeFloor(w, floors.length); m.position.set(x, topY() + H / 2, 0);
+  floors.push({ m, x, w }); falling = null;
+  m.scale.y = .7; m.userData.squash = 0;
+  updateHud(true);
+  if (floors.length % 10 === 1) { Arcade.confetti({ y: innerHeight * .35, count: 60, emoji: ['🏢', '💰', '📈'] }); Arcade.sfx.coin(); Arcade.toast(`🏢 ${floors.length - 1}층 돌파! 시세 ${fmtPrice(price)}`, '#2b8a3e'); }
+  maybeEvent();
+  spawn();
+}
+const EVENTS = [
+  { key: 'rate', name: '📉 금리 인상! 크레인이 미친 듯이 흔들려요', col: '#e03131', dur: 6 },
+  { key: 'reg', name: '🚫 규제 발표! 다음 층이 좁아져요', col: '#5f3dc4', dur: 0 },
+  { key: 'gtx', name: '🚄 호재: GTX 개통! 다음 층 넓어짐', col: '#2b8a3e', dur: 0 },
+  { key: 'wind', name: '💨 강풍 주의보! 떨어지는 층이 밀려요', col: '#1971c2', dur: 6 },
+];
+function maybeEvent() {
+  if (floors.length < 6 || ev || Math.random() > .22) return;
+  ev = rnd(EVENTS); eventT = ev.dur;
+  $event.style.display = 'block'; $event.style.background = ev.col; $event.textContent = ev.name;
+  Arcade.sfx.hmm(); Arcade.vibrate([20, 40, 20]);
+  if (ev.key === 'reg') { nextW = Math.max(.6, topFloor().w * .7); setTimeout(() => { $event.style.display = 'none'; ev = null; }, 1800); }
+  if (ev.key === 'gtx') { nextW = Math.min(3, topFloor().w + .8); price *= 1.1; updateHud(true); setTimeout(() => { $event.style.display = 'none'; ev = null; }, 1800); }
+}
+function miss() {
+  const f = falling; falling = null;
+  debris.push({ m: f.m, vy: 0, vx: (Math.random() - .5) * 2, rz: (Math.random() - .5) * 4, t: 0 });
+  state = 'over'; overAt = performance.now();
+  Arcade.sfx.crash(); Arcade.shake(.4); Arcade.vibrate([80, 50, 160]);
+  Arcade.toast('💥 분양 실패…', '#e03131');
+  setTimeout(finish, 1100);
+}
+function finish() {
+  const n = floors.length - 1, isBest = n > best;
+  if (isBest) { best = n; try { localStorage.setItem('tower-best', best); } catch {} }
+  isBest && n > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  const msg = n >= 40 ? '랜드마크 등극! 영끌 성공의 신화' : n >= 20 ? '역세권 대장 아파트 완성' : n >= 8 ? '그럭저럭 빌라 한 채' : '대출 이자만 남았다…';
+  showScreen(Arcade.resultScreen({ emoji: '🏢', label: '쌓은 층수', score: n, unit: '층', msg,
+    rows: [['최종 시세', fmtPrice(price)], ['PERFECT', `${perfects}번`]], isBest: isBest && n > 0, best }));
+  Arcade.gameOver(n);
+}
+function tapStart() {
+  if (state === 'ready') start();
+  else if (state === 'over' && performance.now() - overAt > 1600 && !Arcade.inRun()) { reset(); start(); }
+}
+const rings = [];
+function ring(x, y) { const r = new THREE.Mesh(new THREE.RingGeometry(.3, .45, 32), new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: .9, side: THREE.DoubleSide })); r.rotation.x = -Math.PI / 2; r.position.set(x, y + .02, 0); scene.add(r); rings.push({ m: r, t: 0 }); }
+addEventListener('pointerdown', () => { state === 'playing' ? drop() : tapStart(); });
+addEventListener('keydown', e => { if ((e.code === 'Space' || e.code === 'Enter') && !e.repeat) { e.preventDefault(); state === 'playing' ? drop() : tapStart(); } });
+
+// ---------- loop ----------
+const camPos = new THREE.Vector3(0, 6, 12), camLook = new THREE.Vector3(0, 3, 0);
+let last = performance.now();
+reset(); showIntro();
+window.__tower = { get state() { return state; }, get cur() { return cur; }, top: () => topFloor(), drop, get floors() { return floors.length - 1; }, get price() { return price; } };
+
+function frame(now) {
+  const dt = Math.min(.04, (now - last) / 1000); last = now; const t = now / 1000;
+  const n = floors.length;
+  if (ev && ev.dur) { eventT -= dt; if (eventT <= 0) { ev = null; $event.style.display = 'none'; } }
+  // the hook swings faster as the tower grows (and crazily during a rate hike)
+  const hookY = topY() + 3.4;
+  if (cur && state !== 'over') {
+    const speed = 1.6 + Math.min(2.2, n * .06) + (ev?.key === 'rate' ? 1.6 : 0), amp = 2.6 + (ev?.key === 'rate' ? 1 : 0);
+    swingT += dt * speed;
+    cur.x = Math.sin(swingT) * amp;
+    cur.m.position.set(cur.x, hookY - .6, 0); cur.m.rotation.z = Math.cos(swingT) * .05;
+  }
+  trolley.position.set(cur ? cur.x : 0, 0, 0);
+  const jibY = Math.max(30, hookY + 8); jib.position.y = jibY; arm.position.y = jibY; mast.scale.y = jibY / 30; mast.position.y = jibY / 2;
+  cable.scale.y = Math.max(.1, jibY - hookY); cable.position.set(0, (jibY + hookY) / 2, 0); hook.position.set(0, hookY, 0);
+  trolley.position.z = 0;
+  if (falling) {
+    falling.vy -= 22 * dt; falling.y += falling.vy * dt;
+    if (ev?.key === 'wind') falling.x += Math.sin(t * 3) * dt * 1.2;
+    falling.m.position.set(falling.x, falling.y, 0); falling.m.rotation.z *= .9;
+    if (falling.y - H / 2 <= topY()) land();
+  }
+  for (let i = debris.length - 1; i >= 0; i--) { const d = debris[i]; d.t += dt; d.vy -= 18 * dt; d.m.position.y += d.vy * dt; d.m.position.x += d.vx * dt; d.m.rotation.z += d.rz * dt; if (d.m.position.y < -3 || d.t > 4) { scene.remove(d.m); debris.splice(i, 1); } }
+  for (const f of floors) if (f.m.userData.squash !== undefined && f.m.userData.squash < 1) { f.m.userData.squash += dt * 5; f.m.scale.y = 1 - .3 * Math.cos(f.m.userData.squash * Math.PI * 2) * (1 - f.m.userData.squash); }
+  for (let i = rings.length - 1; i >= 0; i--) { const r = rings[i]; r.t += dt; r.m.scale.setScalar(1 + r.t * 8); r.m.material.opacity = .9 * (1 - r.t / .5); if (r.t > .5) { scene.remove(r.m); rings.splice(i, 1); } }
+  // sky darkens toward space as you climb
+  const k = Math.min(1, n / 60); scene.background.copy(SKY_LOW).lerp(SKY_HIGH, k); scene.fog.color.copy(scene.background);
+  // camera follows the top
+  const portrait = innerWidth < innerHeight;
+  const ty = topY();
+  const cp = state === 'over' ? new THREE.Vector3(0, ty * .55 + 4, Math.max(14, ty * 1.1)) : new THREE.Vector3(0, ty + (portrait ? 5 : 4), portrait ? 15 : 11);
+  const cl = state === 'over' ? new THREE.Vector3(0, ty * .45, 0) : new THREE.Vector3(0, ty + 1.2, 0);
+  camPos.lerp(cp, Math.min(1, dt * 3)); camLook.lerp(cl, Math.min(1, dt * 3));
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  camera.position.copy(camPos); Arcade.applyShake(camera, dt); camera.lookAt(camLook);
+  sun.position.set(camLook.x + 6, camLook.y + 10, 8); sun.target.position.copy(camLook);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+addEventListener('resize', () => renderer.setSize(innerWidth, innerHeight));
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

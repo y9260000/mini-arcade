@@ -37,6 +37,19 @@
   .msg{font:500 13px/1.35 "Noto Sans KR",sans-serif;color:#e9ecf5;animation:msgIn .25s ease-out;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .msg b{font-weight:700;margin-right:5px}
   @keyframes msgIn{from{opacity:0;transform:translateY(8px)}}
+  #news{position:fixed;left:50%;top:max(214px,calc(env(safe-area-inset-top) + 204px));transform:translateX(-50%);z-index:5;pointer-events:none;width:min(420px,calc(100% - 32px));
+    background:#fff;color:#1e2532;border-radius:16px;padding:10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;transition:opacity .25s,transform .25s}
+  #news.on{opacity:1;transform:translateX(-50%) translateY(4px)}
+  #news .src{font:700 12px "Noto Sans KR",sans-serif;color:#868e96;display:flex;justify-content:space-between}
+  #news .src b{color:#e03131}
+  #news .t{font:700 16px/1.35 "Noto Sans KR",sans-serif;margin-top:3px;word-break:keep-all}
+  #gauge{position:fixed;right:16px;bottom:calc(max(64px,9vh) + 112px);width:min(210px,34vw);z-index:3;pointer-events:none;background:rgba(10,14,28,.62);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:8px 10px;backdrop-filter:blur(6px)}
+  #gauge .lb{display:flex;justify-content:space-between;font:700 11px "Noto Sans KR",sans-serif;color:rgba(255,255,255,.6)}
+  #gauge .lb b{color:#fff;font-size:13px}
+  #gauge .bar{position:relative;height:12px;border-radius:6px;margin-top:6px;background:linear-gradient(90deg,#3d8bfd,#2c3660 50%,#ff4d4d)}
+  #gauge .needle{position:absolute;top:-4px;width:4px;height:20px;margin-left:-2px;border-radius:2px;background:#fff;box-shadow:0 0 8px #fff;transition:left .15s}
+  #gauge .warn{margin-top:6px;font:700 12px "Noto Sans KR",sans-serif;color:#ffd43b;min-height:16px}
+  #gauge.alert{border-color:#ffd43b;animation:ga .3s infinite alternate} @keyframes ga{to{box-shadow:0 0 18px rgba(255,212,59,.6)}}
   #timer{position:fixed;left:16px;right:16px;bottom:calc(max(64px,9vh) + 92px);max-width:520px;margin:0 auto;height:6px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;z-index:4}
   #timer i{display:block;height:100%;width:100%;background:#ffd43b;border-radius:3px}
 </style>
@@ -52,6 +65,8 @@
 <div class="tag" id="tbuy"></div><div class="tag" id="tsell"></div><div class="tag" id="tpeak"></div>
 <div id="chat"><div class="head"><span>💬 주식 갤러리</span><span><b>●</b> <span id="online">1,284</span>명</span></div><div id="msgs"></div></div>
 <div id="timer"><i></i></div>
+<div id="news"><div class="src"><span id="nsrc"></span><b>🚨 속보</b></div><div class="t" id="nt"></div></div>
+<div id="gauge"><div class="lb"><span>매도세</span><b id="gv">50%</b><span>매수세</span></div><div class="bar"><i class="needle" id="gn" style="left:50%"></i></div><div class="warn" id="gw"></div></div>
 <div id="btns"><button id="buy">매수</button><button id="sell" disabled>매도</button></div>
 <div class="screen" id="center"></div>
 
@@ -118,10 +133,15 @@ let state = 'ready', round = 0, results = [];
 let buyIdx = -1, sellIdx = -1, ffEnd = 0, acc = 0, roundT = 0, startIdx = 0;
 let best = 0; try { best = +localStorage.getItem('stock-best') || 0; } catch {}
 const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+// the next trend is decided LOOK ticks before it starts, and the pressure gauge leaks it: that's the skill signal
+const LOOK = 26, newDrift = () => (Math.random() - .42) * .016;
+let nextDrift = null, shocks = [];
 function nextPrice() {
-  if (--regime <= 0) { drift = (Math.random() - .42) * .014; vol = .006 + Math.random() * .014; regime = 15 + (Math.random() * 55 | 0); }
+  if (--regime <= 0) { drift = nextDrift ?? newDrift(); nextDrift = null; vol = .005 + Math.random() * .01; regime = 18 + (Math.random() * 50 | 0); }
+  if (regime <= LOOK && nextDrift === null) nextDrift = newDrift();
   let r = drift + vol * gauss();
-  if (Math.random() < .012) r += (Math.random() - .45) * .14;
+  for (const sh of shocks) if (sh.wait > 0) sh.wait--; else if (sh.left > 0) { r += sh.per; sh.left--; }
+  if (Math.random() < .004) r += (Math.random() - .5) * .06;
   prices.push(Math.max(.05, prices[prices.length - 1] * Math.exp(r)));
 }
 const won = p => Math.round(p * 100).toLocaleString('ko-KR') + '원';
@@ -144,7 +164,7 @@ const hideScreen = () => { $center.style.display = 'none'; };
 function newChart() {
   clearCandles();
   $('ticker').textContent = NAMES[(Math.random() * NAMES.length) | 0];
-  prices = [100]; regime = 0;
+  prices = [100]; regime = 0; nextDrift = null; shocks = []; newsT = 3 + Math.random() * 2; gaugeV = 0; gaugeHist = [];
   for (let i = 0; i < 160; i++) nextPrice();
   startIdx = prices.length - 1;
   buyIdx = sellIdx = -1; acc = 0; roundT = 0;
@@ -211,6 +231,8 @@ function gameOver() {
 }
 const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '📈', title: '고점 매도 챌린지', how: [
   ['🕯️', '캔들 차트가 실시간으로 움직여요'],
+  ['🚨', '<b>속보</b>가 뜨면 출처를 보세요. 공시·증권사는 진짜, 익명 지라시는 낚시!'],
+  ['📊', '<b>매수세 게이지</b>가 꺾이면 고점이 가까워요'],
   ['🔴', '쌀 때 <b style="color:#e03131">매수</b>, 고점이다 싶으면 <b style="color:#1971c2">매도</b>'],
   ['⏩', '팔고 나면 빨리감기로 그 뒤 진짜 고점을 보여줘요'],
   ['🏁', '3라운드 수익률 합계로 승부 · B/S 키도 가능'],
@@ -273,6 +295,41 @@ function chatTick(dt) {
   if (state === 'live' && buyIdx >= 0 && Math.random() < .5) kind = prices[n] >= prices[buyIdx] ? 'holdUp' : 'holdDown';
   if (state === 'ff' && Math.random() < .5) kind = prices[n] > prices[sellIdx] * 1.03 ? 'regret' : prices[n] < prices[sellIdx] * .97 ? 'genius' : kind;
   post(kind);
+}
+
+// ---------- 🚨 breaking news: real disclosures move the price ~2s later, rumours don't (or go the other way) ----------
+let newsT = 4, newsHide = 0;
+const NEWS = {
+  realUp: ['3분기 영업이익 {p}% 증가 발표', '{n}억 규모 대형 수주 계약 체결', '신제품 사전예약 {n}만 건 돌파', '자사주 {n}억 원어치 매입 결정', '해외 기업과 {n}억 공급 계약'],
+  realDn: ['대표이사 횡령 혐의로 압수수색', '제품 {n}만 대 리콜 결정', '{n}억 규모 유상증자 결정', '실적 쇼크… 영업이익 {p}% 감소', '최대주주 지분 {p}% 대량 매도'],
+  fakeUp: ['ㄹㅇ 내일 상한가 확실함 ㅋㅋ', '지인이 거기 다니는데 대박 호재래', '세력 들어온다 지금 타라!!', '카더라인데 인수합병 한대 ㄷㄷ', '유튜버가 무조건 오른대'],
+  fakeDn: ['곧 상폐된다던데?? ㄷㄷ', '대표 해외로 도망갔다는 소문', '지금 다 던져라 진짜임', '내부자가 팔았다던데 ㅋㅋ'],
+};
+const SRC_REAL = ['📢 전자공시', '📰 연합속보', '🏦 증권사 리포트', '📺 경제TV 단독'], SRC_FAKE = ['💬 익명 갤러', '📱 단톡방 펌', '🎥 주식 유튜버', '👂 카더라'];
+function breakingNews() {
+  const real = Math.random() < .6, up = Math.random() < .55, ticker = $('ticker').textContent;
+  const t = rnd(NEWS[(real ? 'real' : 'fake') + (up ? 'Up' : 'Dn')]).replace('{p}', 10 + (Math.random() * 60 | 0)).replace('{n}', (2 + (Math.random() * 90 | 0)) * 10);
+  $('nsrc').textContent = real ? `${rnd(SRC_REAL)} · ${ticker}` : rnd(SRC_FAKE); $('nt').textContent = real ? `${ticker}, ${t}` : t;
+  $('news').classList.add('on'); newsHide = 4.2; Arcade.sfx.ding(); Arcade.vibrate(20);
+  const k = up ? 1 : -1;
+  if (real) { const tot = (.08 + Math.random() * .08) * k, n = 10; shocks.push({ wait: 26 + (Math.random() * 8 | 0), left: n, per: tot / n }); }
+  else if (Math.random() < .5) { const n = 8; shocks.push({ wait: 24, left: n, per: -.05 * k / n }); }
+}
+function rnd(a) { return a[(Math.random() * a.length) | 0]; }
+// pressure gauge: current trend + the upcoming trend (leaked a bit early) + pending news shocks, smoothed and noisy
+let gaugeV = 0, gaugeHist = [];
+function gaugeTick(dt) {
+  const lead = nextDrift !== null ? nextDrift : drift, w = nextDrift !== null ? Math.min(1, (LOOK - regime) / (LOOK * .6)) : 0;
+  let target = (drift * (1 - w) + lead * w) / .009;
+  for (const sh of shocks) if (sh.left > 0 && sh.wait < 22) target += sh.per * sh.left / .05;
+  target = Math.max(-1, Math.min(1, target + (Math.random() - .5) * .25));
+  gaugeV += (target - gaugeV) * Math.min(1, dt * 3);
+  const now = performance.now(); gaugeHist.push([now, gaugeV]); while (gaugeHist.length && now - gaugeHist[0][0] > 1500) gaugeHist.shift();
+  const pctV = Math.round(50 + gaugeV * 50);
+  $('gn').style.left = pctV + '%'; $('gv').textContent = `${pctV >= 50 ? '매수' : '매도'} ${pctV >= 50 ? pctV : 100 - pctV}%`; $('gv').style.color = pctV >= 55 ? '#ff6b6b' : pctV <= 45 ? '#5cb3ff' : '#fff';
+  const peakWas = Math.max(...gaugeHist.map(h => h[1])), dropping = peakWas > .3 && gaugeV < peakWas - .45;
+  const warn = state === 'live' && buyIdx >= 0 && dropping ? '⚠️ 매수세 꺾임! 고점 신호' : state === 'live' && buyIdx < 0 && gaugeV > .45 ? '🔥 매수세 유입 중' : '';
+  $('gw').textContent = warn; $('gauge').classList.toggle('alert', warn.startsWith('⚠️'));
 }
 
 // ---------- layout / render ----------
@@ -342,7 +399,9 @@ function frame(now) {
   else buyLine.visible = false;
   if (state === 'ready' || state === 'over') Object.values(tags).forEach(t => t.style.display = 'none');
 
-  chatTick(dt);
+  chatTick(dt); if (state === 'live' || state === 'ff') gaugeTick(dt);
+  if (state === 'live') { newsT -= dt; if (newsT <= 0) { newsT = 4.5 + Math.random() * 3; breakingNews(); } }
+  if (newsHide > 0) { newsHide -= dt; if (newsHide <= 0) $('news').classList.remove('on'); }
   // camera: angled 3D view framing the visible range
   const w = k1 - k0, cx = (k0 + k1) / 2, dist = Math.max(16, w * 1.05 / camera.aspect + 10, w * .55 + 8);
   const tp = new THREE.Vector3(cx + w * .12, CHART_H * .5 + dist * .22, dist), tl = new THREE.Vector3(cx, CHART_H * .42, 0);

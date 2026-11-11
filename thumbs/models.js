@@ -211,6 +211,14 @@ export const M = {
     cyl(.28, .28, .05, 0xffffff, -.1, -1.05, .7, 0, 0, 0, G, 16); [0xffffff, 0xb2f2bb, 0xffc9de].forEach((c, i) => { const s2 = sph(.07, c, -.2 + i * .1, -1, .7, G, 8, 6); s2.scale.set(1.4, .8, .9); });
     return t => { b.scale.setScalar(1 + Math.abs(Math.sin(t * 5)) * .08); g.rotation.z = Math.sin(t * 6) * .05; k.position.y = -1.1 - Math.abs(Math.sin(t * 2)) * .05; sw.position.y = 1.1 - (t * .6 % .5); };
   },
+  hwatu() {   // fanned hwatu cards on a green blanket
+    box(2.6, .05, 1.8, 0x2f6b3a, 0, -.6, 0);
+    const cols = [[0xfbf3df, 0x2b8a3e, 0xe03131], [0xfbf3df, 0xe64980, 0xffd43b], [0xb22222, 0xb22222, 0xb22222], [0xfbf3df, 0x495057, 0xffffff]];
+    const cs = cols.map((c, i) => { const g = grp(-.75 + i * .5, -.5 + i * .02, .1 - i * .05); g.rotation.set(-1.2, 0, (i - 1.5) * .18);
+      box(.62, .92, .03, 0x1c1c24, 0, 0, 0, 0, 0, 0, g); box(.54, .84, .035, c[0], 0, 0, 0, 0, 0, 0, g);
+      if (c[0] !== 0xb22222) { sph(.12, c[2], .08, .2, .03, g, 8, 6).scale.z = .2; box(.4, .1, .04, c[1], 0, -.25, 0, 0, 0, 0, g); } return g; });
+    return t => { cs.forEach((g, i) => { g.position.y = -.5 + i * .02 + Math.max(0, Math.sin(t * 2.5 - i * .7)) * .25; g.rotation.z = (i - 1.5) * .18 + Math.sin(t * 2 + i) * .04; }); };
+  },
   dice() {   // random-play die: rounded white cube with pips
     const d = grp(); d.rotation.set(.55, .75, .1);
     const g = new THREE.BoxGeometry(1.6, 1.6, 1.6, 10, 10, 10), p = g.attributes.position, v = new THREE.Vector3(), cl = new THREE.Vector3(), A = .56, RR = .24;

@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>화투 짝맞추기</title>
+<script src="common.js?v=19"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#1f4d2b;
+    user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  .hud-score{font-size:56px}
+  #bar{position:fixed;left:50%;transform:translateX(-50%);top:max(108px,calc(env(safe-area-inset-top) + 100px));z-index:3;display:flex;gap:10px;align-items:center;pointer-events:none}
+  #bar .pill{font:20px "Jua",sans-serif}
+  #time{min-width:92px;text-align:center} #time.low{background:#ff6b6b;color:#fff}
+  #hint{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(18px,env(safe-area-inset-bottom));z-index:4;border:0;border-radius:18px;padding:14px 20px;font:22px "Jua",sans-serif;background:#ffd43b;color:#5c3a00;box-shadow:0 5px 0 #c98a00;cursor:pointer}
+  #hint:active{transform:translateY(3px);box-shadow:0 2px 0 #c98a00} #hint:disabled{opacity:.4}
+  #say{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;pointer-events:none;font:clamp(34px,9vw,60px) "Jua",sans-serif;color:#fff;text-shadow:0 4px 0 #8b1e1e,0 0 24px rgba(0,0,0,.4);opacity:0;white-space:nowrap}
+  #say.show{animation:sy 1.2s ease-out}
+  @keyframes sy{0%{opacity:0;transform:translate(-50%,-50%) scale(1.6)}15%{opacity:1;transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0}}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>점</small></div>
+</div>
+<div id="bar" class="hud-ctl"><span class="pill" id="stage">1단계</span><span class="pill dark" id="time">⏱ 60</span><span class="pill" id="left">남은 짝 6</span></div>
+<button id="hint" class="hud-ctl">💡 힌트 3</button>
+<div id="say"></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const $ = id => document.getElementById(id);
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+// ---------- our own hand-drawn hwatu faces (12 months, two variants each) ----------
+const MONTHS = [
+  { n: 1, name: '송학', col: '#2b8a3e' }, { n: 2, name: '매조', col: '#e64980' }, { n: 3, name: '벚꽃', col: '#f783ac' }, { n: 4, name: '흑싸리', col: '#343a40' },
+  { n: 5, name: '난초', col: '#7048e8' }, { n: 6, name: '모란', col: '#c92a2a' }, { n: 7, name: '홍싸리', col: '#e03131' }, { n: 8, name: '공산', col: '#495057' },
+  { n: 9, name: '국화', col: '#f59f00' }, { n: 10, name: '단풍', col: '#d9480f' }, { n: 11, name: '오동', col: '#1c1c24' }, { n: 12, name: '비', col: '#1971c2' },
+];
+const W = 256, H = 384;
+function flower(g, x, y, r, petal, center, n = 5) {
+  g.fillStyle = petal; for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; g.beginPath(); g.ellipse(x + Math.cos(a) * r * .55, y + Math.sin(a) * r * .55, r * .5, r * .32, a, 0, 7); g.fill(); }
+  g.fillStyle = center; g.beginPath(); g.arc(x, y, r * .25, 0, 7); g.fill();
+}
+function branch(g, pts, w = 10, c = '#5c3a21') { g.strokeStyle = c; g.lineWidth = w; g.lineCap = 'round'; g.beginPath(); g.moveTo(...pts[0]); for (const p of pts.slice(1)) g.lineTo(...p); g.stroke(); }
+function ribbon(g, txt) {   // red poem ribbon (띠) for the second variant
+  g.save(); g.translate(150, 70); g.rotate(.12); g.fillStyle = '#e03131'; g.fillRect(-18, 0, 36, 170); g.fillStyle = '#fff3bf'; g.font = 'bold 26px serif'; g.textAlign = 'center';
+  [...txt].forEach((ch, i) => g.fillText(ch, 0, 34 + i * 34)); g.restore();
+}
+function drawFace(m, v) {
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  g.fillStyle = '#1c1c24'; g.fillRect(0, 0, W, H); g.fillStyle = '#fbf3df'; g.fillRect(10, 10, W - 20, H - 20);
+  const k = m.n;
+  if (k === 1) { g.fillStyle = '#e03131'; g.beginPath(); g.arc(180, 80, 42, 0, 7); g.fill(); branch(g, [[60, 300], [90, 200], [80, 120]], 14); for (let i = 0; i < 4; i++) { g.fillStyle = i % 2 ? '#2b8a3e' : '#37b24d'; g.beginPath(); g.moveTo(40 + i * 10, 250 - i * 45); g.lineTo(150 + i * 5, 250 - i * 45); g.lineTo(95, 200 - i * 45); g.fill(); } }
+  if (k === 2) { branch(g, [[30, 300], [120, 200], [210, 120]], 12); [[120, 200], [170, 150], [80, 250], [205, 115]].forEach(([x, y]) => flower(g, x, y, 34, '#f06595', '#ffd43b')); if (!v) { g.fillStyle = '#fab005'; g.beginPath(); g.ellipse(80, 130, 30, 18, -.4, 0, 7); g.fill(); } }
+  if (k === 3) { for (let i = 0; i < 9; i++) flower(g, 50 + (i % 3) * 75, 90 + Math.floor(i / 3) * 60, 30, '#ffc9de', '#f783ac'); g.fillStyle = '#c92a2a'; g.fillRect(30, 260, 196, 50); g.fillStyle = '#ffd43b'; for (let i = 0; i < 5; i++) g.fillRect(40 + i * 38, 270, 18, 30); }
+  if (k === 4) { branch(g, [[200, 30], [190, 140]], 8, '#343a40'); for (let i = 0; i < 7; i++) { g.fillStyle = '#212529'; g.beginPath(); g.ellipse(90 + (i % 2) * 60, 70 + i * 34, 30, 12, .6, 0, 7); g.fill(); } }
+  if (k === 5) { for (let i = 0; i < 4; i++) { g.strokeStyle = '#2f9e44'; g.lineWidth = 8; g.beginPath(); g.moveTo(60 + i * 45, 320); g.quadraticCurveTo(50 + i * 45, 200, 80 + i * 40, 90); g.stroke(); } [[90, 120], [170, 160]].forEach(([x, y]) => flower(g, x, y, 38, '#845ef7', '#ffd43b', 3)); }
+  if (k === 6) { flower(g, 128, 160, 80, '#e03131', '#ffd43b', 6); flower(g, 128, 160, 46, '#ff8787', '#ffd43b', 6); for (const s of [-1, 1]) { g.fillStyle = '#2b8a3e'; g.beginPath(); g.ellipse(128 + s * 70, 270, 50, 22, s * .5, 0, 7); g.fill(); } }
+  if (k === 7) { branch(g, [[40, 330], [120, 200], [190, 80]], 7, '#862e9c'); for (let i = 0; i < 12; i++) { g.fillStyle = '#e03131'; g.beginPath(); g.arc(60 + Math.random() * 140, 80 + Math.random() * 200, 10, 0, 7); g.fill(); } }
+  if (k === 8) { g.fillStyle = v ? '#ced4da' : '#e9ecef'; g.fillRect(10, 10, W - 20, 200); g.fillStyle = '#fff'; g.beginPath(); g.arc(128, 110, 64, 0, 7); g.fill(); g.strokeStyle = '#adb5bd'; g.lineWidth = 4; g.stroke(); g.fillStyle = '#1c1c24'; g.beginPath(); g.moveTo(10, 260); g.quadraticCurveTo(128, 160, 246, 260); g.lineTo(246, 374); g.lineTo(10, 374); g.fill(); }
+  if (k === 9) { [[128, 140, 70], [70, 250, 40], [190, 260, 40]].forEach(([x, y, r]) => { flower(g, x, y, r, '#fab005', '#e8590c', 12); flower(g, x, y, r * .6, '#ffd43b', '#e8590c', 10); }); }
+  if (k === 10) { const leaf = (x, y, s) => { g.fillStyle = '#e8590c'; g.beginPath(); for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + (i - 2) * .55; g.lineTo(x + Math.cos(a) * s, y + Math.sin(a) * s); g.lineTo(x + Math.cos(a + .27) * s * .45, y + Math.sin(a + .27) * s * .45); } g.lineTo(x, y + s * .3); g.fill(); };
+    [[80, 120, 50], [170, 100, 44], [120, 220, 56], [190, 270, 40], [60, 290, 38]].forEach(p => leaf(...p)); }
+  if (k === 11) { for (let i = 0; i < 3; i++) { g.fillStyle = '#1c1c24'; g.beginPath(); g.ellipse(80 + i * 50, 200 - (i % 2) * 40, 60, 40, i * .4, 0, 7); g.fill(); } g.fillStyle = '#ffd43b'; g.beginPath(); g.arc(180, 300, 20, 0, 7); g.fill(); }
+  if (k === 12) { g.fillStyle = '#4c6ef5'; g.fillRect(10, 10, W - 20, H - 20); g.fillStyle = '#fbf3df'; g.fillRect(10, 250, W - 20, 124); g.strokeStyle = '#2b8a3e'; g.lineWidth = 6; for (let i = 0; i < 6; i++) { g.beginPath(); g.moveTo(40 + i * 35, 20); g.quadraticCurveTo(30 + i * 35, 150, 60 + i * 30, 250); g.stroke(); }
+    g.fillStyle = '#ffd43b'; g.beginPath(); g.arc(120, 250, 46, Math.PI, 0); g.fill(); g.fillRect(118, 250, 4, 60); }
+  if (v && k !== 8 && k !== 12) ribbon(g, ['솔', '매', '벚', '흑', '난', '모', '홍', '공', '국', '단', '오', '비'][k - 1] + '띠');
+  // big month label at the bottom so it's easy to read
+  g.fillStyle = 'rgba(28,28,36,.86)'; g.fillRect(10, H - 74, W - 20, 64); g.fillStyle = '#fff'; g.font = 'bold 40px "Jua", sans-serif'; g.textAlign = 'center'; g.fillText(`${k}월 ${m.name}`, W / 2, H - 28);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; return tex;
+}
+const backTex = (() => { const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'); g.fillStyle = '#7a1414'; g.fillRect(0, 0, W, H); g.fillStyle = '#b22222'; g.fillRect(14, 14, W - 28, H - 28);
+  g.strokeStyle = 'rgba(255,220,180,.25)'; g.lineWidth = 3; for (let i = -H; i < W + H; i += 26) { g.beginPath(); g.moveTo(i, 14); g.lineTo(i + H, H); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+const FACES = MONTHS.map(m => [drawFace(m, 0), drawFace(m, 1)]);
+
+// ---------- three: green blanket table, top-down ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x173d22);
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, .1, 100);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x2b5a35, 1.4));
+const key = new THREE.DirectionalLight(0xffffff, 1.3); key.position.set(2, 10, 4); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); Object.assign(key.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8 }); scene.add(key);
+{ const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); g.fillStyle = '#2f6b3a'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 4000; i++) { g.fillStyle = `rgba(${Math.random() < .5 ? '255,255,255' : '0,0,0'},${Math.random() * .06})`; g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(6, 6);
+  const mat = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({ map: t, roughness: 1 })); mat.rotation.x = -Math.PI / 2; mat.receiveShadow = true; scene.add(mat); }
+const CW = 1.1, CH = 1.65;
+const edgeMat = new THREE.MeshStandardMaterial({ color: 0x1c1c24 }), backMat = new THREE.MeshStandardMaterial({ map: backTex, roughness: .6 });
+let cards = [];
+function makeCard(month, variant) {
+  const g = new THREE.Group();
+  const m = new THREE.Mesh(new THREE.BoxGeometry(CW, .045, CH), [edgeMat, edgeMat, new THREE.MeshStandardMaterial({ map: FACES[month][variant], roughness: .55 }), backMat, edgeMat, edgeMat]);
+  m.castShadow = true; m.receiveShadow = true; g.add(m); scene.add(g);
+  return { g, m, month, up: false, flipT: 1, from: Math.PI, to: Math.PI, matched: false, lift: 0 };
+}
+function layout(n) {   // columns/rows for n cards, sized to the screen
+  const portrait = innerWidth < innerHeight;
+  const cols = portrait ? (n <= 12 ? 3 : 4) : (n <= 12 ? 4 : n <= 16 ? 4 : n <= 20 ? 5 : 6), rows = Math.ceil(n / cols);
+  return { cols, rows };
+}
+let grid = { cols: 4, rows: 3 };
+function placeCards() {
+  grid = layout(cards.length); const gx = CW + .22, gz = CH + .22;
+  cards.forEach((c, i) => { const col = i % grid.cols, row = Math.floor(i / grid.cols); c.g.position.set((col - (grid.cols - 1) / 2) * gx, 0, (row - (grid.rows - 1) / 2) * gz + .3); });
+  fitCamera();
+}
+function fitCamera() {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  const w = grid.cols * (CW + .22) + .6, h = grid.rows * (CH + .22) + 3.6, vh = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const d = Math.max(h / vh, w / (vh * camera.aspect)) * 1.04;
+  camera.position.set(0, d, d * .12 - .5); camera.lookAt(0, 0, -.4);   // shift the grid below the HUD
+}
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCards(); });
+
+// ---------- game ----------
+let state = 'ready', stage = 0, score = 0, timeLeft = 60, open = [], busy = false, pairsLeft = 0, combo = 0, hints = 3, overAt = 0, preview = 0, misses = 0;
+let best = 0; try { best = +localStorage.getItem('hwatu-best') || 0; } catch {}
+const showScreen = html => { $('center').innerHTML = html; $('center').style.display = ''; };
+showScreen(Arcade.titleScreen({ emoji: '🎴', title: '화투 짝맞추기', how: [
+  ['🎴', '같은 <b>달(월)</b> 화투 두 장을 찾아 뒤집어요'],
+  ['👀', '처음 몇 초 동안 모든 패를 보여드려요. 잘 기억하세요!'],
+  ['💡', '막히면 <b>힌트</b> 버튼 (단계마다 3번)'],
+  ['⏱', '시간 안에 다 맞추면 다음 단계. 천천히, 차근차근!'],
+], cta: '시작하기' }));
+const PAIRS = [6, 8, 10, 12, 12];
+function updateHud() {
+  $('score').innerHTML = `${score}<small>점</small>`; $('stage').textContent = `${stage + 1}단계`;
+  $('left').textContent = `남은 짝 ${pairsLeft}`; $('hint').textContent = `💡 힌트 ${hints}`; $('hint').disabled = hints <= 0 || state !== 'playing';
+}
+function say(t) { const e = $('say'); e.textContent = t; e.classList.remove('show'); void e.offsetWidth; e.classList.add('show'); }
+function flip(c, up) { c.from = c.g.rotation.z; c.to = up ? 0 : Math.PI; c.flipT = 0; c.up = up; }
+function setupStage() {
+  cards.forEach(c => scene.remove(c.g)); cards = []; open = []; busy = false; combo = 0; hints = 3;
+  const n = PAIRS[Math.min(stage, PAIRS.length - 1)], months = shuffle([...Array(12).keys()]).slice(0, n);
+  const deck = shuffle(months.flatMap(m => [makeCard(m, 0), makeCard(m, 1)]));
+  cards = deck; pairsLeft = n; placeCards();
+  cards.forEach(c => { c.g.rotation.z = 0; c.up = true; c.to = 0; c.flipT = 1; });   // face up for the preview
+  preview = Math.max(3, 5 - stage * .5); timeLeft = 45 + n * 7 - stage * 4;
+  state = 'preview'; updateHud(); say('잘 보세요! 👀');
+}
+function startPlay() { state = 'playing'; cards.forEach(c => flip(c, false)); Arcade.sfx.whoosh(); updateHud(); say('시작!'); }
+function pick(c) {
+  if (state !== 'playing' || busy || c.up || c.matched) return;
+  flip(c, true); open.push(c); Arcade.sfx.thud(); Arcade.vibrate(15);
+  if (open.length < 2) return;
+  const [a, b] = open; busy = true;
+  if (a.month === b.month) {
+    setTimeout(() => {
+      a.matched = b.matched = true; open = []; busy = false; combo++; pairsLeft--;
+      const pts = 100 + (combo - 1) * 50; score += pts; Arcade.sfx.coin(); Arcade.vibrate([20, 30, 40]);
+      say(combo >= 2 ? `${combo}연속! 착착! +${pts}` : `짝! +${pts}`);
+      if (pairsLeft === 0) stageClear();
+      updateHud();
+    }, 380);
+  } else {
+    misses++; combo = 0;
+    setTimeout(() => { flip(a, false); flip(b, false); open = []; busy = false; Arcade.sfx.tap(); }, 1000);   // a full second to look before they turn back
+  }
+}
+function stageClear() {
+  state = 'clear'; const bonus = Math.round(timeLeft) * 10; score += bonus;
+  Arcade.sfx.fanfare(); Arcade.confetti({ y: innerHeight * .4, count: 90, emoji: ['🎴', '🌸', '🍁', '🌕'] });
+  say(`${stage + 1}단계 성공! 남은 시간 보너스 +${bonus}`); updateHud();
+  setTimeout(() => { stage++; setupStage(); }, 2200);
+}
+function finish() {
+  state = 'over'; overAt = performance.now();
+  const isBest = score > best; if (isBest) { best = score; try { localStorage.setItem('hwatu-best', best); } catch {} }
+  isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  const msg = stage >= 4 ? '기억력이 청춘이시네요!' : stage >= 2 ? '아주 잘하셨어요!' : '천천히 다시 해봐요';
+  showScreen(Arcade.resultScreen({ emoji: '🎴', label: '화투 짝맞추기', score, unit: '점', msg, rows: [['도달 단계', `${stage + 1}단계`], ['틀린 횟수', `${misses}번`]], isBest: isBest && score > 0, best }));
+  Arcade.gameOver(score);
+}
+function start() { score = 0; stage = 0; misses = 0; $('center').style.display = 'none'; setupStage(); }
+$('hint').addEventListener('pointerdown', e => {
+  e.stopPropagation(); if (state !== 'playing' || hints <= 0 || busy) return;
+  const rest = cards.filter(c => !c.matched && !c.up); if (!rest.length) return;
+  const m = rest[0].month, pair = rest.filter(c => c.month === m); hints--; updateHud();
+  pair.forEach(c => { c.hint = 1.2; }); Arcade.sfx.ding();
+});
+// picking with a raycaster (generous: the whole card is the target)
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+addEventListener('pointerdown', e => {
+  if (e.target.closest?.('.arcade-btn, #hint')) return;
+  if (state === 'ready') return start();
+  if (state === 'over') { if (performance.now() - overAt > 1000 && !Arcade.inRun()) start(); return; }
+  ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(cards.map(c => c.m))[0]; if (hit) pick(cards.find(c => c.m === hit.object));
+});
+addEventListener('keydown', e => { if ((e.code === 'Space' || e.code === 'Enter') && (state === 'ready' || state === 'over')) { e.preventDefault(); if (state === 'ready') start(); else if (performance.now() - overAt > 1000 && !Arcade.inRun()) start(); } });
+window.__hwatu = { get state() { return state; }, get cards() { return cards; }, pick, get score() { return score; } };
+
+// idle: a few cards fanned out on the blanket behind the title
+cards = shuffle([...Array(12).keys()]).slice(0, 6).flatMap(m => [makeCard(m, 0), makeCard(m, 1)]); placeCards(); cards.forEach((c, i) => { c.g.rotation.z = i % 3 ? Math.PI : 0; c.to = c.g.rotation.z; });
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
+  if (state === 'preview') { preview -= dt; if (preview <= 0) startPlay(); }
+  if (state === 'playing') { timeLeft -= dt; if (timeLeft <= 0) { timeLeft = 0; finish(); } }
+  $('time').textContent = `⏱ ${Math.ceil(Math.max(0, timeLeft))}`; $('time').classList.toggle('low', state === 'playing' && timeLeft < 10);
+  for (const c of cards) {
+    if (c.flipT < 1) { c.flipT = Math.min(1, c.flipT + dt * 3.2); const e = c.flipT < .5 ? 2 * c.flipT * c.flipT : 1 - Math.pow(-2 * c.flipT + 2, 2) / 2; c.g.rotation.z = c.from + (c.to - c.from) * e; c.g.position.y = Math.sin(c.flipT * Math.PI) * .6; }
+    else c.g.position.y = c.matched ? .08 + Math.sin(t * 3 + c.month) * .03 : 0;
+    if (c.matched) c.m.material[2].emissive?.setHex(0x332200);
+    if (c.hint > 0) { c.hint -= dt; c.g.position.y = .25 + Math.abs(Math.sin(t * 10)) * .15; }   // hinted pair hops
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

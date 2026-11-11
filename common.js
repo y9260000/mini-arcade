@@ -49,6 +49,8 @@
       desc: '광고·쿠키·앱설치·로봇인증… 방해요소를 다 닫고 품절 전에 구매하기' },
     { id: 'nag', file: 'nag.html', name: '명절 잔소리 대작전', emoji: '🧧', unit: '번', bestKey: 'nag-best',
       desc: '내가 잔소리하는 쪽! 친척 프로필을 보고 딱 맞는 잔소리를 시간 안에 날리기' },
+    { id: 'hwatu', file: 'hwatu.html', name: '화투 짝맞추기', emoji: '🎴', unit: '점', bestKey: 'hwatu-best',
+      desc: '같은 달 화투 두 장을 찾아라! 큼직한 패로 천천히 즐기는 기억력 게임' },
   ];
 
   const q = new URLSearchParams(location.search);

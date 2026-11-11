@@ -12,6 +12,8 @@
   #price{font-family:"Jua",sans-serif;font-size:18px}
   #price.up{animation:pu .3s}
   @keyframes pu{50%{transform:scale(1.15);background:#d3f9d8}}
+  #wind{position:fixed;left:50%;top:max(160px,calc(env(safe-area-inset-top) + 150px));transform:translateX(-50%);z-index:3;pointer-events:none;font:700 16px "Noto Sans KR",sans-serif;color:#fff;background:rgba(25,113,194,.88);border-radius:999px;padding:6px 14px;white-space:nowrap;box-shadow:0 6px 16px rgba(0,0,0,.25)}
+  #wind b{font:22px "Jua",sans-serif;letter-spacing:-2px;margin:0 4px;animation:wb .5s infinite alternate} @keyframes wb{to{opacity:.55}}
   #event{position:fixed;left:50%;top:max(118px,calc(env(safe-area-inset-top) + 108px));transform:translateX(-50%);z-index:3;pointer-events:none;display:none;
     font-family:"Jua",sans-serif;font-size:18px;color:#fff;border-radius:999px;padding:6px 16px;box-shadow:0 6px 16px rgba(0,0,0,.25);white-space:nowrap}
   #hint{position:fixed;bottom:max(12vh,76px);left:0;right:0;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
@@ -24,7 +26,7 @@
   <div id="score" class="hud-score">0<small>층</small></div>
   <div class="hud-row"><span class="pill dark" id="price">시세 3.0억</span><span class="pill" id="combo" style="display:none"></span></div>
 </div>
-<div id="event" class="hud-ctl"></div>
+<div id="event" class="hud-ctl"></div><div id="wind" class="hud-ctl" style="display:none"></div>
 <div id="hint" class="hud-ctl"><span class="pill">👆 탭해서 층을 떨어뜨려요. 딱 맞추면 PERFECT!</span></div>
 <div class="screen" id="center"></div>
 
@@ -137,6 +139,11 @@ const cable = box(.04, 1, .04, flat(0x212529), 0, 0, 0, trolley);
 const hook = box(.3, .2, .3, flat(0x495057), 0, 0, 0, trolley);
 
 // ---------- state ----------
+const $wind = document.getElementById('wind');
+let windDir = 1, windPow = 1, windNow = 0, windVis = 0;
+const streaks = [];
+for (let i = 0; i < 36; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.8 + Math.random() * 1.4, .035, .035), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false })); m.position.set((Math.random() - .5) * 28, 0, -2.5 + Math.random() * 6); m.userData = { dy: (Math.random() - .5) * 12, k: .4 + Math.random() * .6 }; m.visible = false; scene.add(m); streaks.push(m); }
+const sock = new THREE.Mesh(new THREE.ConeGeometry(.22, 1.1, 8, 1, true), new THREE.MeshStandardMaterial({ color: 0xff6b35, side: THREE.DoubleSide, flatShading: true })); sock.geometry.translate(0, -.55, 0); sock.visible = false; scene.add(sock);
 let state = 'ready', floors = [], cur = null, falling = null, debris = [], overAt = 0, combo = 0, perfects = 0, price = 3, eventT = 0, ev = null, swingT = 0, nextW = null;
 let best = 0; try { best = +localStorage.getItem('tower-best') || 0; } catch {}
 const $score = $('score'), $price = $('price'), $combo = $('combo'), $center = $('center'), $event = $('event'), $hint = $('hint');
@@ -221,6 +228,7 @@ const EVENTS = [
 function maybeEvent() {
   if (floors.length < 6 || ev || Math.random() > .22) return;
   ev = rnd(EVENTS); eventT = ev.dur;
+  if (ev.key === 'wind') { windDir = Math.random() < .5 ? -1 : 1; windPow = .8 + Math.random() * .9; }
   $event.style.display = 'block'; $event.style.background = ev.col; $event.textContent = ev.name;
   Arcade.sfx.hmm(); Arcade.vibrate([20, 40, 20]);
   if (ev.key === 'reg') { nextW = Math.max(.6, topFloor().w * .7); setTimeout(() => { $event.style.display = 'none'; ev = null; }, 1800); }
@@ -256,7 +264,7 @@ addEventListener('keydown', e => { if ((e.code === 'Space' || e.code === 'Enter'
 const camPos = new THREE.Vector3(0, 6, 12), camLook = new THREE.Vector3(0, 3, 0);
 let last = performance.now();
 reset(); showIntro();
-window.__tower = { get state() { return state; }, get cur() { return cur; }, top: () => topFloor(), drop, get floors() { return floors.length - 1; }, get price() { return price; } };
+window.__tower = { wind() { ev = EVENTS.find(e => e.key === 'wind'); eventT = ev.dur; windDir = 1; windPow = 1.4; $event.style.display = 'block'; $event.style.background = ev.col; $event.textContent = ev.name; }, get state() { return state; }, get cur() { return cur; }, top: () => topFloor(), drop, get floors() { return floors.length - 1; }, get price() { return price; } };
 
 function frame(now) {
   const dt = Math.min(.04, (now - last) / 1000); last = now; const t = now / 1000;
@@ -275,9 +283,24 @@ function frame(now) {
   const jibY = Math.max(30, hookY + 8); jib.position.y = jibY; arm.position.y = jibY; mast.scale.y = jibY / 30; mast.position.y = jibY / 2;
   cable.scale.y = Math.max(.1, jibY - hookY); cable.position.set(0, (jibY + hookY) / 2, 0); hook.position.set(0, hookY, 0);
   trolley.position.z = 0;
+  // 💨 wind: steady direction with gusts, shown by streaks, a windsock and a HUD meter
+  const windOn = ev?.key === 'wind'; windNow = windOn ? windDir * windPow * (.75 + .35 * Math.sin(t * 2.3)) : 0;
+  windVis += ((windOn ? 1 : 0) - windVis) * Math.min(1, dt * 3);
+  for (const st of streaks) {
+    st.position.x += windDir * (7 + windPow * 8) * (.6 + st.userData.k) * dt;
+    if (st.position.x > 14) st.position.x = -14; if (st.position.x < -14) st.position.x = 14;
+    st.position.y = camLook.y + st.userData.dy; st.material.opacity = windVis * .55 * st.userData.k;
+    st.visible = windVis > .02;
+  }
+  sock.visible = windVis > .05; sock.position.set(trolley.position.x + .2, jib.position.y - .1, .6);
+  sock.rotation.z = windDir > 0 ? -Math.PI / 2 : Math.PI / 2; sock.rotation.x = Math.sin(t * 9) * .25 * windVis; sock.scale.set(1, .4 + .6 * Math.min(1, Math.abs(windNow) / 1.4), 1);
+  if (cur && windOn) cur.m.rotation.z += -windNow * .05;
+  $wind.style.display = windVis > .1 ? '' : 'none';
+  if (windOn) { const lvl = Math.min(3, Math.max(1, Math.round(Math.abs(windNow) * 2))), ar = windDir > 0 ? '→' : '←';
+    $wind.innerHTML = `💨 <b>${ar.repeat(lvl)}</b> 풍속 ${(Math.abs(windNow) * 9).toFixed(1)}m/s`; }
   if (falling) {
     falling.vy -= 22 * dt; falling.y += falling.vy * dt;
-    if (ev?.key === 'wind') falling.x += Math.sin(t * 3) * dt * 1.2;
+    if (ev?.key === 'wind') falling.x += windNow * dt * 1.25;
     falling.m.position.set(falling.x, falling.y, 0); falling.m.rotation.z *= .9;
     if (falling.y - H / 2 <= topY()) land();
   }

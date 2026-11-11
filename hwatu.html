@@ -174,16 +174,17 @@ function pick(c) {
   if (open.length < 2) return;
   const [a, b] = open; busy = true;
   if (a.month === b.month) {
+    Arcade.vibrate([40, 30, 90]);   // fire inside the tap itself: iOS only gives haptics during a user gesture
     setTimeout(() => {
       a.matched = b.matched = true; open = []; busy = false; combo++; pairsLeft--;
-      const pts = 100 + (combo - 1) * 50; score += pts; slap(1.2); slap(1, .09); Arcade.sfx.coin(); Arcade.vibrate([30, 40, 70]); Arcade.shake(.18);
+      const pts = 100 + (combo - 1) * 50; score += pts; slap(1.2); slap(1, .09); Arcade.sfx.coin(); Arcade.shake(.18);
       matchedCount++; if (matchedCount === shuffleAt) setTimeout(shuffleRest, 450);
       say(combo >= 2 ? `${combo}연속! 착착! +${pts}` : `짝! +${pts}`);
       if (pairsLeft === 0) stageClear();
       updateHud();
     }, 380);
   } else {
-    misses++; combo = 0; timeLeft = Math.max(0, timeLeft - 2); Arcade.vibrate([60, 30, 60]); Arcade.sfx.miss(); say('땡! -2초');
+    misses++; combo = 0; timeLeft = Math.max(0, timeLeft - 2); Arcade.vibrate([70, 40, 70]); Arcade.sfx.miss(); say('땡! -2초');
     setTimeout(() => { flip(a, false); flip(b, false); open = []; busy = false; slap(.4); }, 650);
   }
 }

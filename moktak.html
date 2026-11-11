@@ -55,6 +55,7 @@
 <div id="sutra"></div>
 <div id="judge"></div>
 <div class="screen" id="center"></div>
+<audio id="bgm" src="sounds/banya.mp3" preload="auto" loop playsinline></audio>
 
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -415,8 +416,12 @@ function hud() {
 }
 function judge(text, color) { $judge.textContent = text; $judge.style.color = color; $judge.classList.remove('show'); void $judge.offsetWidth; $judge.classList.add('show'); }
 
+// background chant (우리말 반야심경), started from the tap that starts the game so mobile allows it
+const bgm = document.getElementById('bgm'); let bgmFade = 0;
+function bgmPlay() { try { clearInterval(bgmFade); bgm.currentTime = 0; bgm.volume = .42; bgm.play().catch(() => {}); } catch {} }
+function bgmStop() { clearInterval(bgmFade); bgmFade = setInterval(() => { bgm.volume = Math.max(0, bgm.volume - .04); if (bgm.volume <= .01) { bgm.pause(); clearInterval(bgmFade); } }, 60); }
 function start() {
-  ensureAudio();
+  ensureAudio(); bgmPlay();
   $center.style.display = 'none';
   state = 'count';
   combo = maxCombo = bonnoe = perfects = goods = misses = 0; npcCursor = 0; feverTime = 0; rollHits = 0; activeRoll = null; sLine = sWord = rollWord = 0; renderSutra(); finalAscend = false; lastMilestone = 0; document.getElementById('heavenflash').classList.remove('on'); endFever(true); hud();
@@ -521,6 +526,7 @@ function offBeat(label) {
 }
 
 function end(clear) {
+  bgmStop();
   if (clear) { finalAscend = true; Arcade.toast('🙏 해탈!! 승천합니다', '#c08a00'); bigBell(); Arcade.vibrate([60, 40, 60, 40, 200]); setTimeout(() => document.getElementById('heavenflash').classList.add('on'), 1500); setTimeout(() => document.getElementById('heavenflash').classList.remove('on'), 3200); }
   state = 'over'; overAt = performance.now(); activeRoll = null; endFever(true);
   const acc = clear ? accuracy() : 0;

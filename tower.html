@@ -72,12 +72,57 @@ function floorTex(color) {
   for (let i = 0; i < 4; i++) { g.fillStyle = '#9ad1ff'; g.fillRect(8 + i * 30, 14, 20, 30); g.fillStyle = 'rgba(255,255,255,.6)'; g.fillRect(8 + i * 30, 14, 6, 30); g.fillStyle = '#f1f3f5'; g.fillRect(4 + i * 30, 46, 28, 6); }
   const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
 }
-const FLOOR_COLORS = ['#f8f0e3', '#ffe8cc', '#e7f5ff', '#fff0f6', '#ebfbee', '#f3f0ff'];
-const TEX = FLOOR_COLORS.map(floorTex);
+// ---------- building zones: the tower changes character as it climbs ----------
+const ZONES = [
+  { upto: 6, name: '🏪 상가 & 빌라', kind: 'villa', motion: ['swing'] },
+  { upto: 15, name: '🏢 아파트 구간', kind: 'apt', motion: ['swing', 'slide'] },
+  { upto: 25, name: '🏙️ 유리 오피스텔', kind: 'glass', motion: ['slide', 'swing', 'erratic'] },
+  { upto: 38, name: '💎 펜트하우스', kind: 'pent', motion: ['erratic', 'slide', 'swing'] },
+  { upto: Infinity, name: '🚀 우주 엘리베이터', kind: 'space', motion: ['erratic', 'slide', 'swing'] },
+];
+const zoneOf = n => ZONES.find(z => n <= z.upto);
+const SHOPS = [['치킨', '#e03131'], ['편의점', '#1971c2'], ['부동산', '#2b8a3e'], ['미용실', '#ae3ec9'], ['카페', '#8d5a3b'], ['약국', '#0ca678'], ['노래방', '#f76707']];
+const texCache = {};
+function kindTex(kind, variant) {
+  const key = kind + variant; if (texCache[key]) return texCache[key];
+  const c = document.createElement('canvas'); c.width = 128; c.height = 64; const g = c.getContext('2d');
+  if (kind === 'shop') {
+    const [name, col] = SHOPS[variant % SHOPS.length];
+    g.fillStyle = '#f8f9fa'; g.fillRect(0, 0, 128, 64); g.fillStyle = col; g.fillRect(0, 4, 128, 22);
+    g.fillStyle = '#fff'; g.font = 'bold 18px sans-serif'; g.textAlign = 'center'; g.fillText(name, 64, 21);
+    g.fillStyle = '#a5d8ff'; g.fillRect(6, 32, 116, 26); g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(6, 32, 30, 26);
+  } else if (kind === 'villa') {
+    g.fillStyle = ['#c9714a', '#d9a066', '#b5654a'][variant % 3]; g.fillRect(0, 0, 128, 64);
+    g.fillStyle = 'rgba(0,0,0,.12)'; for (let y = 0; y < 64; y += 8) for (let x = (y / 8) % 2 * 8; x < 128; x += 16) g.fillRect(x, y, 15, 7);
+    for (let i = 0; i < 3; i++) { g.fillStyle = '#fff'; g.fillRect(10 + i * 40, 14, 26, 30); g.fillStyle = '#9ad1ff'; g.fillRect(13 + i * 40, 17, 20, 24); }
+  } else if (kind === 'glass') {
+    const grd = g.createLinearGradient(0, 0, 128, 64); grd.addColorStop(0, '#4dabf7'); grd.addColorStop(1, '#1864ab'); g.fillStyle = grd; g.fillRect(0, 0, 128, 64);
+    g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.moveTo(20 + variant * 7, 0); g.lineTo(50 + variant * 7, 0); g.lineTo(20 + variant * 7, 64); g.lineTo(-10 + variant * 7, 64); g.fill();
+    g.fillStyle = '#dee2e6'; for (let x = 0; x <= 128; x += 32) g.fillRect(x - 1, 0, 3, 64); g.fillRect(0, 0, 128, 3); g.fillRect(0, 61, 128, 3);
+  } else if (kind === 'pent') {
+    g.fillStyle = '#1b1f3a'; g.fillRect(0, 0, 128, 64); g.fillStyle = '#fab005'; g.fillRect(0, 0, 128, 4); g.fillRect(0, 58, 128, 6);
+    for (let i = 0; i < 2; i++) { g.fillStyle = '#ffe8a3'; g.fillRect(10 + i * 62, 12, 46, 40); g.fillStyle = 'rgba(255,200,80,.5)'; g.fillRect(10 + i * 62, 12, 14, 40); }
+  } else if (kind === 'space') {
+    g.fillStyle = '#495057'; g.fillRect(0, 0, 128, 64); g.fillStyle = '#868e96'; for (let x = 0; x < 128; x += 16) g.fillRect(x, 0, 2, 64);
+    g.fillStyle = '#3bc9db'; for (let i = 0; i < 6; i++) g.fillRect(6 + i * 21, 28, 12, 6); g.fillStyle = '#ff6b6b'; g.fillRect(0, 54, 128, 3);
+  } else if (kind === 'gold') {
+    const grd = g.createLinearGradient(0, 0, 0, 64); grd.addColorStop(0, '#ffe066'); grd.addColorStop(.5, '#fab005'); grd.addColorStop(1, '#e67700'); g.fillStyle = grd; g.fillRect(0, 0, 128, 64);
+    g.fillStyle = '#fff3bf'; for (let i = 0; i < 4; i++) g.fillRect(10 + i * 30, 16, 16, 28); g.fillStyle = '#fff'; g.font = 'bold 14px sans-serif'; g.fillText('완판!', 46, 60);
+  } else { g.fillStyle = ['#f8f0e3', '#e7f5ff', '#ebfbee', '#fff0f6', '#f3f0ff'][variant % 5]; g.fillRect(0, 0, 128, 64);
+    for (let i = 0; i < 4; i++) { g.fillStyle = '#9ad1ff'; g.fillRect(8 + i * 30, 14, 20, 30); g.fillStyle = 'rgba(255,255,255,.6)'; g.fillRect(8 + i * 30, 14, 6, 30); g.fillStyle = '#f1f3f5'; g.fillRect(4 + i * 30, 46, 28, 6); } }
+  const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; texCache[key] = t; return t;
+}
+function styleFor(n) {
+  const z = zoneOf(n);
+  if (n >= 5 && Math.random() < .12) return { kind: 'gold', v: 0, gold: true };
+  if (n <= 3) return { kind: 'shop', v: (Math.random() * SHOPS.length) | 0 };
+  return { kind: z.kind, v: (Math.random() * 5) | 0 };
+}
 const H = .8, D = 2.4;
-function makeFloor(w, idx) {
-  const tex = TEX[idx % TEX.length].clone(); tex.needsUpdate = true; tex.repeat.set(Math.max(.5, w / 1.6), 1);
-  const side = new THREE.MeshStandardMaterial({ map: tex, roughness: .7 }), top = flat(0xced4da);
+function makeFloor(w, idx, style = { kind: 'apt', v: idx }) {
+  const tex = kindTex(style.kind, style.v).clone(); tex.needsUpdate = true; tex.repeat.set(Math.max(.5, w / 1.6), 1);
+  const side = new THREE.MeshStandardMaterial({ map: tex, roughness: style.kind === 'glass' ? .15 : .7, metalness: style.kind === 'glass' || style.kind === 'space' ? .4 : 0, emissive: style.gold ? 0x7a4a00 : 0x000000, emissiveIntensity: style.gold ? .5 : 0 });
+  const top = flat(style.kind === 'pent' ? 0x343a40 : style.gold ? 0xfab005 : 0xced4da);
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, H, D), [side, side, top, top, side, side]);
   m.castShadow = true; m.receiveShadow = true; scene.add(m); return m;
 }
@@ -100,7 +145,8 @@ const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🏢', title: '�
   ['👆', '크레인에 매달린 층을 <b>탭</b>해서 떨어뜨려요'],
   ['✂️', '삐져나온 부분은 잘려나가요 (하자 보수비)'],
   ['✨', '딱 맞추면 <b>PERFECT</b>! 시세 프리미엄 + 폭이 회복돼요'],
-  ['📉', '<b>금리 인상</b>·<b>규제</b> 이벤트 조심. 완전히 빗나가면 분양 실패'],
+  ['🏙️', '빌라 → 아파트 → 오피스텔 → 펜트하우스 → <b>우주</b>! 구간마다 움직임이 달라요'],
+  ['🏆', '가끔 오는 <b>황금층</b>을 PERFECT로 받으면 시세 +25%'],
 ] }));
 const topY = () => .4 + floors.length * H;
 const topFloor = () => floors[floors.length - 1];
@@ -108,19 +154,24 @@ function fmtPrice(p) { return p >= 10 ? `${p.toFixed(1)}억` : `${p.toFixed(2)}�
 function updateHud(up) {
   $score.innerHTML = `${floors.length - 1}<small>층</small>`;
   $price.textContent = `시세 ${fmtPrice(price)}`; if (up) { $price.classList.remove('up'); void $price.offsetWidth; $price.classList.add('up'); }
-  $combo.style.display = combo >= 2 ? '' : 'none'; $combo.textContent = `✨ ${combo}연속 PERFECT`;
+
 }
 function reset() {
   for (const f of floors) scene.remove(f.m); for (const d of debris) scene.remove(d.m);
   if (cur) scene.remove(cur.m); if (falling) scene.remove(falling.m);
   floors = []; debris = []; cur = null; falling = null; combo = 0; perfects = 0; price = 3; ev = null; eventT = 0; nextW = null;
-  const base = makeFloor(3, 0); base.position.set(0, .4 + H / 2, 0); floors.push({ m: base, x: 0, w: 3 });   // ground floor (lobby)
+  zoneName = ''; const base = makeFloor(3, 0, { kind: 'shop', v: 2 }); base.position.set(0, .4 + H / 2, 0); floors.push({ m: base, x: 0, w: 3 });   // ground floor (lobby)
   spawn(); updateHud();
 }
+let zoneName = '';
 function spawn() {
   const w = nextW ?? topFloor().w; nextW = null;
-  cur = { m: makeFloor(w, floors.length), w, x: 0 };
+  const n = floors.length, z = zoneOf(n), style = styleFor(n);
+  if (z.name !== zoneName) { if (zoneName) { Arcade.toast(`${z.name} 진입! 움직임이 달라져요`, '#7048e8'); Arcade.sfx.coin(); } zoneName = z.name; }
+  const motion = n <= 2 ? 'swing' : z.motion[(Math.random() * z.motion.length) | 0];
+  cur = { m: makeFloor(w, n, style), w, x: 0, style, motion };
   swingT = Math.random() * Math.PI * 2;
+  $('combo').style.display = ''; $('combo').textContent = `${z.name.split(' ')[0]} ${{ swing: '🔁 흔들흔들', slide: '➡️ 직진 왕복', erratic: '🌀 투기 과열' }[motion]}${style.gold ? ' · 🏆 황금층' : ''}`;
 }
 function start() { state = 'playing'; $center.style.display = 'none'; $hint.style.display = ''; Arcade.sfx.go(); }
 function drop() {
@@ -139,6 +190,7 @@ function land() {
   if (off < .09) {   // perfect: snap, keep width, regrow a little
     combo++; perfects++; x = below.x; w = Math.min(3, below.w + (combo >= 3 ? .15 : 0));
     price *= 1.06 + Math.min(.06, combo * .01);
+    if (f.style?.gold) { price *= 1.25; Arcade.confetti({ y: innerHeight * .35, count: 90, colors: ['#ffd43b', '#fab005', '#fff3bf'], emoji: ['🏆', '💰'] }); setTimeout(() => Arcade.toast('🏆 황금층 PERFECT! 시세 +25%', '#e8590c'), 400); }
     Arcade.sfx.perfect(Math.min(combo, 12)); Arcade.vibrate(combo >= 3 ? [20, 30, 50] : 30); Arcade.shake(.1);
     Arcade.toast(combo >= 3 ? `✨ ${combo}연속 PERFECT! 프리미엄 붙는다` : '✨ PERFECT!', '#e8590c');
     ring(x, topY());
@@ -146,13 +198,13 @@ function land() {
     combo = 0;
     // cut the overhang off as debris
     const cutW = f.w - overlap, cutX = f.x > below.x ? right + cutW / 2 : left - cutW / 2;
-    const piece = makeFloor(cutW, floors.length); piece.position.set(cutX, topY() + H / 2, 0);
+    const piece = makeFloor(cutW, floors.length, f.style); piece.position.set(cutX, topY() + H / 2, 0);
     debris.push({ m: piece, vy: 0, vx: (f.x > below.x ? 1 : -1) * 1.2, rz: (f.x > below.x ? -1 : 1) * 2, t: 0 });
     price *= 1.03; price -= cutW * .15;   // repair costs
     Arcade.sfx.pop(.8 + floors.length * .02); Arcade.sfx.thud(); Arcade.vibrate(15); Arcade.shake(.06);
   }
   scene.remove(f.m);
-  const m = makeFloor(w, floors.length); m.position.set(x, topY() + H / 2, 0);
+  const m = makeFloor(w, floors.length, f.style); m.position.set(x, topY() + H / 2, 0);
   floors.push({ m, x, w }); falling = null;
   m.scale.y = .7; m.userData.squash = 0;
   updateHud(true);
@@ -214,8 +266,9 @@ function frame(now) {
   const hookY = topY() + 3.4;
   if (cur && state !== 'over') {
     const speed = 1.6 + Math.min(2.2, n * .06) + (ev?.key === 'rate' ? 1.6 : 0), amp = 2.6 + (ev?.key === 'rate' ? 1 : 0);
-    swingT += dt * speed;
-    cur.x = Math.sin(swingT) * amp;
+    if (cur.motion === 'erratic') swingT += dt * speed * (1 + Math.sin(t * 2.7) * .55 + Math.sin(t * 6.1) * .25);   // jittery speed
+    else swingT += dt * speed * (cur.motion === 'slide' ? .9 : 1);
+    cur.x = cur.motion === 'slide' ? (2 / Math.PI) * Math.asin(Math.sin(swingT)) * amp : Math.sin(swingT) * amp;   // triangle wave = constant speed
     cur.m.position.set(cur.x, hookY - .6, 0); cur.m.rotation.z = Math.cos(swingT) * .05;
   }
   trolley.position.set(cur ? cur.x : 0, 0, 0);
@@ -232,7 +285,7 @@ function frame(now) {
   for (const f of floors) if (f.m.userData.squash !== undefined && f.m.userData.squash < 1) { f.m.userData.squash += dt * 5; f.m.scale.y = 1 - .3 * Math.cos(f.m.userData.squash * Math.PI * 2) * (1 - f.m.userData.squash); }
   for (let i = rings.length - 1; i >= 0; i--) { const r = rings[i]; r.t += dt; r.m.scale.setScalar(1 + r.t * 8); r.m.material.opacity = .9 * (1 - r.t / .5); if (r.t > .5) { scene.remove(r.m); rings.splice(i, 1); } }
   // sky darkens toward space as you climb
-  const k = Math.min(1, n / 60); scene.background.copy(SKY_LOW).lerp(SKY_HIGH, k); scene.fog.color.copy(scene.background);
+  const k = Math.min(1, n / 45); scene.background.copy(SKY_LOW).lerp(SKY_HIGH, k); if (n > 38) scene.background.lerp(new THREE.Color(0x05060f), Math.min(1, (n - 38) / 8)); scene.fog.color.copy(scene.background);
   // camera follows the top
   const portrait = innerWidth < innerHeight;
   const ty = topY();

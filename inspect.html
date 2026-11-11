@@ -63,6 +63,7 @@ const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roug
 const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), typeof mat === 'number' ? flat(mat) : mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; (parent || room).add(m); return m; };
 const WALL_H = 2.3;
 let room = new THREE.Group(); scene.add(room);
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(0, .7, 0);
 let W = 6, D = 5, occupied = [], defects = [], hits = [], marks = [], movers = [];
 
 // ---------- textures ----------
@@ -74,27 +75,38 @@ const concreteTex = c1 => texOf(g => { g.fillStyle = c1; g.fillRect(0, 0, 128, 1
 
 // ---------- placement helpers ----------
 const free = (x, z, w, d) => Math.abs(x) + w / 2 < W / 2 - .05 && Math.abs(z) + d / 2 < D / 2 - .05 && !occupied.some(o => Math.abs(o.x - x) < (o.w + w) / 2 + .1 && Math.abs(o.z - z) < (o.d + d) / 2 + .1);
-function spot(w, d, where = 'any') {   // find a free floor rectangle: against the back wall, the left wall, or anywhere
+function spot(w, d, where = 'any', h = 1) {   // find a free floor rectangle: against the back wall, the left wall, or anywhere
   for (let i = 0; i < 60; i++) {
     let x = rr(-W / 2 + w / 2 + .1, W / 2 - w / 2 - .1), z = rr(-D / 2 + d / 2 + .1, D / 2 - d / 2 - .1);
     if (where === 'back') z = -D / 2 + d / 2 + .08; if (where === 'left') x = -W / 2 + w / 2 + .08;
-    if (free(x, z, w, d)) { occupied.push({ x, z, w, d }); return { x, z }; }
+    if (free(x, z, w, d)) { occupied.push({ x, z, w, d, h }); return { x, z }; }
   }
   return null;
 }
-function wallSpot(yMin = .4, yMax = 2) {   // a point on one of the two visible walls, with its facing
-  const back = Math.random() < W / (W + D);
-  return back ? { p: new THREE.Vector3(rr(-W / 2 + .4, W / 2 - .4), rr(yMin, yMax), -D / 2 + .065), rotY: 0 } : { p: new THREE.Vector3(-W / 2 + .065, rr(yMin, yMax), rr(-D / 2 + .4, D / 2 - .4)), rotY: Math.PI / 2 };
+function hiddenOnWall(ws) {   // is this wall point behind furniture (as seen from the open corner)?
+  const back = ws.rotY === 0, { x, y, z } = ws.p;
+  return occupied.some(o => (o.h ?? 1) + .3 > y && (back
+    ? o.z - o.d / 2 < -D / 2 + 1.3 && Math.abs(o.x - x) < o.w / 2 + .35
+    : o.x - o.w / 2 < -W / 2 + 1.3 && Math.abs(o.z - z) < o.d / 2 + .35));
+}
+function wallSpot(yMin = .4, yMax = 2) {   // a visible point on one of the two walls, with its facing
+  let ws;
+  for (let i = 0; i < 40; i++) {
+    const back = Math.random() < W / (W + D);
+    ws = back ? { p: new THREE.Vector3(rr(-W / 2 + .4, W / 2 - .4), rr(yMin, yMax), -D / 2 + .09), rotY: 0 } : { p: new THREE.Vector3(-W / 2 + .09, rr(yMin, yMax), rr(-D / 2 + .4, D / 2 - .4)), rotY: Math.PI / 2 };
+    if (!hiddenOnWall(ws)) return ws;
+  }
+  return ws;
 }
 const onWall = (obj, ws) => { obj.position.copy(ws.p); obj.rotation.y = ws.rotY; room.add(obj); return obj; };
 function blot(color, size, opacity, n = 5) {
   const g = new THREE.Group();
-  for (let i = 0; i < n; i++) { const d = new THREE.Mesh(new THREE.CircleGeometry(size * rr(.35, .8), 9), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false })); d.position.set(rr(-.5, .5) * size, rr(-.5, .5) * size, i * .002); g.add(d); }
+  for (let i = 0; i < n; i++) { const d = new THREE.Mesh(new THREE.CircleGeometry(size * rr(.35, .8), 9), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 })); d.renderOrder = 2; d.position.set(rr(-.5, .5) * size, rr(-.5, .5) * size, i * .002); g.add(d); }
   return g;
 }
 function crackLines(len = 6, color = 0x343a40, op = .9) {
   const g = new THREE.Group(); let x = 0, y = 0;
-  for (let i = 0; i < len; i++) { const s = new THREE.Mesh(new THREE.PlaneGeometry(.022, .2), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op })); s.position.set(x, y, .003); s.rotation.z = rr(-.6, .6); g.add(s); x += rr(-.07, .07); y -= .17; }
+  for (let i = 0; i < len; i++) { const s = new THREE.Mesh(new THREE.PlaneGeometry(.026, .2), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op, polygonOffset: true, polygonOffsetFactor: -4 })); s.renderOrder = 2; s.position.set(x, y, .003); s.rotation.z = rr(-.6, .6); g.add(s); x += rr(-.07, .07); y -= .17; }
   return g;
 }
 const floorDecal = (obj, x, z) => { obj.rotation.x = -Math.PI / 2; obj.position.set(x, .012, z); room.add(obj); return obj; };
@@ -117,11 +129,11 @@ const ROOM_TYPES = {
   oneroom: {
     name: '🛏️ 원룸', floor: () => woodTex(...rnd(PALETTE.wood)), wall: () => rnd(PALETTE.wall),
     furnish() {
-      const b = spot(1.1, 2, rnd(['back', 'left'])); if (b) { box(1.1, .35, 2, rnd([0x748ffc, 0xf783ac, 0x69db7c, 0xffd43b]), b.x, .18, b.z); box(1.05, .12, .5, 0xffffff, b.x, .41, b.z - .65); }
-      const ds = spot(1.1, .55, 'back'); if (ds) { box(1.1, .05, .55, 0xdeb887, ds.x, .75, ds.z); for (const [dx, dz] of [[-.5, -.22], [.5, -.22], [-.5, .22], [.5, .22]]) box(.05, .75, .05, 0x8d5a3b, ds.x + dx, .375, ds.z + dz); box(.35, .25, .03, 0x212529, ds.x, .92, ds.z - .1); }
-      const wr = spot(.9, .55, rnd(['back', 'left'])); if (wr) box(.9, 1.8, .55, rnd([0xc69c6d, 0xf8f9fa, 0x868e96]), wr.x, .9, wr.z);
+      const b = spot(1.1, 2, rnd(['back', 'left']), .55); if (b) { box(1.1, .35, 2, rnd([0x748ffc, 0xf783ac, 0x69db7c, 0xffd43b]), b.x, .18, b.z); box(1.05, .12, .5, 0xffffff, b.x, .41, b.z - .65); }
+      const ds = spot(1.1, .55, 'back', 1.1); if (ds) { box(1.1, .05, .55, 0xdeb887, ds.x, .75, ds.z); for (const [dx, dz] of [[-.5, -.22], [.5, -.22], [-.5, .22], [.5, .22]]) box(.05, .75, .05, 0x8d5a3b, ds.x + dx, .375, ds.z + dz); box(.35, .25, .03, 0x212529, ds.x, .92, ds.z - .1); }
+      const wr = spot(.9, .55, rnd(['back', 'left']), 1.9); if (wr) box(.9, 1.8, .55, rnd([0xc69c6d, 0xf8f9fa, 0x868e96]), wr.x, .9, wr.z);
       const rug = spot(1.3, 1, 'any'); if (rug) { const r = new THREE.Mesh(new THREE.CircleGeometry(.6, 20), flat(rnd([0xffc9c9, 0xd0ebff, 0xd3f9d8]))); floorDecal(r, rug.x, rug.z); occupied.pop(); }
-      const pl = spot(.4, .4, 'any'); if (pl) plant(pl.x, pl.z);
+      const pl = spot(.4, .4, 'any', .85); if (pl) plant(pl.x, pl.z);
       windowOn(wallSpot(1.3, 1.6), rr(1, 1.5)); decoys(2);
     },
     pool: ['mold', 'crack', 'stain', 'socket', 'roach', 'bulge', 'windowCrack', 'puddle', 'frame'],
@@ -129,11 +141,11 @@ const ROOM_TYPES = {
   bath: {
     name: '🛁 욕실', floor: () => tileTex(rnd(['#e7f5ff', '#f8f9fa', '#fff0f6']), '#adb5bd', 6), wall: () => rnd([0xffffff, 0xe7f5ff, 0xf1f3f5]),
     furnish() {
-      const tb = spot(1.6, .8, 'back'); if (tb) { box(1.6, .55, .8, 0xffffff, tb.x, .28, tb.z); box(1.4, .05, .6, new THREE.MeshStandardMaterial({ color: 0x9ad1ff, transparent: true, opacity: .6 }), tb.x, .5, tb.z); env.tub = tb; }
-      const tl = spot(.45, .65, rnd(['back', 'left'])); if (tl) { box(.4, .4, .5, 0xffffff, tl.x, .2, tl.z); box(.4, .5, .15, 0xffffff, tl.x, .45, tl.z - .25); }
-      const sk = spot(.6, .45, rnd(['back', 'left'])); if (sk) { box(.6, .8, .45, 0xffffff, sk.x, .4, sk.z); env.sink = sk; const mir = new THREE.Mesh(new THREE.PlaneGeometry(.5, .6), new THREE.MeshStandardMaterial({ color: 0xdbe4ff, metalness: .8, roughness: .1 }));
-        const atBack = Math.abs(sk.z + D / 2) < .6; onWall(mir, atBack ? { p: new THREE.Vector3(sk.x, 1.45, -D / 2 + .065), rotY: 0 } : { p: new THREE.Vector3(-W / 2 + .065, 1.45, sk.z), rotY: Math.PI / 2 }); env.mirror = mir; }
-      for (const [w, rot, x, z] of [[W, 0, 0, -D / 2 + .06], [D, Math.PI / 2, -W / 2 + .06, 0]]) { const t = new THREE.Mesh(new THREE.PlaneGeometry(w, 1.2), new THREE.MeshStandardMaterial({ map: tileTex('#ffffff', '#ced4da', 8), roughness: .3 })); t.material.map.repeat.set(w / 1.2, 1); t.position.set(x, .6, z); t.rotation.y = rot; room.add(t); }
+      const tb = spot(1.6, .8, 'back', .6); if (tb) { box(1.6, .55, .8, 0xffffff, tb.x, .28, tb.z); box(1.4, .05, .6, new THREE.MeshStandardMaterial({ color: 0x9ad1ff, transparent: true, opacity: .6 }), tb.x, .5, tb.z); env.tub = tb; }
+      const tl = spot(.45, .65, rnd(['back', 'left']), .75); if (tl) { box(.4, .4, .5, 0xffffff, tl.x, .2, tl.z); box(.4, .5, .15, 0xffffff, tl.x, .45, tl.z - .25); }
+      const sk = spot(.6, .45, rnd(['back', 'left']), 1.8); if (sk) { box(.6, .8, .45, 0xffffff, sk.x, .4, sk.z); env.sink = sk; const mir = new THREE.Mesh(new THREE.PlaneGeometry(.5, .6), new THREE.MeshStandardMaterial({ color: 0xdbe4ff, metalness: .8, roughness: .1 }));
+        const atBack = Math.abs(sk.z + D / 2) < .6; onWall(mir, atBack ? { p: new THREE.Vector3(sk.x, 1.45, -D / 2 + .09), rotY: 0 } : { p: new THREE.Vector3(-W / 2 + .09, 1.45, sk.z), rotY: Math.PI / 2 }); env.mirror = mir; }
+      for (const [w, rot, x, z] of [[W, 0, 0, -D / 2 + .065], [D, Math.PI / 2, -W / 2 + .065, 0]]) { const t = new THREE.Mesh(new THREE.PlaneGeometry(w, 1.2), new THREE.MeshStandardMaterial({ map: tileTex('#ffffff', '#ced4da', 8), roughness: .3 })); t.material.map.repeat.set(w / 1.2, 1); t.position.set(x, .6, z); t.rotation.y = rot; room.add(t); }
       decoys(1);
     },
     pool: ['groutMold', 'tubRing', 'tileCrack', 'mirrorCrack', 'puddle', 'drip', 'roach', 'mold'],
@@ -141,15 +153,15 @@ const ROOM_TYPES = {
   kitchen: {
     name: '🍳 주방', floor: () => checkTex(rnd(['#f8f9fa', '#fff4e6']), rnd(['#ced4da', '#e9c46a', '#a5d8ff'])), wall: () => rnd(PALETTE.wall),
     furnish() {
-      const run = rr(2.4, Math.min(3.6, W - 1)); const cx = rr(-W / 2 + run / 2 + .1, W / 2 - run / 2 - .1); occupied.push({ x: cx, z: -D / 2 + .38, w: run, d: .7 });
+      const run = rr(2.4, Math.min(3.6, W - 1)); const cx = rr(-W / 2 + run / 2 + .1, W / 2 - run / 2 - .1); occupied.push({ x: cx, z: -D / 2 + .38, w: run, d: .7, h: 2.05 });
       const col = rnd([0xffffff, 0x495057, 0x96f2d7, 0xffc9c9]);
       box(run, .85, .65, col, cx, .425, -D / 2 + .38); box(run, .05, .68, 0xdee2e6, cx, .87, -D / 2 + .38);
       const sinkX = cx - run / 4, stoveX = cx + run / 4; env.sinkX = sinkX; env.stoveX = stoveX;
       box(.5, .04, .4, 0xadb5bd, sinkX, .89, -D / 2 + .38); box(.05, .25, .05, 0xced4da, sinkX, 1.0, -D / 2 + .15);
       box(.6, .04, .5, 0x212529, stoveX, .9, -D / 2 + .38); for (const [dx, dz] of [[-.15, -.1], [.15, -.1], [-.15, .12], [.15, .12]]) { const r = new THREE.Mesh(new THREE.TorusGeometry(.06, .015, 4, 12), flat(0x868e96)); r.rotation.x = Math.PI / 2; r.position.set(stoveX + dx, .93, -D / 2 + .38 + dz); room.add(r); }
       env.cabinets = []; for (let i = 0; i < Math.floor(run / .6); i++) { const c = box(.55, .5, .35, col, cx - run / 2 + .3 + i * .6, 1.75, -D / 2 + .2); env.cabinets.push(c); }
-      const fr = spot(.7, .65, rnd(['back', 'left'])); if (fr) { env.fridge = box(.7, 1.8, .65, rnd([0xf8f9fa, 0xced4da, 0xb2f2bb]), fr.x, .9, fr.z); box(.05, .5, .05, 0x868e96, fr.x + .28, 1.1, fr.z + .34); }
-      const tb = spot(1, .7, 'any'); if (tb) { box(1, .05, .7, 0xdeb887, tb.x, .72, tb.z); for (const [dx, dz] of [[-.45, -.3], [.45, -.3], [-.45, .3], [.45, .3]]) box(.05, .72, .05, 0x8d5a3b, tb.x + dx, .36, tb.z + dz); }
+      const fr = spot(.7, .65, rnd(['back', 'left']), 1.9); if (fr) { env.fridge = box(.7, 1.8, .65, rnd([0xf8f9fa, 0xced4da, 0xb2f2bb]), fr.x, .9, fr.z); box(.05, .5, .05, 0x868e96, fr.x + .28, 1.1, fr.z + .34); }
+      const tb = spot(1, .7, 'any', .8); if (tb) { box(1, .05, .7, 0xdeb887, tb.x, .72, tb.z); for (const [dx, dz] of [[-.45, -.3], [.45, -.3], [-.45, .3], [.45, .3]]) box(.05, .72, .05, 0x8d5a3b, tb.x + dx, .36, tb.z + dz); }
       decoys(2);
     },
     pool: ['grease', 'cabinetTilt', 'rust', 'puddle', 'roach', 'socket', 'drip', 'roach2'],
@@ -158,10 +170,10 @@ const ROOM_TYPES = {
     name: '🪴 베란다', floor: () => concreteTex(rnd(['#ced4da', '#dee2e6', '#e9ecef'])), wall: () => rnd([0xf8f9fa, 0xe9ecef]),
     furnish() {
       env.windows = [];
-      for (let i = 0; i < Math.max(2, Math.floor(W / 1.6)); i++) env.windows.push(windowOn({ p: new THREE.Vector3(-W / 2 + .9 + i * 1.6, 1.35, -D / 2 + .065), rotY: 0 }, 1.4, 1.3));
-      const wm = spot(.7, .7, 'left'); if (wm) { box(.7, .9, .7, 0xf8f9fa, wm.x, .45, wm.z); const door = new THREE.Mesh(new THREE.CircleGeometry(.22, 16), flat(0x74c0fc)); door.position.set(wm.x + .36, .5, wm.z); door.rotation.y = Math.PI / 2; room.add(door); }
-      const rk = spot(1.4, .5, 'any'); if (rk) { env.rack = rk; for (const s of [-1, 1]) box(.04, 1.1, .04, 0xadb5bd, rk.x + s * .7, .55, rk.z); box(1.44, .04, .04, 0xadb5bd, rk.x, 1.1, rk.z); for (let i = 0; i < 3; i++) box(.3, .4, .02, rnd([0xff8787, 0x74c0fc, 0xffd43b, 0xffffff]), rk.x - .45 + i * .45, .85, rk.z); }
-      for (let i = 0; i < 3; i++) { const p = spot(.4, .4, rnd(['back', 'any'])); if (p) plant(p.x, p.z); }
+      for (let i = 0; i < Math.max(2, Math.floor(W / 1.6)); i++) env.windows.push(windowOn({ p: new THREE.Vector3(-W / 2 + .9 + i * 1.6, 1.35, -D / 2 + .09), rotY: 0 }, 1.4, 1.3));
+      const wm = spot(.7, .7, 'left', .95); if (wm) { box(.7, .9, .7, 0xf8f9fa, wm.x, .45, wm.z); const door = new THREE.Mesh(new THREE.CircleGeometry(.22, 16), flat(0x74c0fc)); door.position.set(wm.x + .36, .5, wm.z); door.rotation.y = Math.PI / 2; room.add(door); }
+      const rk = spot(1.4, .5, 'any', 1.2); if (rk) { env.rack = rk; for (const s of [-1, 1]) box(.04, 1.1, .04, 0xadb5bd, rk.x + s * .7, .55, rk.z); box(1.44, .04, .04, 0xadb5bd, rk.x, 1.1, rk.z); for (let i = 0; i < 3; i++) box(.3, .4, .02, rnd([0xff8787, 0x74c0fc, 0xffd43b, 0xffffff]), rk.x - .45 + i * .45, .85, rk.z); }
+      for (let i = 0; i < 3; i++) { const p = spot(.4, .4, rnd(['back', 'any']), .85); if (p) plant(p.x, p.z); }
       for (let x = -W / 2 + .2; x < W / 2; x += .4) box(.04, .7, .04, 0x868e96, x, .35, D / 2 - .1);
       env.rail = box(W, .05, .06, 0x868e96, 0, .72, D / 2 - .1);
     },
@@ -170,10 +182,10 @@ const ROOM_TYPES = {
   basement: {
     name: '🏚️ 반지하', floor: () => concreteTex(rnd(['#adb5bd', '#868e96'])), wall: () => rnd([0xdee2e6, 0xced4da, 0xe9ecef]),
     furnish() {
-      windowOn({ p: new THREE.Vector3(rr(-W / 2 + 1, W / 2 - 1), 2.0, -D / 2 + .065), rotY: 0 }, 1.1, .45);
-      const mt = spot(1.1, 1.9, rnd(['back', 'left'])); if (mt) box(1.1, .2, 1.9, 0xf1f3f5, mt.x, .1, mt.z);
-      for (let i = 0; i < 3; i++) { const b = spot(.5, .4, 'any'); if (b) { box(.5, .4, .4, 0xc69c6d, b.x, .2, b.z); if (Math.random() < .5) box(.45, .35, .35, 0xd9a066, b.x, .58, b.z); } }
-      const dh = spot(.35, .3, 'any'); if (dh) { box(.35, .6, .3, 0xffffff, dh.x, .3, dh.z); box(.2, .05, .02, 0x51cf66, dh.x, .5, dh.z + .16); }
+      windowOn({ p: new THREE.Vector3(rr(-W / 2 + 1, W / 2 - 1), 2.0, -D / 2 + .09), rotY: 0 }, 1.1, .45);
+      const mt = spot(1.1, 1.9, rnd(['back', 'left']), .25); if (mt) box(1.1, .2, 1.9, 0xf1f3f5, mt.x, .1, mt.z);
+      for (let i = 0; i < 3; i++) { const b = spot(.5, .4, 'any', .8); if (b) { box(.5, .4, .4, 0xc69c6d, b.x, .2, b.z); if (Math.random() < .5) box(.45, .35, .35, 0xd9a066, b.x, .58, b.z); } }
+      const dh = spot(.35, .3, 'any', .65); if (dh) { box(.35, .6, .3, 0xffffff, dh.x, .3, dh.z); box(.2, .05, .02, 0x51cf66, dh.x, .5, dh.z + .16); }
       decoys(1);
     },
     pool: ['mold', 'mold', 'damp', 'puddle', 'crack', 'mouse', 'roach', 'socket'],
@@ -188,7 +200,7 @@ function decoys(n) {   // normal outlets and picture frames, to tempt careless t
 
 // ---------- defects ----------
 const DEF = {
-  mold: { name: '곰팡이', cost: 300, make: s => { const ws = Math.random() < .6 ? { p: new THREE.Vector3(-W / 2 + .065, rr(1.3, 1.85), -D / 2 + rr(.3, .7)), rotY: Math.PI / 2 } : wallSpot(1.1, 1.85); return [onWall(blot(0x2b8a3e, rr(.18, .28), .8 - s), ws), ws.p]; } },
+  mold: { name: '곰팡이', cost: 300, make: s => { const ws = Math.random() < .6 ? { p: new THREE.Vector3(-W / 2 + .09, rr(1.3, 1.85), -D / 2 + rr(.3, .7)), rotY: Math.PI / 2 } : wallSpot(1.1, 1.85); return [onWall(blot(0x2b8a3e, rr(.18, .28), .8 - s), ws), ws.p]; } },
   crack: { name: '벽 균열', cost: 400, make: s => { const ws = wallSpot(1.4, 1.9); const o = onWall(crackLines(rr(4, 7) | 0, 0x343a40, .9 - s), ws); return [o, ws.p.clone().add(new THREE.Vector3(0, -.4, 0))]; } },
   stain: { name: '벽지 얼룩', cost: 150, make: s => { const ws = wallSpot(.8, 1.9); return [onWall(blot(0xe9c46a, .2, .55 - s * .8), ws), ws.p]; } },
   socket: { name: '그을린 콘센트', cost: 250, make: () => { const ws = wallSpot(.35, .5); return [outlet(ws, true), ws.p]; } },
@@ -204,17 +216,18 @@ const DEF = {
   tubRing: { name: '욕조 물때', cost: 200, make: s => { if (!env.tub) return null; const r = new THREE.Mesh(new THREE.TorusGeometry(.5, .03, 4, 20), new THREE.MeshBasicMaterial({ color: 0xd9480f, transparent: true, opacity: .8 - s })); r.rotation.x = Math.PI / 2; r.scale.set(1.35, .6, 1); r.position.set(env.tub.x, .52, env.tub.z); room.add(r); return [r, r.position]; } },
   tileCrack: { name: '깨진 타일', cost: 300, make: s => { const ws = wallSpot(.35, 1); const o = onWall(crackLines(4, 0x495057, .9 - s), ws); return [o, ws.p.clone().add(new THREE.Vector3(0, -.25, 0))]; } },
   mirrorCrack: { name: '금 간 거울', cost: 150, make: () => { if (!env.mirror) return null; const g = crackLines(3, 0xffffff, .95); g.position.set(.08, .15, .01); env.mirror.add(g); env.mirror.updateMatrixWorld(); return [g, room.worldToLocal(env.mirror.localToWorld(new THREE.Vector3(.08, -.1, 0)))]; } },
-  grease: { name: '기름때', cost: 200, make: s => { const ws = { p: new THREE.Vector3(env.stoveX ?? 0, 1.2, -D / 2 + .065), rotY: 0 }; return [onWall(blot(0x8d6e40, .25, .7 - s), ws), ws.p]; } },
+  grease: { name: '기름때', cost: 200, make: s => { const ws = { p: new THREE.Vector3(env.stoveX ?? 0, 1.2, -D / 2 + .09), rotY: 0 }; return [onWall(blot(0x8d6e40, .25, .7 - s), ws), ws.p]; } },
   cabinetTilt: { name: '처진 찬장 문', cost: 250, make: s => { if (!env.cabinets?.length) return null; const c = rnd(env.cabinets); c.rotation.z = .12 - s * .09; c.position.y -= .04; return [c, c.position]; } },
   rust: { name: '녹', cost: 200, make: s => { const host = env.fridge || env.rail; if (!host) return null; const b = blot(0xd9480f, .14, .85 - s); const p = env.fridge ? new THREE.Vector3(host.position.x + .2, .35, host.position.z + .33) : new THREE.Vector3(rr(-W / 3, W / 3), .72, D / 2 - .06); b.position.copy(p); room.add(b); return [b, p]; } },
   condensation: { name: '결로', cost: 250, make: s => { const w = env.windows ? rnd(env.windows) : null; if (!w) return null; const g = new THREE.Group(); for (let i = 0; i < 14; i++) { const d = new THREE.Mesh(new THREE.CircleGeometry(rr(.015, .035), 6), new THREE.MeshBasicMaterial({ color: 0x1971c2, transparent: true, opacity: .7 - s * .6 })); d.position.set(rr(-.5, .5), rr(-.55, -.2), .05); g.add(d); } w.add(g); w.updateMatrixWorld(); return [g, room.worldToLocal(w.localToWorld(new THREE.Vector3(0, -.38, .05)))]; } },
   pigeon: { name: '비둘기 둥지', cost: 300, make: () => { const at = env.rack ? new THREE.Vector3(env.rack.x + .5, 1.15, env.rack.z) : new THREE.Vector3(0, .75, D / 2 - .1); const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.SphereGeometry(.1, 8, 6), flat(0x868e96)); b.scale.set(1.3, 1, 1); g.add(b); const h = new THREE.Mesh(new THREE.SphereGeometry(.06, 8, 6), flat(0x5c7cfa)); h.position.set(.11, .07, 0); g.add(h); g.position.copy(at).add(new THREE.Vector3(0, .1, 0)); g.userData.pigeon = h; room.add(g); return [g, g.position]; } },
-  damp: { name: '습기 얼룩', cost: 350, make: s => { const ws = { p: new THREE.Vector3(-W / 2 + .065, .55, rr(-D / 2 + .6, D / 2 - .6)), rotY: Math.PI / 2 }; return [onWall(blot(0x495057, .45, .45 - s * .5, 7), ws), ws.p]; } },
+  damp: { name: '습기 얼룩', cost: 350, make: s => { const ws = { p: new THREE.Vector3(-W / 2 + .09, .55, rr(-D / 2 + .6, D / 2 - .6)), rotY: Math.PI / 2 }; return [onWall(blot(0x495057, .45, .45 - s * .5, 7), ws), ws.p]; } },
 };
 function critter(color, size, speed, tail) {
   const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.SphereGeometry(size, 8, 6), flat(color)); b.scale.set(1, .55, 1.6); g.add(b);
   if (tail) { const t = new THREE.Mesh(new THREE.BoxGeometry(.01, .01, size * 2.2), flat(0xffa8a8)); t.position.z = -size * 2.2; g.add(t); }
-  g.position.set(rr(-W / 3, W / 3), size * .55, rr(-D / 3, D / 3)); room.add(g);
+  let px = 0, pz = 0; for (let i = 0; i < 40; i++) { px = rr(-W / 2 + .4, W / 2 - .4); pz = rr(-D / 2 + .4, D / 2 - .4); if (free(px, pz, .3, .3)) break; }
+  g.position.set(px, size * .55, pz); room.add(g);
   movers.push({ g, speed, dir: Math.random() * Math.PI * 2, turnT: 0 });
   return [g, g.position];
 }
@@ -231,12 +244,23 @@ function buildRoom(typeKey, level) {
   box(.12, WALL_H, D, wallM, -W / 2, WALL_H / 2, 0);
   box(W, .1, .04, 0xffffff, 0, .05, -D / 2 + .07); box(.04, .1, D, 0xffffff, -W / 2 + .07, .05, 0);   // skirting
   T.furnish();
+  placeCamera(); camera.position.copy(camPos); camera.lookAt(camLook); camera.updateMatrixWorld();
+  const solids = []; room.traverse(o => { if (o.isMesh && !o.material.transparent && o.geometry.type === 'BoxGeometry') solids.push(o); });
+  const rc = new THREE.Raycaster();
+  const blocked = (obj, at) => { const p = at.clone(); room.updateMatrixWorld(true); room.localToWorld(p); const dir = p.clone().sub(camera.position), dist = dir.length(); rc.set(camera.position, dir.normalize());
+    return rc.intersectObjects(solids, false).some(x => x.distance < dist - .12 && x.object !== obj && !obj?.getObjectById?.(x.object.id)); };
   const n = Math.min(T.pool.length, 4 + Math.floor(level / 2));
-  const subtle = Math.min(.4, level * .05);
+  const subtle = Math.min(.22, level * .03);
   let made = 0;
   for (const k of shuffle(T.pool.slice())) {
     if (made >= n) break;
-    const def = DEF[k]; const res = def.make(subtle); if (!res) continue;
+    const def = DEF[k]; let res = null;
+    for (let tries = 0; tries < 4; tries++) {   // re-roll any defect the camera can't actually see
+      res = def.make(subtle); if (!res) break;
+      if (['roach', 'roach2', 'mouse'].includes(k) || !blocked(res[0], res[1])) break;
+      res[0].parent?.remove(res[0]); const mi = movers.findIndex(m => m.g === res[0]); if (mi >= 0) movers.splice(mi, 1); res = null;
+    }
+    if (!res) continue;
     const [obj, at] = res;
     const hit = new THREE.Mesh(new THREE.SphereGeometry(Math.max(.26, .38 - level * .012), 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
     hit.position.copy(at); room.add(hit);
@@ -334,7 +358,6 @@ addEventListener('pointerdown', e => {
 addEventListener('keydown', e => { if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); tapStart(); } });
 
 // dollhouse camera from the open front-right corner, fitted to the room size
-const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(0, .7, 0);
 function placeCamera() {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   const portrait = camera.aspect < 1;
@@ -351,7 +374,11 @@ addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); pl
 // ---------- loop ----------
 let last = performance.now();
 reset(); showIntro();
-window.__insp = { get state() { return state; }, get defects() { return defects; }, get score() { return score; }, get lives() { return lives; }, screenOf, get timeLeft() { return timeLeft; },
+window.__insp = { occluded() {   // test hook: defects whose spot is blocked from the camera by solid furniture/walls
+    const out = [], rc = new THREE.Raycaster(), solids = []; room.traverse(o => { if (o.isMesh && o.material && !o.material.transparent && o.material.visible !== false && o.geometry.type === 'BoxGeometry') solids.push(o); });
+    for (const d of defects) { const p = (['roach', 'roach2', 'mouse'].includes(d.key) ? d.obj.position : d.at).clone(); room.localToWorld(p); const dir = p.clone().sub(camera.position); const dist = dir.length(); rc.set(camera.position, dir.normalize());
+      const h = rc.intersectObjects(solids, false).find(x => x.distance < dist - .12 && !d.obj?.getObjectById?.(x.object.id) && x.object !== d.obj); if (h) out.push(d.name); }
+    return out; }, get state() { return state; }, get defects() { return defects; }, get score() { return score; }, get lives() { return lives; }, screenOf, get timeLeft() { return timeLeft; },
   build(k) { typeKey = k; buildRoom(k, 8); placeCamera(); updateHud(); } };
 
 function frame(now) {

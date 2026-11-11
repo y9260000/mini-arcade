@@ -117,12 +117,12 @@ let targets = [];
 const SLOTS = [[-2.6, -4.5], [2.4, -6], [-.6, -8.5], [2.8, -11], [-3, -12.5], [.4, -15]];
 function spawn(slotIdx, delay = 0) {
   const lvl = Math.min(1, angels / 25);
-  const devil = angels >= 3 && Math.random() < .14 + lvl * .1;
+  const devil = angels >= 5 && Math.random() < .1 + lvl * .08;
   const k = devil ? KINDS[5] : KINDS[(Math.random() * 5) | 0];
   const per = makePerson(k);
   const [sx, sz] = SLOTS[slotIdx];
   const t = { ...per, k, slot: slotIdx, x0: sx + (Math.random() - .5), z: sz, y0: .15 + Math.random() * .5,
-    amp: Math.random() < .25 + lvl * .6 ? .8 + Math.random() * (1 + lvl * 1.5) : 0, spd: .6 + Math.random() * (.8 + lvl), ph: Math.random() * 6,
+    amp: Math.random() < .1 + lvl * .5 ? .6 + Math.random() * (.8 + lvl * 1.2) : 0, spd: .4 + Math.random() * (.5 + lvl * .8), ph: Math.random() * 6,
     state: 'idle', t: -delay, cool: 0 };
   per.root.position.set(t.x0, t.y0, t.z); per.root.scale.setScalar(.01);
   scene.add(per.root); targets.push(t);
@@ -140,13 +140,13 @@ let flying = null;   // { mesh, p, v, prevY, spin }
 // trajectory preview
 const PREV_N = 26;
 const prevGeo = new THREE.BufferGeometry(); prevGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PREV_N * 3), 3));
-const preview = new THREE.Points(prevGeo, new THREE.PointsMaterial({ color: 0xffffff, size: .14, transparent: true, opacity: .9, depthWrite: false }));
+const preview = new THREE.Points(prevGeo, new THREE.PointsMaterial({ color: 0xf59f00, size: .22, transparent: true, opacity: .9, depthWrite: false , depthTest: false }));
 preview.visible = false; scene.add(preview);
-const landMark = new THREE.Mesh(new THREE.RingGeometry(.22, .3, 20), new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: .8, side: THREE.DoubleSide, depthWrite: false }));
-landMark.rotation.x = -Math.PI / 2; landMark.visible = false; scene.add(landMark);
+const landMark = new THREE.Mesh(new THREE.RingGeometry(.36, .52, 28), new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: .9, side: THREE.DoubleSide, depthWrite: false, depthTest: false })); landMark.renderOrder = 8;
+landMark.rotation.x = -.45; landMark.visible = false; scene.add(landMark);   // tilted toward the camera so it reads as a target
 
 // ---------- state ----------
-const START_HALOS = 12;
+const START_HALOS = 15;
 let state = 'ready', angels = 0, halos = START_HALOS, thrown = 0, perfects = 0, combo = 0, overAt = 0, aim = null;
 let best = 0; try { best = +localStorage.getItem('halo-best') || 0; } catch {}
 const $score = $('score'), $halos = $('halos'), $combo = $('combo'), $center = $('center'), $hint = $('hint');
@@ -190,7 +190,15 @@ function updatePreview() {
     for (let s = 0; s < 4; s++) { vv.y -= G * .02; p.addScaledVector(vv, .02); if (!landed && p.y < .5 && vv.y < 0) landed = p.clone(); }
   }
   prevGeo.attributes.position.needsUpdate = true; prevGeo.computeBoundingSphere();
-  landMark.visible = false;
+  // where does the arc come down through head height?
+  const p2 = ORIGIN.clone(), v2 = v.clone(); let cross = null;
+  for (let i = 0; i < 200 && !cross; i++) { const py = p2.y; v2.y -= G * .01; p2.addScaledVector(v2, .01); if (v2.y < 0 && py >= 2.1 && p2.y < 2.1) cross = p2.clone(); }
+  landMark.visible = !!cross && pow > .05;
+  if (cross) {
+    landMark.position.set(cross.x, 2.1, cross.z);
+    const near = targets.some(t => t.state !== 'angel' && t.t >= 0 && headPos(t, hp) && Math.hypot(cross.x - hp.x, cross.z - hp.z) < .7);
+    landMark.material.color.setHex(near ? 0x37b24d : 0xf59f00); landMark.scale.setScalar(near ? 1.5 : 1.2);
+  }
 }
 function throwHalo() {
   const { v, pow } = launchVel(aim); aim = null; updatePreview();
@@ -267,7 +275,7 @@ addEventListener('keydown', e => { if ((e.code === 'Space' || e.code === 'Enter'
 const hp = new THREE.Vector3();
 let last = performance.now();
 reset(); showIntro();
-window.__halo = { get state() { return state; }, get targets() { return targets; }, get angels() { return angels; }, get halos() { return halos; },
+window.__halo = { get lm() { return { v: landMark.visible, p: landMark.position.toArray().map(x => +x.toFixed(2)) }; }, get state() { return state; }, get targets() { return targets; }, get angels() { return angels; }, get halos() { return halos; },
   shootAt(i) { // test helper: solve a launch that lands on target i
     const t = targets[i]; headPos(t, hp);
     flying = null; aim = null; halos--; thrown++; updateHud();
@@ -304,7 +312,13 @@ function frame(now) {
   if (flying) {
     const f = flying;
     f.prevY = f.p.y;
-    f.v.y -= G * dt; f.p.addScaledVector(f.v, dt);
+    f.v.y -= G * dt;
+    if (f.v.y < 0) {   // aim assist: a falling halo drifts toward a head it's about to miss narrowly
+      let bestT = null, bd = 1.1;
+      for (const t of targets) { if (t.state === 'angel' || t.t < 0) continue; headPos(t, hp); const d = Math.hypot(f.p.x - hp.x, f.p.z - hp.z); if (d < bd && f.p.y > hp.y) { bd = d; bestT = hp.clone(); } }
+      if (bestT) { f.v.x += (bestT.x - f.p.x) * dt * 5; f.v.z += (bestT.z - f.p.z) * dt * 5; }
+    }
+    f.p.addScaledVector(f.v, dt);
     f.mesh.position.copy(f.p); f.mesh.rotation.z += f.spin * dt;
     for (const t of targets) {
       if (t.state === 'angel' || t.t < 0 || f.hitCool.has(t)) continue;
@@ -312,8 +326,8 @@ function frame(now) {
       const lip = hp.y + .05;
       if (f.prevY >= lip && f.p.y < lip && f.v.y < 0) {
         const d = Math.hypot(f.p.x - hp.x, f.p.z - hp.z);
-        if (d < HALO_R + .02) { t.k.devil ? devilBurn(t) : convert(t, d < .1); break; }
-        if (d < HALO_R + .32) {             // clipped the head: bounce off with a "ting"
+        if (d < HALO_R + .22) { t.k.devil ? devilBurn(t) : convert(t, d < .16); break; }   // generous ringer
+        if (d < HALO_R + .45) {             // clipped the head: bounce off with a "ting"
           f.hitCool.add(t); combo = 0; updateHud();
           const nx = (f.p.x - hp.x) / (d || 1), nz = (f.p.z - hp.z) / (d || 1);
           f.v.set(nx * 2.5, Math.abs(f.v.y) * .45, nz * 2.5); f.spin *= -1.4;

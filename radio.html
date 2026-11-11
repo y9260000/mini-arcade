@@ -14,12 +14,15 @@
   #msg{position:fixed;left:50%;bottom:max(26px,calc(env(safe-area-inset-bottom) + 18px));transform:translateX(-50%);z-index:3;pointer-events:none;
     font:20px "Jua",sans-serif;color:#fff;background:rgba(45,111,240,.85);border-radius:999px;padding:10px 22px;white-space:nowrap;box-shadow:0 6px 20px rgba(0,0,0,.35)}
   #msg.go{background:rgba(47,158,68,.92);animation:mg .3s infinite alternate} @keyframes mg{to{transform:translateX(-50%) scale(1.06)}}
+  #hopbar{position:fixed;left:50%;bottom:max(84px,calc(env(safe-area-inset-bottom) + 76px));transform:translateX(-50%);width:min(260px,60vw);height:8px;border-radius:4px;background:rgba(255,255,255,.15);overflow:hidden;z-index:3;pointer-events:none}
+  #hopbar i{display:block;height:100%;width:100%;transform-origin:left;background:#66d9e8}
   #msg.wait{background:rgba(255,255,255,.14)}
 </style>
 </head>
 <body>
 <div id="top" class="hud-ctl"><span class="pill" id="score">0점</span><span class="pill" id="dest">🌕 달</span><span class="pill" id="lives">📶📶📶</span></div>
 <div id="msg" class="hud-ctl">탭해서 송신!</div>
+<div id="hopbar" class="hud-ctl"><i id="hop"></i></div>
 <div class="screen" id="center"></div>
 
 <script type="module">
@@ -29,11 +32,11 @@ const rnd = a => a[(Math.random() * a.length) | 0];
 
 // ---------- destinations: each needs more relay hops ----------
 const DEST = [
-  { name: '🌕 달', r: .9, color: 0xced4da, hops: 1, who: '달 기지 대원' },
-  { name: '🔴 화성', r: 1, color: 0xe8590c, hops: 2, who: '감자 키우는 우주인' },
+  { name: '🌕 달', r: .9, color: 0xced4da, hops: 2, who: '달 기지 대원' },
+  { name: '🔴 화성', r: 1, color: 0xe8590c, hops: 3, who: '감자 키우는 우주인' },
   { name: '🪐 목성', r: 1.4, color: 0xd9a066, hops: 3, who: '유로파 기지' },
-  { name: '💍 토성', r: 1.25, color: 0xf2d29b, hops: 3, ring: true, who: '토성 고리 관리소' },
-  { name: '🔵 해왕성', r: 1.1, color: 0x4c6ef5, hops: 4, who: '보이저 팬클럽' },
+  { name: '💍 토성', r: 1.25, color: 0xf2d29b, hops: 4, ring: true, who: '토성 고리 관리소' },
+  { name: '🔵 해왕성', r: 1.1, color: 0x4c6ef5, hops: 5, who: '보이저 팬클럽' },
 ];
 
 // ---------- three ----------
@@ -89,40 +92,61 @@ const guideGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), 
 const guide = new THREE.Line(guideGeo, new THREE.LineDashedMaterial({ color: 0x66d9e8, dashSize: .25, gapSize: .18, transparent: true, opacity: .7 }));
 const holder = new THREE.Mesh(new THREE.SphereGeometry(.42, 16, 10), basic(0x66d9e8, .35));
 function clearLevel() { while (world.children.length) world.remove(world.children[0]); nodes = []; ringMeshes.length = 0; }
-function zoneHalf() { return Math.max(.2, .52 - level * .035); }
+function zoneHalf() { return Math.max(.13, .34 - level * .03); }
 function buildLevel() {
   clearLevel();
-  const D = DEST[level % DEST.length], lap = Math.floor(level / DEST.length), hops = Math.min(5, D.hops + lap);
+  const D = DEST[level % DEST.length], lap = Math.floor(level / DEST.length), hops = Math.min(6, D.hops + lap);
   const span = 4.2 + hops * 3.4, pts = [];
   for (let i = 0; i <= hops + 1; i++) { const u = i / (hops + 1); pts.push(new THREE.Vector3(-span / 2 + u * span, 0, (i === 0 || i === hops + 1) ? 0 : (i % 2 ? -1.6 : 1.6) * (.6 + Math.random() * .5))); }
   const earth = makeEarth(); earth.position.copy(pts[0]); world.add(earth);
   nodes.push({ kind: 'earth', obj: earth, c: pts[0].clone(), pos: () => earth.position.clone().add(new THREE.Vector3(.95, .4, 0)) });
   for (let i = 1; i <= hops; i++) {
-    const c = pts[i], r = 1.15 + Math.random() * .25, sp = (1.1 + level * .07 + Math.random() * .5) * (i % 2 ? 1 : -1);
+    const c = pts[i], r = 1.15 + Math.random() * .25, sp = (1.6 + level * .12 + Math.random() * .7) * (Math.random() < .5 ? 1 : -1);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(r, .02, 4, 64), basic(0x5c7cfa, .35)); ring.rotation.x = Math.PI / 2; ring.position.copy(c); world.add(ring);
     const zone = new THREE.Mesh(new THREE.TorusGeometry(r, .09, 6, 24, zoneHalf() * 2), basic(0x69db7c, .55)); zone.rotation.x = -Math.PI / 2; zone.position.copy(c); world.add(zone);
     const sat = makeSat(); world.add(sat);
-    const n = { kind: 'sat', obj: sat, c: c.clone(), r, sp, a: Math.random() * 6.28, ring, zone, zoneAng: 0, pos: () => sat.position.clone() };
+    const n = { kind: 'sat', obj: sat, c: c.clone(), r, sp, wob: 1.3 + Math.random() * 1.6, ph: Math.random() * 6, a: Math.random() * 6.28, ring, zone, zoneAng: 0, pos: () => sat.position.clone() };
     nodes.push(n);
   }
   const planet = makePlanet(D); planet.position.copy(pts[hops + 1]); world.add(planet);
-  const pn = { kind: 'planet', obj: planet, c: pts[hops + 1].clone(), r: D.r + .32, sp: (1 + level * .06) * (hops % 2 ? -1 : 1), a: Math.random() * 6.28, pos: () => world.worldToLocal(planet.userData.rx.children[1].getWorldPosition(new THREE.Vector3())) };
+  const pn = { kind: 'planet', obj: planet, c: pts[hops + 1].clone(), r: D.r + .32, sp: (1.5 + level * .1) * (Math.random() < .5 ? -1 : 1), wob: 1.1, ph: 0, a: Math.random() * 6.28, pos: () => world.worldToLocal(planet.userData.rx.children[1].getWorldPosition(new THREE.Vector3())) };
   const pzone = new THREE.Mesh(new THREE.TorusGeometry(D.r + .32, .09, 6, 24, zoneHalf() * 2), basic(0xffd43b, .45)); pzone.rotation.x = -Math.PI / 2; pzone.position.copy(pn.c); world.add(pzone); pn.zone = pzone;
   nodes.push(pn);
   // each zone faces the previous node's centre (that's where the signal comes from)
   for (let i = 1; i < nodes.length; i++) { const n = nodes[i], p = nodes[i - 1].c; n.zoneAng = Math.atan2(-(p.z - n.c.z), p.x - n.c.x); }
   for (let i = 1; i < nodes.length; i++) { const n = nodes[i]; n.zone.rotation.z = n.zoneAng - zoneHalf(); }
-  world.add(holder); world.add(guide); beamAt = 0; $('dest').textContent = `${D.name}${lap ? ` · ${lap + 1}회차` : ''}`; frame3();
+  world.add(holder); world.add(guide); beamAt = 0; hopT = hopMax(); spawnRocks(); $('dest').textContent = `${D.name}${lap ? ` · ${lap + 1}회차` : ''}`; frame3();
 }
 // angle of a relay on its orbit, in the same convention as zoneAng (x right, -z up on screen)
 const angOf = n => n.a;
 const inZone = n => { let d = angOf(n) - n.zoneAng; d = Math.atan2(Math.sin(d), Math.cos(d)); return Math.abs(d) < zoneHalf(); };
+let simT = 0;
 function placeNodes(dt) {
+  simT += dt;
   for (const n of nodes) {
-    if (n.kind === 'sat') { n.a += n.sp * dt; n.obj.position.set(n.c.x + Math.cos(n.a) * n.r, 0, n.c.z - Math.sin(n.a) * n.r); n.obj.rotation.y = n.a; const ok = inZone(n); n.obj.userData.led.material.color.setHex(ok ? 0x51cf66 : 0xff6b6b); n.zone.material.opacity = ok ? 1 : .55; }
-    if (n.kind === 'planet') { n.a += n.sp * dt; n.obj.rotation.y = n.a; n.obj.children[0].rotation.y = 0; const ok = inZone(n); n.zone.material.opacity = ok ? 1 : .55; }
+    const vm = 1 + (level >= 1 ? .55 : .3) * Math.sin(simT * n.wob + n.ph);
+    if (n.kind === 'sat') { n.a += n.sp * vm * dt; n.obj.position.set(n.c.x + Math.cos(n.a) * n.r, 0, n.c.z - Math.sin(n.a) * n.r); n.obj.rotation.y = n.a; const ok = inZone(n); n.obj.userData.led.material.color.setHex(ok ? 0x51cf66 : 0xff6b6b); n.zone.material.opacity = ok ? 1 : .55; }
+    if (n.kind === 'planet') { n.a += n.sp * vm * dt; n.obj.rotation.y = n.a; n.obj.children[0].rotation.y = 0; const ok = inZone(n); n.zone.material.opacity = ok ? 1 : .55; }
   }
 }
+// ---------- asteroids drifting across the routes: a signal that hits one is lost ----------
+let rocks = [];
+function spawnRocks() {
+  rocks.forEach(r => world.remove(r.m)); rocks = [];
+  const n = level < 1 ? 0 : Math.min(5, 1 + Math.floor(level / 1.5)), xs = nodes.map(n => n.c.x), x0 = Math.min(...xs), x1 = Math.max(...xs);
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(.32 + Math.random() * .18, 0), flat(0x868e96)); world.add(m);
+    rocks.push({ m, x: x0 + 1.5 + Math.random() * (x1 - x0 - 3), z: (Math.random() - .5) * 8, vz: (Math.random() < .5 ? 1 : -1) * (1.1 + Math.random() * 1.2 + level * .06) });
+  }
+}
+function moveRocks(dt) { for (const r of rocks) { r.z += r.vz * dt; if (Math.abs(r.z) > 4.5) r.vz *= -1; r.m.position.set(r.x, 0, r.z); r.m.rotation.x += dt; r.m.rotation.y += dt * 1.3; } }
+function rockOnPath(a, b) {   // first asteroid touching segment a→b (XZ plane)
+  const ab = b.clone().sub(a); ab.y = 0; const L2 = ab.lengthSq();
+  for (const r of rocks) { const ap = new THREE.Vector3(r.x - a.x, 0, r.z - a.z), t = Math.max(0, Math.min(1, ap.dot(ab) / L2)); const d = Math.hypot(a.x + ab.x * t - r.x, a.z + ab.z * t - r.z); if (d < .55) return { r, t }; }
+  return null;
+}
+let hopT = 0;
+const hopMax = () => Math.max(2.2, 4.2 - level * .18);
 // ---------- beam fx ----------
 function beam(from, to, color, life = .35) {
   const d = to.clone().sub(from), len = d.length();
@@ -143,7 +167,8 @@ showScreen(Arcade.titleScreen({ emoji: '📡', title: '우주 전파 배달', ho
   ['🛰️', '위성들이 궤도를 빙글빙글 돌아요'],
   ['🟢', '다음 위성이 <b>초록 구역</b>에 들어온 순간 탭! 전파가 튕겨 넘어가요'],
   ['🪐', '마지막엔 행성 <b>수신기가 노란 구역</b>에 왔을 때 탭해서 배달'],
-  ['📶', '빗나가면 신호 하나 잃어요. 3번 끊기면 끝!'],
+  ['☄️', '소행성이 길을 막을 땐 기다렸다 쏘기 · 배터리 바가 닳기 전에!'],
+  ['📶', '빗나가면 신호를 잃고 <b>지구부터 다시</b>. 3번 끊기면 끝!'],
 ] }));
 function updateHud() {
   $('score').textContent = `${score}점`;
@@ -162,19 +187,28 @@ function tap() {
   if (state !== 'playing' || cool > 0) return;
   const from = nodes[beamAt].pos(), next = nodes[beamAt + 1];
   cool = .25;
+  const to0 = next.pos(), hit = rockOnPath(from, to0);
+  if (hit) {   // smacked into an asteroid
+    const at = from.clone().lerp(to0, hit.t); beam(from, at, 0xff922b, .45); burst(at, 0xff922b, 14);
+    loseSignal('☄️ 소행성에 막혔다!'); updateHud(); return;
+  }
   if (inZone(next)) {
     const to = next.pos(); beam(from, to, next.kind === 'planet' ? 0xffd43b : 0x66d9e8); burst(to, 0x66d9e8, 10);
-    beamAt++; combo++; score += 10 * Math.min(5, combo); Arcade.sfx.note?.(Math.min(7, beamAt)); Arcade.vibrate(15);
+    beamAt++; combo++; hopT = hopMax(); score += 10 * Math.min(5, combo); Arcade.sfx.note?.(Math.min(7, beamAt)); Arcade.vibrate(15);
     if (next.kind === 'planet') deliver(to);
   } else {
     // signal shoots off into empty space
     const dir = next.c.clone().sub(from).normalize(), miss = from.clone().addScaledVector(dir, from.distanceTo(next.c) + 2.5);
     beam(from, miss, 0xff6b6b, .45); burst(miss, 0xff6b6b, 8);
-    lives--; combo = 0; Arcade.sfx.miss(); Arcade.shake(.25); Arcade.vibrate([40, 30, 40]);
-    Arcade.toast(rnd(['📵 신호 끊김!', '🌌 전파가 우주 미아로…', '😵 타이밍 놓침!']), '#e03131');
-    if (lives <= 0) { state = 'over-anim'; setTimeout(finish, 900); }
+    loseSignal(rnd(['📵 신호 끊김!', '🌌 전파가 우주 미아로…', '😵 타이밍 놓침!']));
   }
   updateHud();
+}
+// a lost signal costs a life and sends the message back to Earth
+function loseSignal(msg) {
+  lives--; combo = 0; Arcade.sfx.miss(); Arcade.shake(.25); Arcade.vibrate([40, 30, 40]);
+  Arcade.toast(`${msg} 지구부터 다시!`, '#e03131'); beamAt = 0; hopT = hopMax();
+  if (lives <= 0) { state = 'over-anim'; setTimeout(finish, 900); }
 }
 function deliver(pos) {
   const D = DEST[level % DEST.length];
@@ -214,7 +248,9 @@ let last = performance.now();
 window.__radio = { get state() { return state; }, get nodes() { return nodes; }, get beamAt() { return beamAt; }, inZone, tap, get lives() { return lives; }, get level() { return level; } };
 function loop(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now; cool -= dt;
-  placeNodes(state === 'ready' || state === 'over' ? dt * .5 : dt);
+  placeNodes(state === 'ready' || state === 'over' ? dt * .5 : dt); moveRocks(dt);
+  if (state === 'playing') { hopT -= dt; if (hopT <= 0) loseSignal('🔋 배터리 방전!'); }
+  $('hop').style.transform = `scaleX(${state === 'playing' ? Math.max(0, hopT / hopMax()) : 0})`; $('hop').style.background = hopT < 1 ? '#ff6b6b' : '#66d9e8';
   if (nodes[0]) nodes[0].obj.rotation.y += dt * .3;
   const nx = nodes[beamAt + 1];
   if (nodes[beamAt] && nx) { const a = nodes[beamAt].pos(), b = new THREE.Vector3(nx.c.x + Math.cos(nx.zoneAng) * nx.r, 0, nx.c.z - Math.sin(nx.zoneAng) * nx.r);

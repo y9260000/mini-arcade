@@ -16,7 +16,7 @@
     { id: 'elevator', file: 'elevator.html', name: '닫힘 버튼', emoji: '🛗', unit: '명', bestKey: 'elevator-best',
       desc: '부장님이 폰 볼 때만 닫힘 버튼 꾹. 눈 마주치면 끝장' },
     { id: 'halo', file: 'halo.html', name: '천사 만들기', emoji: '😇', unit: '명', bestKey: 'halo-best',
-      desc: '고리 던지기! 머리 위에 헤일로를 씌우면 천사가 되어 승천' },
+      desc: '박자 맞춰 지나가는 사람에게 헤일로 쏙! 정확하면 승천' },
     { id: 'cine', file: 'cine.html', name: '씨네필 통역기', emoji: '🎬', unit: '개', bestKey: 'cine-best',
       desc: '옆자리 영화 고인물의 어려운 말, 쉬운 말로 빨리 번역하기' },
     { id: 'cat', file: 'cat.html', name: '냥 떨구기', emoji: '🐱', unit: '점', bestKey: 'cat-best',

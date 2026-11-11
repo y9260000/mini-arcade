@@ -156,24 +156,55 @@ const spots = [0xff3bd4, 0x3bc9ff, 0xfff23b].map((c, i) => { const l = new THREE
 box(.07, .07, .5, 0x8d5a3b, 0, 0, .1, gavel); box(.18, .16, .16, 0x5c3a21, 0, 0, -.18, gavel);
 
 // ---------- cases ----------
-const CASES = [
-  { name: '🍗 치킨 도둑 사건', lines: [
-    ['판사', '지금부터 재판을 시작하겠습니다'], ['검사', '피고인은 그날 밤 치킨집에 있었습니까'], ['피고인', '저는 그냥 콜라만 사러 갔습니다'],
-    ['검사', '그런데 왜 손에 양념이 묻어 있었죠'], ['변호사', '이의 있습니다 유도 신문입니다'], ['판사', '이의를 받아들입니다'],
-    ['증인', '분명히 닭다리 두 개를 들고 뛰었어요'], ['피고인', '그 치킨은 원래 제 것이었습니다'] ] },
-  { name: '🍫 민트초코 테러 사건', lines: [
-    ['판사', '정숙해 주시기 바랍니다'], ['검사', '피고인은 회사 냉장고를 열었습니까'], ['피고인', '배가 너무 고파서 그랬습니다'],
-    ['증인', '팀장님 케이크가 민트초코로 바뀌었어요'], ['변호사', '제 의뢰인은 반민초파입니다'], ['검사', '증거물 1번 CCTV 영상을 제출합니다'],
-    ['판사', '피고인은 최후 진술을 하십시오'], ['피고인', '민트초코는 죄가 없습니다'] ] },
-  { name: '🐱 고양이 층간소음 사건', lines: [
-    ['판사', '원고 측 먼저 진술하십시오'], ['변호사', '새벽 세 시마다 우다다 소리가 납니다'], ['피고인', '그건 제가 아니라 고양이입니다'],
-    ['검사', '고양이 이름이 무엇입니까'], ['피고인', '이름은 왕자님이고 다섯 살입니다'], ['증인', '저도 그 고양이에게 간식을 줬습니다'],
-    ['변호사', '고양이에게는 죄를 물을 수 없습니다'], ['판사', '다음 공판은 일주일 뒤에 열겠습니다'] ] },
-  { name: '🎤 노래방 18번 사건', lines: [
-    ['판사', '사건 번호 십팔 번을 심리합니다'], ['검사', '피고인은 마이크를 독점했습니까'], ['피고인', '고음 부분만 잠깐 불렀습니다'],
-    ['증인', '세 시간 동안 같은 노래만 불렀어요'], ['변호사', '그 노래는 명곡이라 무죄입니다'], ['검사', '탬버린까지 압수했다는 증언이 있습니다'],
-    ['판사', '피고인에게 박수 세 번을 명합니다'] ] },
+// ---------- procedurally generated cases: random crime + random lines + random fills, every game is different ----------
+const CRIMES = [
+  { e: '🍗', t: '치킨 도둑', obj: '치킨', place: '치킨집', evid: '양념 묻은 손', who: '배달 기사', pen: '치킨 열 마리 배상', ex: ['배가 너무 고팠습니다', '닭다리는 원래 제 몫입니다'] },
+  { e: '🍫', t: '민트초코 테러', obj: '케이크', place: '회사 냉장고', evid: '초록색 크림', who: '팀장님', pen: '반성문 세 장', ex: ['민트초코는 죄가 없습니다', '치약 맛이라 오해하신 겁니다'] },
+  { e: '🐱', t: '고양이 층간소음', obj: '캣타워', place: '윗집', evid: '고양이 털', who: '아랫집 할머니', pen: '방음 매트 설치', ex: ['우다다는 고양이 본능입니다', '그건 제가 아니라 왕자님입니다'] },
+  { e: '🎤', t: '노래방 마이크 독점', obj: '마이크', place: '코인 노래방', evid: '탬버린', who: '친구', pen: '박수 세 번', ex: ['고음 부분만 불렀습니다', '그 노래는 명곡입니다'] },
+  { e: '📦', t: '택배 오배송 개봉', obj: '택배', place: '아파트 현관', evid: '뜯긴 박스', who: '경비 아저씨', pen: '택배 재포장', ex: ['제 이름이랑 똑같았습니다', '뽁뽁이만 터뜨렸습니다'] },
+  { e: '🍜', t: '탕비실 컵라면 실종', obj: '컵라면', place: '탕비실', evid: '나무젓가락', who: '인턴', pen: '컵라면 한 박스', ex: ['국물만 마셨습니다', '유통기한이 임박했습니다'] },
+  { e: '🐟', t: '붕어빵 머리 선취', obj: '붕어빵', place: '포장마차', evid: '팥 자국', who: '사장님', pen: '꼬리부터 먹기', ex: ['머리부터 먹는 게 예의입니다', '붕어빵은 원래 머리가 맛있습니다'] },
+  { e: '💬', t: '단톡방 읽씹', obj: '단톡방', place: '카톡', evid: '읽음 표시', who: '동창', pen: '이모티콘 열 개', ex: ['답장을 쓰다가 잠들었습니다', '알림이 꺼져 있었습니다'] },
+  { e: '🚗', t: '주차 콘 점령', obj: '주차 자리', place: '골목길', evid: '빨간 고깔', who: '옆집 아저씨', pen: '고깔 반납', ex: ['잠깐 세워둔 것뿐입니다', '고깔이 원래 거기 있었습니다'] },
+  { e: '🏋️', t: '헬스장 기구 독점', obj: '벤치', place: '헬스장', evid: '수건', who: '트레이너', pen: '덤벨 정리 한 달', ex: ['세트 사이에 쉬었을 뿐입니다', '폰은 타이머로 썼습니다'] },
+  { e: '🍕', t: '파인애플 피자 주문', obj: '피자', place: '회식 자리', evid: '영수증', who: '부장님', pen: '피자 재주문', ex: ['파인애플은 과일입니다', '달고 짜서 맛있습니다'] },
+  { e: '⭐', t: '배달 리뷰 별 한 개', obj: '리뷰', place: '배달 앱', evid: '캡처 사진', who: '사장님', pen: '별점 수정', ex: ['단무지가 안 왔습니다', '실수로 눌렀습니다'] },
 ];
+const josa = (w, a, b) => { const c = w.charCodeAt(w.length - 1); return w + ((c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28) ? a : b); };
+const TIMES = ['새벽 세 시', '어젯밤', '점심시간', '퇴근 직후', '주말 오후', '월요일 아침'];
+const POOL = {
+  open: ['지금부터 재판을 시작하겠습니다', '정숙해 주시기 바랍니다', '사건 번호 {n}번을 심리합니다', '원고 측 먼저 진술하십시오', '모두 자리에 앉아 주십시오'],
+  q1: ['피고인은 그날 {t} {place}에 있었습니까', '피고인은 {obj:을} 건드렸습니까', '{place}에서 무엇을 하고 있었죠', '피고인은 {who:과} 아는 사이입니까'],
+  q2: ['그런데 왜 {evid:이} 발견됐죠', '증거물 {n}번 {evid:을} 제출합니다', '{t}에 찍힌 영상이 있습니다', '피고인의 알리바이는 거짓입니다'],
+  def: ['이의 있습니다 유도 신문입니다', '증거가 불충분합니다', '피고인은 초범입니다', '제 의뢰인은 {obj:을} 싫어합니다', '그건 정황 증거일 뿐입니다'],
+  mid: ['이의를 받아들입니다', '이의를 기각합니다', '증인은 사실만 말하십시오', '방청석은 조용히 해 주세요', '변호인은 질문을 바꾸세요'],
+  wit: ['분명히 {t}에 수상한 소리를 들었어요', '{who:이} 모든 걸 봤다고 했어요', '피고인이 {obj:을} 들고 뛰었어요', '저도 {obj:을} 좋아해서 기억해요', '{place} 앞에서 피고인을 봤어요'],
+  deny: ['저는 그날 집에서 자고 있었습니다', '기억이 잘 나지 않습니다', '억울합니다 판사님', '맹세코 아닙니다'],
+  end: ['피고인에게 {pen:을} 명합니다', '다음 공판은 일주일 뒤에 열겠습니다', '피고인은 최후 진술을 하십시오', '판결은 휴정 후 선고하겠습니다'],
+};
+function fill(tpl, C) {
+  return tpl.replace(/\{(\w+)(?::(\S))?\}/g, (_, k, j) => {
+    const w = k === 't' ? rnd(TIMES) : k === 'n' ? String(2 + ((Math.random() * 97) | 0)) : C[k];
+    if (!j) return w;
+    const pair = { 을: ['을', '를'], 이: ['이', '가'], 과: ['과', '와'] }[j];
+    return josa(w, pair[0], pair[1]);
+  });
+}
+let lastCrime = null;
+function makeCase() {
+  const C = rnd(CRIMES.filter(c => c !== lastCrime)); lastCrime = C;
+  const L = [
+    ['판사', fill(rnd(POOL.open), C)], ['검사', fill(rnd(POOL.q1), C)],
+    ['피고인', Math.random() < .6 ? rnd(C.ex) : rnd(POOL.deny)], ['검사', fill(rnd(POOL.q2), C)],
+    ['변호사', fill(rnd(POOL.def), C)], ['판사', rnd(POOL.mid)], ['증인', fill(rnd(POOL.wit), C)],
+  ];
+  if (Math.random() < .5) L.splice(5, 0, ['피고인', rnd(C.ex.concat(POOL.deny))]);   // sometimes the defendant blurts out more
+  const end = fill(rnd(POOL.end), C); L.push(['판사', end]);
+  if (end.includes('최후 진술')) L.push(['피고인', `${josa(C.obj, '은', '는')} 죄가 없습니다`]);
+  return { name: `${C.e} ${C.t} 사건`, lines: L };
+}
+let curCase = makeCase();
 
 // ---------- state ----------
 const STRIKES = 3;
@@ -191,7 +222,7 @@ const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '⌨️', title: 
 function updateHud() {
   $score.innerHTML = `${chars}<small>글자</small>`;
   $('strikes').textContent = '🖋️'.repeat(STRIKES - strikes) + '❌'.repeat(strikes);
-  $('case').textContent = `사건 ${caseNo + 1} · ${CASES[caseNo % CASES.length].name}`;
+  $('case').textContent = `사건 ${caseNo + 1} · ${curCase.name}`;
 }
 const norm = s => s.replace(/\s+/g, ' ');
 function render() {
@@ -216,10 +247,10 @@ function render() {
   return allOk;
 }
 function nextLine() {
-  const C = CASES[caseNo % CASES.length];
+  const C = curCase;
   if (lineNo >= C.lines.length) {
     SND.gavel(); gavelT = .6; Arcade.toast(`🔨 ${C.name} 종결! 다음 사건`, '#7a5c3a'); Arcade.confetti({ y: innerHeight * .3, count: 50, emoji: ['📜', '⚖️', '⌨️'] });
-    caseNo++; lineNo = 0; secPerChar = Math.max(.32, secPerChar - .06); baseTime = Math.max(2, baseTime - .2); updateHud();
+    caseNo++; curCase = makeCase(); lineNo = 0; secPerChar = Math.max(.32, secPerChar - .06); baseTime = Math.max(2, baseTime - .2); updateHud();
     state = 'pause'; setTimeout(() => { state = 'playing'; nextLine(); }, 1300); return;
   }
   const [who, text] = C.lines[lineNo++];
@@ -282,7 +313,7 @@ function finish() {
   showScreen(Arcade.resultScreen({ emoji: '⌨️', label: '받아 적은 글자', score: chars, unit: '글자', msg, rows: [['최고 타수', `${topTpm}타/분`], ['완료한 발언', `${lines}개`], ['오타 없는 발언', `${perfectLines}개`], ['처리한 사건', `${caseNo}건`]], isBest: isBest && chars > 0, best }));
   Arcade.gameOver(chars);
 }
-function reset() { strokes = []; tpm = 0; topTpm = 0; hype = 0; hypeStage = 0; chars = 0; strikes = 0; caseNo = 0; lineNo = 0; lines = 0; perfectLines = 0; secPerChar = .62; baseTime = 3.2; prevText = ''; target = ''; $typed.value = ''; $line.innerHTML = ''; $txt.textContent = ''; $('cpm').textContent = ''; updateHud(); }
+function reset() { strokes = []; tpm = 0; topTpm = 0; hype = 0; hypeStage = 0; chars = 0; strikes = 0; caseNo = 0; curCase = makeCase(); lineNo = 0; lines = 0; perfectLines = 0; secPerChar = .62; baseTime = 3.2; prevText = ''; target = ''; $typed.value = ''; $line.innerHTML = ''; $txt.textContent = ''; $('cpm').textContent = ''; updateHud(); }
 function start() {
   state = 'count'; $center.style.display = 'none';
   $typed.focus();   // must happen inside the tap so the phone keyboard opens

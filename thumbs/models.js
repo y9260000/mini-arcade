@@ -78,13 +78,18 @@ export const M = {
     const wings = [-1, 1].map(s => { const w = sph(.5, 0xffffff, s * .6, .05, -.3); w.scale.set(.5, .9, .2); w.rotation.z = s * .4; return w; });
     return t => { ring.position.y = 1.15 + Math.sin(t * 3) * .08; ring.rotation.z = t * 2; wings.forEach((w, i) => w.rotation.z = (i ? 1 : -1) * (.4 + Math.sin(t * 9) * .35)); G.position.y = Math.sin(t * 2) * .1; };
   },
-  cine() {
-    box(1.8, 1.1, .3, 0x212529, 0, -.3, 0);
-    const top = grp(-.9, .25, 0); box(1.8, .3, .32, 0xffffff, .9, .15, 0, 0, 0, 0, top);
-    for (let i = 0; i < 5; i++) box(.18, .32, .34, 0x212529, .25 + i * .34, .15, 0, 0, 0, 0, top);
-    const sp = grp(.95, .8, .3); sph(.38, 0xffffff, 0, 0, 0, sp); cone(.15, .3, 0xffffff, -.25, -.35, 0, 0, 0, .6, sp);
-    return t => { const k = (t * 1.2) % 1; top.rotation.z = k < .5 ? .45 * Math.sin(k * 2 * Math.PI / 2 * 2) : Math.max(0, .45 - (k - .5) * 6) * 0; sp.scale.setScalar(1 + Math.sin(t * 4) * .1); };
+  cine() {   // 전문가 통역기: expert, speech bubble with jargon, floating domain props
+    const p = person(-.5, -1.1, 0, { body: 0x1c1c22, hair: 0x3a2a20, s: 1.05 }); p.rotation.y = .4;
+    const cap = cyl(.27, .25, .1, 0x8b1e2d, 0, 1.43, 0, 0, 0, .18, p);
+    const b = grp(.55, .55, 0); box(1.1, .7, .14, 0xffffff, 0, 0, 0, 0, 0, 0, b); cone(.14, .3, 0xffffff, -.38, -.44, 0, 0, 0, .5, b, 4);
+    box(.5, .1, .02, 0x7048e8, -.15, .12, .08, 0, 0, 0, b); box(.7, .08, .02, 0xadb5bd, 0, -.08, .08, 0, 0, 0, b);
+    const items = [];
+    const glass = grp(.95, -.45, .3); cyl(.1, .04, .18, new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: .55 }), 0, .2, 0, 0, 0, 0, glass); cyl(.08, .06, .07, 0x7a0f1f, 0, .16, 0, 0, 0, 0, glass); cyl(.012, .012, .16, 0xdee2e6, 0, .03, 0, 0, 0, 0, glass); items.push(glass);
+    const chart = grp(.3, -.7, .4); [.12, .22, .16, .3].forEach((h, i) => box(.07, h, .07, i === 2 ? 0xfa5252 : 0x40c057, -.12 + i * .09, h / 2, 0, 0, 0, 0, chart)); items.push(chart);
+    const cup = grp(1.2, .05, .2); cyl(.09, .07, .13, 0xffffff, 0, 0, 0, 0, 0, 0, cup); cyl(.07, .07, .01, 0xb5702c, 0, .066, 0, 0, 0, 0, cup); items.push(cup);
+    return t => { items.forEach((it, i) => { it.position.y += Math.sin(t * 2.4 + i * 2) * .004; it.rotation.y = Math.sin(t * 1.5 + i) * .5; }); b.scale.setScalar(1 + Math.sin(t * 4) * .04); p.rotation.y = .4 + Math.sin(t * 2) * .15; };
   },
+
   cat() {
     const c = grp(0, -.4, 0);
     const b = sph(.75, 0xffa94d, 0, 0, 0, c); b.scale.set(1, .8, .9);
@@ -208,23 +213,27 @@ export const M = {
     G.userData.noShadow = true;
     return t => { d.rotation.set(.55 + (t - 1) * 2.2, .75 + (t - 1) * 3, .1); };
   },
-  favicon() {   // 콩알 mascot: a chubby blue bean with a face, holding a tiny gamepad
-    const b = grp(); b.rotation.z = -.32;
-    const bodyG = new THREE.SphereGeometry(1, 32, 24), p = bodyG.attributes.position, v = new THREE.Vector3();
-    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); v.x *= .82; v.y *= 1.12; v.z *= .78; v.x -= Math.max(0, v.y) * .0 + (1 - v.y * v.y) * .12 * Math.sign(v.x) * (v.x < 0 ? 1.4 : 0); p.setXYZ(i, v.x, v.y, v.z); }
-    bodyG.computeVertexNormals();
-    b.add(new THREE.Mesh(bodyG, new THREE.MeshStandardMaterial({ color: 0x2d6ff0, roughness: .35 })));
-    const shine = sph(.16, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .75 }), .32, .62, .58, b, 12, 8); shine.scale.set(1, 1.6, .5);
-    for (const sx of [-1, 1]) { const e = sph(.11, 0x16171a, sx * .26, .18, .74, b, 12, 8); e.scale.set(1, 1.35, .6); sph(.035, glow(0xffffff), sx * .26 + .03, .24, .8, b, 6, 4);
-      const ch = sph(.1, new THREE.MeshBasicMaterial({ color: 0xff8fab, transparent: true, opacity: .8 }), sx * .44, -.05, .66, b, 10, 6); ch.scale.set(1.3, .7, .4); }
-    tor(.1, .025, 0x16171a, 0, .0, .76, 0, 0, Math.PI, b, Math.PI);   // smile
-    const pad = grp(0, -.75, .72, b); pad.rotation.x = -.3; box(.86, .34, .18, 0xffffff, 0, 0, 0, 0, 0, 0, pad);
-    box(.18, .06, .04, 0x343a40, -.2, 0, .1, 0, 0, 0, pad); box(.06, .18, .04, 0x343a40, -.2, 0, .1, 0, 0, 0, pad);
-    sph(.05, 0xff5252, .18, .05, .1, pad, 8, 6); sph(.05, 0xffd43b, .28, -.05, .1, pad, 8, 6);
-    for (const sx of [-1, 1]) { const h = sph(.14, 0x2d6ff0, sx * .48, -.7, .7, b, 12, 8); h.scale.set(1, .85, .8); }   // little hands
+  favicon() {   // console gamepad in brand blue
+    const pad = grp(); pad.rotation.x = .55;
+    const shape = new THREE.Shape(); const W = 1.25, H = .62;
+    shape.moveTo(-W + .35, H); shape.lineTo(W - .35, H); shape.quadraticCurveTo(W + .15, H, W + .2, .1); shape.quadraticCurveTo(W + .3, -.75, W - .05, -.9);
+    shape.quadraticCurveTo(W - .35, -1.02, W - .55, -.55); shape.lineTo(-W + .55, -.55); shape.quadraticCurveTo(-W + .35, -1.02, -W + .05, -.9);
+    shape.quadraticCurveTo(-W - .3, -.75, -W - .2, .1); shape.quadraticCurveTo(-W - .15, H, -W + .35, H);
+    const body = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: .42, bevelEnabled: true, bevelThickness: .12, bevelSize: .1, bevelSegments: 4, curveSegments: 18 }), new THREE.MeshStandardMaterial({ color: 0x2d6ff0, roughness: .4 }));
+    body.position.z = -.21; pad.add(body);
+    const top = .36;
+    // d-pad
+    const dp = grp(-.72, .02, top, pad); box(.46, .15, .08, 0x1e2532, 0, 0, 0, 0, 0, 0, dp); box(.15, .46, .08, 0x1e2532, 0, 0, 0, 0, 0, 0, dp);
+    // face buttons
+    [[.72, .22, 0xffd43b], [.94, 0, 0xff5252], [.5, 0, 0x51cf66], [.72, -.22, 0x74c0fc]].forEach(([x, y, c]) => { const b = cyl(.1, .1, .1, c, x, y, top, Math.PI / 2, 0, 0, pad, 16); });
+    // sticks
+    for (const x of [-.32, .32]) { cyl(.13, .15, .08, 0x1e2532, x, -.38, top, Math.PI / 2, 0, 0, pad, 16); cyl(.11, .11, .04, 0x343a40, x, -.38, top + .06, Math.PI / 2, 0, 0, pad, 16); }
+    // start/select
+    box(.14, .05, .04, 0xe9ecef, -.13, .25, top, 0, 0, 0, pad); box(.14, .05, .04, 0xe9ecef, .13, .25, top, 0, 0, 0, pad);
     G.userData.noShadow = true; G.userData.front = true;
-    return t => { b.position.y = Math.abs(Math.sin(t * 3)) * .12; b.rotation.z = -.32 + Math.sin(t * 2) * .08; };
+    return t => { pad.rotation.set(.55 + Math.sin(t * 2) * .08, Math.sin(t * 1.4) * .15, Math.sin(t * 1.7) * .06); };
   },
+
 
 };
 

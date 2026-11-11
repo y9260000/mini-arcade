@@ -37,9 +37,16 @@
   @keyframes bd{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
   #cmd.go .seq span{background:#fff;color:#e8590c}
   #pad{position:fixed;left:50%;transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));z-index:4;display:grid;grid-template-columns:repeat(3,var(--k));grid-template-rows:repeat(3,var(--k));gap:4px;--k:min(66px,17vw,9vh)}
-  #pad .mid{border-radius:50%;background:rgba(255,255,255,.25);margin:18%}
-  .b{border:0;border-radius:16px;width:100%;height:100%;padding:0;background:rgba(255,255,255,.92);font:clamp(30px,8vw,40px) "Jua",sans-serif;color:#2b2438;box-shadow:0 6px 0 rgba(0,0,0,.45);cursor:pointer;touch-action:none}
-  .b:active,.b.on{transform:translateY(5px);box-shadow:0 1px 0 rgba(0,0,0,.45);background:#ffd43b}
+  /* 3D keycaps: lit top face, thick side wall, soft drop shadow; pressing sinks the cap */
+  #pad::before{content:"";position:absolute;inset:calc(var(--k) * -.18);border-radius:28px;background:linear-gradient(#3a2d52,#21182f);box-shadow:inset 0 2px 0 rgba(255,255,255,.12),0 10px 24px rgba(0,0,0,.45);z-index:-1}
+  #pad .mid{border-radius:50%;margin:16%;background:radial-gradient(circle at 50% 35%,#2b2140,#120c1c);box-shadow:inset 0 3px 6px rgba(0,0,0,.6),0 1px 0 rgba(255,255,255,.12)}
+  .b{position:relative;border:0;border-radius:16px;width:100%;height:100%;padding:0;cursor:pointer;touch-action:none;
+    font:clamp(28px,7.5vw,38px) "Jua",sans-serif;color:#3b3355;text-shadow:0 1px 0 rgba(255,255,255,.9),0 -1px 0 rgba(0,0,0,.15);
+    background:linear-gradient(180deg,#ffffff 0%,#eceaf3 55%,#d9d5e6 100%);
+    box-shadow:inset 0 2px 0 #fff,inset 0 -4px 0 rgba(80,60,120,.18),0 7px 0 #8f86a8,0 8px 0 #6f6688,0 12px 14px rgba(0,0,0,.45);
+    transform:translateY(-4px);transition:transform .05s,box-shadow .05s}
+  .b:active,.b.on{transform:translateY(3px);background:linear-gradient(180deg,#fff3bf,#ffd43b 60%,#fab005);color:#7a4f00;
+    box-shadow:inset 0 2px 0 #fff8db,inset 0 -3px 0 rgba(140,90,0,.25),0 1px 0 #c98a00,0 2px 0 #a06d00,0 4px 6px rgba(0,0,0,.4)}
   #shout{position:fixed;left:50%;top:44%;transform:translate(-50%,-50%);z-index:5;pointer-events:none;font:clamp(34px,9vw,64px) "Jua",sans-serif;color:#fff;text-shadow:0 5px 0 #e03131,0 0 30px #ff922b;white-space:nowrap;opacity:0}
   #shout.show{animation:sh .9s ease-out}
   @keyframes sh{0%{opacity:0;transform:translate(-50%,-50%) scale(2.2) rotate(-6deg)}20%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(-3deg)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-60%) scale(1)}}

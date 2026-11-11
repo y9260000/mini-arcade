@@ -3,27 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>씨네필 통역기</title>
-<script src="common.js?v=16"></script>
+<title>전문가 통역기</title>
+<script src="common.js?v=19"></script>
 <style>
-  html,body{margin:0;height:100%;overflow:hidden;background:#140f1e;
+  html,body{margin:0;height:100%;overflow:hidden;background:#1b1626;
     user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
   canvas{display:block}
   .hud-score{font-size:56px}
   #say{position:fixed;left:50%;top:max(122px,calc(env(safe-area-inset-top) + 112px));transform:translateX(-50%);width:min(560px,calc(100% - 32px));box-sizing:border-box;
-    background:#fff;color:var(--ink);border-radius:22px;padding:14px 18px 16px;z-index:3;box-shadow:0 12px 34px rgba(0,0,0,.45)}
-  #say::after{content:"";position:absolute;left:22%;bottom:-12px;border:12px solid transparent;border-bottom:0;border-top-color:#fff}
+    background:#fff;color:var(--ink);border-radius:22px;padding:14px 18px 16px;z-index:3;box-shadow:0 12px 34px rgba(0,0,0,.4)}
+  #say::after{content:"";position:absolute;left:50%;bottom:-12px;margin-left:-12px;border:12px solid transparent;border-bottom:0;border-top-color:#fff}
   #say .who{font:700 13px "Noto Sans KR",sans-serif;color:var(--ink-soft);display:flex;justify-content:space-between;align-items:center;gap:8px}
-  #say .who b{color:#7048e8}
+  #say .who b{color:var(--dc,#7048e8)}
+  #say .kind{font:700 11px "Noto Sans KR",sans-serif;color:#fff;background:var(--dc,#7048e8);border-radius:999px;padding:3px 8px}
   #say .txt{font-family:"Jua",sans-serif;font-size:clamp(19px,4.8vw,25px);line-height:1.4;margin-top:6px;min-height:2.8em;word-break:keep-all}
-  #say .txt em{font-style:normal;color:#7048e8;background:#f3f0ff;border-radius:6px;padding:0 4px}
+  #say .txt em{font-style:normal;color:var(--dc,#7048e8);background:color-mix(in srgb,var(--dc,#7048e8) 12%,white);border-radius:6px;padding:0 4px}
   #say.react .txt{color:var(--ink-soft)}
   #tbar{height:6px;border-radius:3px;background:#eee;margin-top:10px;overflow:hidden}
-  #tbar i{display:block;height:100%;background:#7048e8;transform-origin:left}
+  #tbar i{display:block;height:100%;background:var(--dc,#7048e8);transform-origin:left}
   #tbar.low i{background:#fa5252}
   #choices{position:fixed;left:50%;bottom:max(64px,calc(env(safe-area-inset-bottom) + 58px));transform:translateX(-50%);width:min(560px,calc(100% - 32px));
     display:flex;flex-direction:column;gap:10px;z-index:3}
-  .ch{display:flex;align-items:center;gap:12px;border:0;cursor:pointer;text-align:left;background:rgba(255,255,255,.95);color:var(--ink);border-radius:18px;
+  #choices.ox{flex-direction:row}
+  #choices.ox .ch{flex:1;justify-content:center;font-size:20px;padding:18px 10px}
+  .ch{display:flex;align-items:center;gap:12px;border:0;cursor:pointer;text-align:left;background:rgba(255,255,255,.96);color:var(--ink);border-radius:18px;
     padding:13px 16px;font:700 clamp(15px,4vw,17px)/1.35 "Noto Sans KR",sans-serif;box-shadow:0 5px 0 rgba(0,0,0,.35);word-break:keep-all;transition:transform .05s}
   .ch:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.35)}
   .ch .k{flex:none;width:28px;height:28px;border-radius:50%;background:#2b2438;color:#fff;display:flex;align-items:center;justify-content:center;font:16px "Jua",sans-serif}
@@ -31,6 +34,15 @@
   .ch.no{background:#ff6b6b;color:#fff} .ch.no .k{background:#c92a2a}
   .ch.dim{opacity:.45}
   #choices.lock .ch{pointer-events:none}
+  @media (min-aspect-ratio: 6/5) {   /* wide screens: expert on the left, talk + answers on the right */
+    #say{left:auto;right:max(24px,4vw);transform:none;width:min(500px,48vw);top:max(110px,16vh)}
+    #say::after{left:-12px;top:34px;bottom:auto;margin:0;border:12px solid transparent;border-left:0;border-right-color:#fff}
+    #choices{left:auto;right:max(24px,4vw);transform:none;width:min(500px,48vw)}
+  }
+  #intro{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);z-index:6;pointer-events:none;text-align:center;opacity:0}
+  #intro.show{animation:intro 1.3s ease-out}
+  #intro .e{font-size:72px;line-height:1} #intro .n{font:34px "Jua",sans-serif;color:#fff;text-shadow:0 4px 0 rgba(0,0,0,.35);margin-top:6px} #intro .s{font:700 14px "Noto Sans KR",sans-serif;color:#fff;opacity:.85}
+  @keyframes intro{0%{opacity:0;transform:translate(-50%,-30%) scale(.7)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}25%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0}}
 </style>
 </head>
 <body>
@@ -38,247 +50,296 @@
   <div id="score" class="hud-score">0<small>개</small></div>
   <div class="hud-row"><span class="pill" id="lives"></span><span class="pill dark" id="combo" style="display:none"></span></div>
 </div>
-<div id="say" class="hud-ctl"><div class="who"><span>🎩 <b>옆자리 씨네필</b> · 상영 중 속삭임</span><span id="qn"></span></div><div class="txt" id="txt"></div><div id="tbar"><i id="tfill"></i></div></div>
+<div id="say" class="hud-ctl"><div class="who"><span id="whoName"></span><span class="kind" id="kind"></span></div><div class="txt" id="txt"></div><div id="tbar"><i id="tfill"></i></div></div>
 <div id="choices" class="hud-ctl"></div>
+<div id="intro"><div class="e" id="ie"></div><div class="n" id="in"></div><div class="s" id="is"></div></div>
 <div class="screen" id="center"></div>
 
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 const $ = id => document.getElementById(id);
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const rnd = a => a[(Math.random() * a.length) | 0];
 
-// ---------- content: [jargon (with *highlights*), plain answer, wrong, wrong] ----------
-const QS = [
-  ['이 영화는 *맥거핀*이 서사를 견인하지만, 결국 그 자체엔 아무 의미가 없다는 게 핵심이야.', '그 가방 안에 뭐 들었는지 끝까지 안 알려줌', '주인공 이름이 맥거핀임', '햄버거 PPL이 너무 많음'],
-  ['*미장센*이 인물의 고립감을 시각적으로 은유하고 있잖아.', '주인공 혼자 있는 장면을 엄청 넓게 찍음', '배우가 혼자 대본 연습함', '조명팀이 먼저 퇴근함'],
-  ['*롱테이크*로 시간의 물성을 관객이 체험하게 만드는 거지.', '컷 안 끊고 엄청 길게 찍음', '촬영 테이프가 길었음', '배우가 대사를 까먹어서 버팀'],
-  ['*열린 결말*로 해석의 주도권을 관객에게 넘긴 거야.', '그냥 결말 안 알려주고 끝냄', '엔딩 크레딧 뒤에 쿠키 있음', '관객 투표로 결말 정함'],
-  ['*제4의 벽*을 허무는 메타적 연출이 돋보였어.', '배우가 카메라 보고 나한테 말 걸었음', '세트장 벽이 진짜 무너짐', '4편까지 나온다는 뜻'],
-  ['*신뢰할 수 없는 화자*를 통해 관객을 기만하는 구조지.', '나레이션 하던 주인공이 거짓말쟁이였음', '나레이션 목소리가 너무 작았음', '감독이 관객한테 사기 침'],
-  ['플래시백과 플래시포워드가 교차하며 *비선형적 서사*를 구축해.', '시간 순서가 뒤죽박죽임', '카메라 플래시가 많이 터짐', '줄거리가 고속도로에서 일어남'],
-  ['*디제시스* 바깥의 음악이 감정을 과잉 조장하고 있어.', '슬픈 장면에 BGM을 너무 세게 깔았음', '주인공이 갑자기 노래 부름', '옆자리 사람 폰 벨소리'],
-  ['*데우스 엑스 마키나*식 해결은 서사적 게으름이야.', '갑자기 신급 존재가 나타나 다 해결해 줌', '기계들이 반란을 일으킴', '감독이 촬영 날 늦잠 잠'],
-  ['*점프컷*이 인물의 불안한 심리를 리드미컬하게 드러내지.', '장면이 툭툭 끊기게 편집함', '주인공이 점프를 자주 함', '필름 끊겨서 재상영함'],
-  ['*오마주*와 표절의 경계를 영리하게 넘나드는 연출이야.', '다른 영화 장면을 거의 똑같이 따라함', '배우가 오마주라는 강아지를 키움', '감독이 표창장을 받음'],
-  ['*클리셰*를 비틀어서 장르적 기대를 전복시키지.', '뻔하게 가는 척하다가 반전 줌', '클리셰라는 악당이 나옴', '중간에 상영관이 바뀜'],
-  ['주인공의 *캐릭터 아크*가 완결되지 않은 채 봉합돼.', '주인공이 성장하다 말고 끝남', '주인공이 방주(아크)를 만듦', '수술 장면이 나옴'],
-  ['*체호프의 총*이 결국 3막에서 발사되지.', '초반에 보여준 물건이 나중에 꼭 쓰임', '러시아 배우가 총을 쏨', '연극 3막을 영화로 만듦'],
-  ['숏의 구도가 권력 관계를 *수직적으로 형상화*해.', '높은 사람은 위에, 약자는 아래에 찍음', '엘리베이터 장면이 많음', '숏폼으로 찍었음'],
-  ['*레드 헤링*으로 관객의 의심을 교묘하게 분산시켜.', '범인 아닌 사람을 범인처럼 보이게 함', '빨간 청어 요리가 나옴', '객석에 빨간 조명을 켬'],
-  ['이 감독 특유의 *작가주의적 자의식*이 과잉돼 있어.', '감독이 자기 하고 싶은 대로만 만듦', '감독이 원래 웹소설 작가임', '감독이 직접 출연함'],
-  ['*슬로우 번* 전개가 후반부 카타르시스를 극대화하지.', '초반 엄청 지루한데 마지막에 터짐', '불이 천천히 번지는 재난영화', '슬로모션이 많음'],
-  ['인물 간의 *서브텍스트*가 대사보다 더 많은 걸 말하고 있어.', '말은 안 하는데 둘이 썸 탐', '자막이 대사보다 김', '둘이 문자로만 대화함'],
-  ['포스트모던한 *장르 혼종성*이 정체성을 해체하지.', '코미디인지 호러인지 모르겠음', '포스트잇이 많이 나옴', '주인공이 기억을 잃음'],
-  ['*익스트림 클로즈업*이 감정의 결을 해부하듯 포착해.', '얼굴을 모공 보일 만큼 크게 찍음', '배우가 극한 직업 출연자임', '카메라가 고장 남'],
-  ['*매치컷*으로 시공간을 우아하게 도약하는 거지.', '모양 비슷한 장면으로 휙 넘어감', '성냥 켜는 장면이 나옴', '축구 경기 장면이 나옴'],
-  ['시퀀스 전체가 하나의 거대한 *알레고리*야.', '사실 이 영화 전부 다 비유임', '알레르기 있는 주인공 얘기', '시퀀스가 길어서 화장실 다녀옴'],
-  ['캐릭터의 동기가 *개연성* 측면에서 설득력이 결여됐어.', '얘 갑자기 왜 저래?', '연기가 너무 자연스러움', '캐릭터한테 입사 동기가 없음'],
-  ['*쿠키 영상*이 세계관 확장을 암시하고 있어.', '속편 나온다는 뜻', '극장에서 쿠키 나눠줌', '크레딧이 너무 김'],
-  ['*핸드헬드* 촬영이 다큐멘터리적 리얼리티를 부여하지.', '카메라 엄청 흔들려서 멀미남', '배우들이 손잡고 다님', '배우가 손 연기를 잘함'],
-  ['감독의 *필모그래피*를 관통하는 자기복제야.', '이 감독 영화 다 비슷함', '감독이 복제인간임', '필름을 복사해서 상영함'],
-  ['*탈장르적 시도*가 대중성과의 타협을 거부한 거지.', '흥행은 망했다는 뜻', '탈의실 장면이 많음', '대중교통 장면이 나옴'],
-  ['이야기의 *여백*이 오히려 관객의 정서적 참여를 유도해.', '설명을 안 해줘서 알아서 상상해야 함', '자막에 여백이 많음', '상영관이 텅 비었음'],
-  ['*음향의 부재*, 그 침묵 자체가 하나의 언어인 셈이지.', '한참 동안 아무 소리도 안 남', '극장 스피커 고장', '배우가 수화로 말함'],
-  ['이건 자본주의에 대한 *우화적 비판*이야.', '부자들이 나쁘게 나옴', '돈 엄청 들인 영화임', '동물이 나오는 동화임'],
-  ['*컬러 팔레트*가 인물의 감정선을 따라 채도를 잃어가지.', '주인공 우울해질수록 화면이 칙칙해짐', '물감 회사 PPL임', '흑백 TV로 틀었음'],
-  ['*인서트 컷*으로 디테일의 상징성을 환기시키는 거야.', '중요한 물건을 갑자기 확대해서 보여줌', '광고가 중간에 들어감', '배우가 코인 넣는 장면'],
-  ['*페이소스*가 웃음 뒤에 묵직하게 남아.', '웃긴데 끝나고 나니 슬픔', '파스타 먹는 장면이 웃김', '웃다가 사레들림'],
-  ['*누벨바그*의 정신을 동시대적으로 재해석했어.', '옛날 프랑스 영화 스타일 따라함', '새 파도타기 영화', '빵집에서 찍은 영화'],
-  ['*러닝타임*을 감당할 만큼 서사의 밀도가 충분치 않아.', '쓸데없이 길다', '배우가 달리기를 많이 함', '시간 여행 영화임'],
+// ---------- experts: [sentence with *term*, plain meaning, wrong, wrong] + real/fake terms for the O/X round ----------
+const EXPERTS = [
+  { id: 'cine', emoji: '🎬', name: '씨네필', where: '심야 영화관', color: '#7048e8', bg: 0x2b2040,
+    items: [
+      ['이 영화는 *맥거핀*이 서사를 견인하지만 그 자체엔 의미가 없어.', '그 가방 안에 뭐 들었는지 끝까지 안 알려줌', '주인공 이름이 맥거핀임', '햄버거 PPL이 너무 많음'],
+      ['*미장센*이 인물의 고립감을 은유하고 있잖아.', '주인공 혼자 있는 장면을 엄청 넓게 찍음', '배우가 혼자 대본 연습함', '조명팀이 먼저 퇴근함'],
+      ['*롱테이크*로 시간의 물성을 체험하게 만들지.', '컷 안 끊고 엄청 길게 찍음', '촬영 테이프가 길었음', '배우가 대사를 까먹어서 버팀'],
+      ['*제4의 벽*을 허무는 메타적 연출이야.', '배우가 카메라 보고 나한테 말 걸었음', '세트장 벽이 진짜 무너짐', '4편까지 나온다는 뜻'],
+      ['*데우스 엑스 마키나*식 해결은 서사적 게으름이지.', '갑자기 신급 존재가 나타나 다 해결해 줌', '기계들이 반란을 일으킴', '감독이 늦잠 잠'],
+      ['*체호프의 총*이 결국 3막에서 발사되잖아.', '초반에 보여준 물건이 나중에 꼭 쓰임', '러시아 배우가 총을 쏨', '연극을 영화로 만듦'],
+      ['*레드 헤링*으로 의심을 교묘하게 분산시켜.', '범인 아닌 사람을 범인처럼 보이게 함', '빨간 청어 요리가 나옴', '객석에 빨간 조명을 켬'],
+    ], real: ['쿠키 영상', '점프컷', '오마주'], fake: ['필름 스핀오프컷', '시네 블렌딩', '리버스 크레딧'],
+    ok: ['그렇지. 좀 보는구나?', '정확해. 다음 주 GV 같이 갈래?', '흠, 대중치고는 제법인데'], no: ['하… 이래서 대중은…', '너 마블만 보지?', '팝콘 내려놔.'] },
+  { id: 'wine', emoji: '🍷', name: '소믈리에', where: '와인 바', color: '#a61e4d', bg: 0x3b1420,
+    items: [
+      ['이 와인은 *탄닌*이 꽤 단단하네요.', '입이 떫고 텁텁해짐', '탄산이 강함', '병이 단단함'],
+      ['*풀바디*라 꽤 묵직하죠.', '입안에서 진하고 무겁게 느껴짐', '병이 큼', '마시면 살찜'],
+      ['잔을 돌려서 *브리딩*을 좀 해줄게요.', '공기랑 섞어서 맛을 부드럽게 함', '와인한테 숨 쉬라고 응원함', '잔을 깨끗이 닦음'],
+      ['*피니시*가 길게 남아요.', '삼키고 나서도 맛이 오래 남음', '마지막 잔이 큼', '병을 끝까지 비움'],
+      ['*빈티지*가 2015년이라 좋은 해예요.', '포도 수확한 해', '중고 와인', '라벨이 오래돼 보임'],
+      ['*떼루아*가 고스란히 느껴지네요.', '포도밭 땅·기후 특징이 맛에 드러남', '테라스에서 마셔야 함', '프랑스어 욕설'],
+      ['이건 *코르키*하네요. 바꿔 드릴게요.', '코르크 때문에 와인이 상해서 쿰쿰함', '코르크가 예쁨', '병따개가 없음'],
+    ], real: ['디캔팅', '소비뇽 블랑', '드라이'], fake: ['탄닌 플립', '레드 브리즈', '샤또 스핀'],
+    ok: ['훌륭한 미각이세요.', '어머, 와인 좀 드셔보셨네요?', '한 잔 더 따라 드릴게요.'], no: ['…그건 포도 주스 감상이네요.', '손님, 잔을 그렇게 잡으시면…', '음, 편의점 와인 좋아하시죠?'] },
+  { id: 'econ', emoji: '📉', name: '이코노미스트', where: '경제 뉴스 스튜디오', color: '#1971c2', bg: 0x14243b,
+    items: [
+      ['*금리 인상*으로 유동성이 위축될 겁니다.', '대출 이자 올라서 다들 돈 안 씀', '금값이 오름', '물이 줄어듦'],
+      ['시장은 이미 *선반영*했죠.', '뉴스 나오기 전에 가격이 먼저 움직임', '선반에 물건을 진열함', '반만 반영함'],
+      ['*스태그플레이션* 우려가 커지고 있어요.', '경기는 나쁜데 물가는 오름', '사슴 가격 폭등', '파티가 너무 많음'],
+      ['*데드캣 바운스*일 가능성이 높습니다.', '폭락 뒤 잠깐 반짝 오르는 척', '고양이가 점프함', '죽은 주식이 부활함'],
+      ['*디커플링* 현상이 나타나고 있어요.', '같이 움직이던 게 따로 놂', '커플이 헤어짐', '쿠폰 두 장 쓰기'],
+      ['*안전자산* 선호 심리가 강해졌죠.', '불안해서 금·달러로 피신', '금고를 많이 삼', '보험을 해지함'],
+      ['*펀더멘털*은 여전히 견조합니다.', '회사 기본 체력은 아직 괜찮음', '펀드 수수료가 쌈', '기초화장품이 좋음'],
+    ], real: ['양적완화', '공매도', '배당락'], fake: ['역금리 스윙', '캔들 텀블링', '달러 소나기'],
+    ok: ['정확한 해석입니다.', '시청자분, 애널리스트 하셔도 되겠어요.', '시장을 읽으시네요.'], no: ['…그렇게 투자하시면 큰일 납니다.', '그건 지라시 수준이네요.', '다시 공부하고 오시죠.'] },
+  { id: 'dev', emoji: '💻', name: '시니어 개발자', where: '스타트업 회의실', color: '#2f9e44', bg: 0x16261c,
+    items: [
+      ['그건 *레거시*라서 건드리면 안 돼요.', '옛날 코드라 손대면 다 터짐', '유산 상속 문제', '레고로 만든 서버'],
+      ['일단 *핫픽스*로 막고 갈게요.', '급하게 땜빵 수정', '뜨거운 고정 볼트', '핫한 기능 추가'],
+      ['*리팩토링*이 시급해요.', '동작은 같은데 코드만 정리', '공장 리모델링', '팩트 체크'],
+      ['제 *로컬*에선 잘 되는데요?', '내 컴퓨터에선 문제없음(=네 탓)', '동네에서 인기 많음', '로컬 맛집 추천'],
+      ['*기술 부채*가 너무 쌓였어요.', '대충 짠 코드 뒷감당이 밀려 있음', '노트북 할부가 남음', '기술자가 돈 빌림'],
+      ['*스코프*를 좀 줄이죠.', '할 일 범위를 줄이자', '망원경 배율을 낮춤', '점수를 깎음'],
+      ['이거 *사이드 이펙트* 없나요?', '다른 데서 예상 못한 문제 생기는지', '약 부작용', '옆자리 소음'],
+    ], real: ['디버깅', '배포', '코드 리뷰'], fake: ['스택 플리핑', '버그 세탁', '클라우드 감자'],
+    ok: ['오, 개발 좀 아시네요?', 'LGTM 👍', '바로 PR 올려주세요.'], no: ['…그건 재부팅해도 안 고쳐져요.', '기획자님이세요?', '이슈 등록할게요…'] },
+  { id: 'fashion', emoji: '🕶️', name: '패션 에디터', where: '패션위크 백스테이지', color: '#e64980', bg: 0x2a1626,
+    items: [
+      ['이번 시즌은 *톤온톤*이 키예요.', '비슷한 색끼리 맞춰 입기', '톤 단위로 무게 재기', '색깔 반반'],
+      ['*오버핏*으로 툭 걸치면 돼요.', '일부러 크게 입기', '살이 쪄서 꽉 낌', '옷을 두 벌 겹침'],
+      ['*레이어드*가 포인트죠.', '여러 겹 겹쳐 입기', '레이저 프린팅', '층간소음'],
+      ['*꾸안꾸* 무드로 가세요.', '꾸민 듯 안 꾸민 듯', '꾸미지 말라는 뜻', '쿠션 안 쓰기'],
+      ['실루엣이 *드레이프*하게 떨어지네요.', '천이 자연스럽게 흘러내림', '드라이클리닝 필요', '옷이 찢어짐'],
+      ['*컬러 블로킹*이 과감하네요.', '원색 덩어리끼리 대비시킴', '색깔 금지', '블록 장난감 패턴'],
+      ['딱 *올드머니룩*이에요.', '조용히 부자처럼 보이는 단정한 스타일', '할머니 옷', '돈 그림 프린트'],
+    ], real: ['테일러드', '크롭', '셋업'], fake: ['슬림 블래스트', '니트 스위블', '코트 랩소디'],
+    ok: ['어머, 감각 있으시다.', '런웨이 서셔도 되겠는데요?', '완전 이번 시즌이에요.'], no: ['…그건 작년 시즌이에요.', '음, 거울은 보고 나오셨죠?', '노 코멘트할게요.'] },
+  { id: 'barista', emoji: '☕', name: '바리스타', where: '스페셜티 카페', color: '#b5702c', bg: 0x2b1e14,
+    items: [
+      ['오늘 원두는 *산미*가 좋아요.', '새콤한 과일 맛이 남', '산에서 딴 콩', '맛이 상함'],
+      ['*싱글 오리진*이라 개성이 뚜렷하죠.', '한 지역 원두만 씀', '혼자 마시는 커피', '원조집'],
+      ['*추출*이 좀 짧았네요.', '커피를 너무 빨리 내려 연함', '뽑기를 덜 함', '알바 휴식이 짧음'],
+      ['*로스팅*이 다크한 편이에요.', '원두를 오래 볶아 쓴맛이 진함', '고기를 바싹 구움', '디스를 세게 함'],
+      ['*크레마*가 예쁘게 올라왔어요.', '에스프레소 위 갈색 거품', '크림 케이크', '크레파스 낙서'],
+      ['*디카페인*으로 드릴까요?', '카페인 뺀 커피', '카페 이름', '디저트 추가'],
+      ['*푸어오버*로 내려 드릴게요.', '손으로 물을 부어 천천히 내림', '컵 넘치게 따름', '가난한 커피'],
+    ], real: ['드립', '라떼아트', '콜드브루'], fake: ['빈 스플래시', '모카 텀블', '에스프레소 쿠션'],
+    ok: ['커피 좀 아시는 분이네요.', '샷 하나 서비스로 드릴게요.', '역시 단골이세요.'], no: ['…아아 메가 사이즈 드릴까요?', '시럽 많이 넣어 드릴게요.', '음, 믹스커피 좋아하시죠?'] },
+  { id: 'gym', emoji: '🏋️', name: '헬스 트레이너', where: '새벽 헬스장', color: '#f08c00', bg: 0x2b2414,
+    items: [
+      ['*점진적 과부하*가 핵심이에요.', '조금씩 무게를 늘려가기', '회원님이 과로함', '짐을 많이 들고 다님'],
+      ['오늘은 *하체* 하는 날이에요.', '다리 운동 (=내일 못 걸음)', '하루 체험', '몸무게 재는 날'],
+      ['회원님, *근손실* 와요!', '근육 빠져요 (단백질 드세요)', '근처에서 손실', '손을 다침'],
+      ['*컴파운드* 운동 위주로 가죠.', '여러 관절 같이 쓰는 큰 운동', '복합기 사용', '화학 실험'],
+      ['*RPE* 8 정도로 하세요.', '힘듦 10 중에 8만큼', '랭킹 8위', '8번만 반복'],
+      ['*펌핑*이 제대로 왔네요.', '근육이 빵빵하게 부풀었음', '펌프로 물 퍼올림', '춤이 신남'],
+      ['*치팅*하지 마세요.', '반동 써서 편하게 하지 말기', '바람피우지 말기', '컨닝 금지'],
+    ], real: ['데드리프트', '스쿼트', '벤치프레스'], fake: ['숄더 스핀업', '레그 드리블', '코어 블래스팅'],
+    ok: ['좋아요! 하나 더!', '오, 운동 좀 하셨네요?', '회원님 자세 완벽해요!'], no: ['…회원님, 오늘 PT 연장이요.', '버피 10개 추가!', '그건 근손실이에요.'] },
+  { id: 'realty', emoji: '🏠', name: '공인중개사', where: '동네 부동산', color: '#2d6ff0', bg: 0x162038,
+    items: [
+      ['여기는 *역세권*이라 수요가 탄탄해요.', '지하철역이 가까움', '역사 깊은 동네', '역삼동 한정'],
+      ['*급매*로 나온 물건이에요.', '집주인이 급해서 싸게 내놓음', '급하게 매진됨', '빨리 사면 할인'],
+      ['*전세가율*이 높아서 조심하셔야 해요.', '전세금이 매매가에 너무 가까움', '전세 사는 사람 비율', '세금 비율'],
+      ['이 집은 *로얄층*이에요.', '전망·채광 좋은 인기 층', '왕이 살던 층', '꼭대기 층'],
+      ['*입주 물량*이 많아서 조정이 있을 거예요.', '새 아파트가 한꺼번에 많이 생김', '이삿짐이 많음', '입주 청소비'],
+      ['*숲세권*이라 쾌적하죠.', '공원·산이 가까움', '숲속 오두막', '나무 향 방향제'],
+      ['*초품아*라 학부모님들이 좋아해요.', '초등학교를 품은 아파트', '초특급 품질 아파트', '초코파이 품은 아파트'],
+    ], real: ['등기부등본', '중도금', '갭투자'], fake: ['층간 리셋', '분양 스와이프', '역세권 플러스존'],
+    ok: ['사장님, 집 보는 눈 있으시네요!', '이 정도면 계약 바로 가시죠?', '임장 좀 다니셨구나?'], no: ['…그러다 전세사기 당해요.', '손님, 계약서는 꼭 읽으세요.', '음, 다시 설명해 드릴게요.'] },
 ];
-const GENERIC = ['배우가 잘생겼다는 뜻', '그냥 팝콘이 맛있다는 뜻', '본인도 졸렸다는 뜻', '감독이랑 친하다는 뜻', '평점 4.5 주겠다는 뜻', '화장실 가고 싶다는 뜻'];
-const OK_LINES = ['그렇지. 좀 보는구나?', '오… 너 왓챠에 별점 남기는 사람이구나', '정확해. 다음 주 GV 같이 갈래?', '역시 내 옆자리 자격 있어', '흠, 대중치고는 제법인데', '바로 그거야. 감독도 울고 가겠다'];
-const NO_LINES = ['하… 이래서 대중은…', '너 마블만 보지?', '그건 평점 1점짜리 해석이야', '팝콘 내려놔.', '…아니야. 됐다.', '쯧. 영화를 귀로 보네'];
-const TIMEOUT_LINES = ['…자니?', '듣고는 있는 거지?', '대답이 없네. 감동받았나'];
+const term = s => s.match(/\*(.+?)\*/)[1];
+const TIMEOUT_LINES = ['…듣고 계세요?', '대답이 없네요?', '(정적)'];
 
-// ---------- three: dark theater ----------
+// ---------- three: talk-show table, expert across from you ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setSize(innerWidth, innerHeight);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight); renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x140f1e);
-scene.fog = new THREE.Fog(0x140f1e, 8, 26);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x1b1626);
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, .05, 100);
-scene.add(new THREE.HemisphereLight(0x5a4a7a, 0x120c18, .9));
-const screenLight = new THREE.PointLight(0x9ec5ff, 30, 30, 1.6); screenLight.position.set(0, 3, -6); scene.add(screenLight);
-const faceLight = new THREE.PointLight(0xffe0b0, 2.2, 3); scene.add(faceLight);
-const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .85, flatShading: true, ...extra });
-const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); parent.add(m); return m; };
-
-// movie screen with a crude animated "film"
-const fc = document.createElement('canvas'); fc.width = 256; fc.height = 112; const fg = fc.getContext('2d');
-const filmTex = new THREE.CanvasTexture(fc); filmTex.colorSpace = THREE.SRGBColorSpace;
-const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(14, 6.1), new THREE.MeshBasicMaterial({ map: filmTex }));
-screenMesh.position.set(0, 3.6, -13); scene.add(screenMesh);
-box(15, 7, .2, flat(0x0b0810), 0, 3.6, -13.15);
-function drawFilm(t) {
-  const scene = Math.floor(t / 6) % 4, k = t % 6;
-  const skies = [['#ff9a5a', '#5a2a6a'], ['#0c1a3a', '#2a4a7a'], ['#e8e2d0', '#a8a090'], ['#1a3a2a', '#6a9a6a']];
-  const g = fg.createLinearGradient(0, 0, 0, 112); g.addColorStop(0, skies[scene][1]); g.addColorStop(1, skies[scene][0]);
-  fg.fillStyle = g; fg.fillRect(0, 0, 256, 112);
-  fg.fillStyle = 'rgba(0,0,0,.85)';
-  if (scene === 0) { fg.beginPath(); fg.arc(128, 80, 26, Math.PI, 0); fill('#ffd8a0'); fg.fillStyle = '#000'; fg.fillRect(0, 84, 256, 28); fg.fillRect(60 + k * 8, 58, 6, 26); fg.fillRect(180 - k * 8, 58, 6, 26); }
-  else if (scene === 1) { for (let i = 0; i < 30; i++) { fg.fillStyle = '#fff'; fg.fillRect((i * 53) % 256, (i * 29) % 70, 1.5, 1.5); } fg.fillStyle = '#000'; fg.fillRect(0, 90, 256, 22); fg.fillRect(110, 60 - Math.sin(k) * 4, 10, 30); }
-  else if (scene === 2) { fg.fillStyle = '#222'; fg.beginPath(); fg.arc(128, 60, 30 + k * 6, 0, 7); fg.fill(); fg.fillStyle = '#e8e2d0'; fg.fillRect(122, 40, 4, 8); fg.fillRect(132, 40, 4, 8); }
-  else { fg.fillStyle = '#0a1a10'; for (let i = 0; i < 9; i++) fg.fillRect(i * 30 + Math.sin(t + i) * 3, 40 + (i % 3) * 8, 12, 72); }
-  function fill(c) { fg.fillStyle = c; fg.fill(); }
-  for (let i = 0; i < 40; i++) { fg.fillStyle = `rgba(255,255,255,${Math.random() * .08})`; fg.fillRect(Math.random() * 256, Math.random() * 112, 2, 2); }
-  filmTex.needsUpdate = true;
-  screenLight.color.set(skies[scene][0]).lerp(new THREE.Color(0xffffff), .4);
+scene.add(new THREE.HemisphereLight(0xfff4e6, 0x2a2238, 1.1));
+const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(2, 5, 4); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); scene.add(key);
+const spot = new THREE.PointLight(0xffe8b0, 6, 8); spot.position.set(0, 3, 1.5); scene.add(spot);
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, flatShading: true, ...extra });
+const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), typeof mat === 'number' ? flat(mat) : mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
+const cyl = (rt, rb, h, mat, x, y, z, parent = scene, seg = 10) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), typeof mat === 'number' ? flat(mat) : mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
+const sph = (r, mat, x, y, z, parent = scene) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), typeof mat === 'number' ? flat(mat) : mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
+// room
+const wallMat = flat(0x2b2040), floorMat = flat(0x3a2e48);
+box(14, 6, .2, wallMat, 0, 3, -2.6); { const f = box(14, .2, 8, floorMat, 0, -.1, 0); }
+// sign on the back wall (canvas texture, redrawn per expert)
+const sc = document.createElement('canvas'); sc.width = 512; sc.height = 160; const sg = sc.getContext('2d');
+const signTex = new THREE.CanvasTexture(sc); signTex.colorSpace = THREE.SRGBColorSpace;
+const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.12), new THREE.MeshBasicMaterial({ map: signTex })); sign.position.set(0, 3.05, -2.48); sign.scale.setScalar(.8); scene.add(sign);
+function drawSign(E) {
+  sg.fillStyle = '#111'; sg.fillRect(0, 0, 512, 160); sg.strokeStyle = E.color; sg.lineWidth = 10; sg.strokeRect(8, 8, 496, 144);
+  sg.fillStyle = '#fff'; sg.font = 'bold 30px sans-serif'; sg.textAlign = 'center'; sg.fillText(`${E.emoji}  ${E.where}`, 256, 62);
+  sg.fillStyle = E.color; sg.font = 'bold 44px sans-serif'; sg.fillText(`오늘의 전문가 · ${E.name}`, 256, 122);
+  signTex.needsUpdate = true;
 }
-
-// seats + audience silhouettes
-const seatMat = flat(0x7a1f2b), headMat = flat(0x0d0a12);
-for (let row = 0; row < 7; row++) {
-  const z = -1.6 - row * 1.3, y = -row * .18;
-  for (let i = -6; i <= 6; i++) {
-    const x = i * .78;
-    box(.66, .5, .6, seatMat, x, y + .3, z); box(.66, .9, .14, seatMat, x, y + .75, z + .3);
-    if (Math.random() < .55) { box(.42, .5, .3, headMat, x, y + 1.15, z + .1); box(.3, .32, .3, headMat, x, y + 1.55, z + .1); }
-  }
+// table
+box(3.4, .12, 1.5, flat(0x8a5a3b), 0, .95, .5); for (const x of [-1.5, 1.5]) for (const z of [-.1, 1.1]) box(.1, .95, .1, flat(0x5c3a21), x, .47, z);
+// mug of water for me (lives indicator lives in the HUD)
+// expert
+const ex = new THREE.Group(); ex.position.set(0, 0, -.4); scene.add(ex);
+let exParts = null, props = new THREE.Group(); scene.add(props);
+function buildExpert(E) {
+  while (ex.children.length) ex.remove(ex.children[0]);
+  while (props.children.length) props.remove(props.children[0]);
+  wallMat.color.setHex(E.bg); scene.background.setHex(E.bg).multiplyScalar(.7);
+  const LOOK = {
+    cine: { body: 0x1c1c22, skin: 0xf1c7a0, hair: 0x3a2a20 }, wine: { body: 0x7a1f2b, skin: 0xf1c7a0, hair: 0x2b2b2b }, econ: { body: 0x1f3a6a, skin: 0xe8b98f, hair: 0x2b2b2b },
+    dev: { body: 0x495057, skin: 0xf1c7a0, hair: 0x1c1c22 }, fashion: { body: 0x111111, skin: 0xf6d2b5, hair: 0xd9a066 }, barista: { body: 0xf1f3f5, skin: 0xe8b98f, hair: 0x6b4f3a },
+    gym: { body: 0xf08c00, skin: 0xc98d62, hair: 0x2b2b2b }, realty: { body: 0x364fc7, skin: 0xf1c7a0, hair: 0x5c3a21 },
+  }[E.id];
+  const skin = flat(LOOK.skin);
+  box(.78, .9, .44, LOOK.body, 0, 1.25, 0, ex);
+  const arms = [-1, 1].map(s => { const p = new THREE.Group(); p.position.set(s * .47, 1.6, 0); box(.2, .66, .22, E.id === 'gym' ? LOOK.skin : LOOK.body, 0, -.3, 0, p); sph(.12, skin, 0, -.66, .02, p); ex.add(p); return p; });
+  const head = new THREE.Group(); head.position.y = 1.72; ex.add(head);
+  box(.5, .54, .46, skin, 0, .27, 0, head);
+  box(.52, .16, .44, LOOK.hair, 0, .56, -.035, head);
+  for (const s of [-1, 1]) box(.07, .08, .02, 0x222222, s * .11, .3, .235, head);
+  const brows = [-1, 1].map(s => box(.13, .03, .02, 0x3a2a20, s * .11, .42, .235, head));
+  const mouth = box(.13, .035, .02, 0x6a2a2a, 0, .13, .235, head);
+  // domain accessories + table props
+  const A = E.id;
+  if (A === 'cine') { const b = cyl(.3, .27, .12, 0x8b1e2d, -.04, .62, 0, head); b.rotation.z = .18; for (const s of [-1, 1]) { const r = new THREE.Mesh(new THREE.TorusGeometry(.08, .016, 4, 12), flat(0x111111)); r.position.set(s * .11, .3, .245); head.add(r); }
+    const pop = cyl(.2, .15, .38, 0xffffff, .9, 1.2, .55, props, 8); for (let i = 0; i < 8; i++) sph(.06, 0xfff3bf, .9 + (Math.random() - .5) * .25, 1.42, .55 + (Math.random() - .5) * .25, props);
+    const reel = cyl(.28, .28, .06, 0x343a40, -.9, 1.04, .55, props, 16); }
+  if (A === 'wine') { box(.1, .08, .04, 0x111111, 0, 1.66, .24, ex); for (const sx of [-1, 1]) { const w = box(.12, .12, .03, 0x111111, sx * .1, 1.66, .24, ex); w.rotation.z = sx * .5; }   // bow tie
+    const g = new THREE.Group(); g.position.set(.8, 1.01, .6); props.add(g); cyl(.12, .04, .2, new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: .45 }), 0, .32, 0, g); cyl(.1, .07, .08, 0x7a0f1f, 0, .27, 0, g); cyl(.015, .015, .2, 0xdee2e6, 0, .12, 0, g); cyl(.08, .08, .02, 0xdee2e6, 0, .01, 0, g);
+    const bt = cyl(.11, .11, .55, 0x1b3a1b, -.8, 1.29, .5, props); cyl(.04, .05, .2, 0x1b3a1b, -.8, 1.66, .5, props); box(.23, .2, .01, 0xfff3bf, -.8, 1.28, .61, props); }
+  if (A === 'econ') { box(.08, .45, .02, 0xe03131, 0, 1.45, .23, ex); for (const s of [-1, 1]) { const r = new THREE.Mesh(new THREE.TorusGeometry(.08, .014, 4, 12), flat(0x111111)); r.position.set(s * .11, .3, .245); head.add(r); }
+    const mon = new THREE.Group(); mon.position.set(-.95, 1.01, .55); props.add(mon); box(.06, .3, .06, 0x343a40, 0, .15, 0, mon); box(.8, .5, .05, 0x111111, 0, .5, 0, mon);
+    const bars = [.12, .2, .15, .3, .38]; bars.forEach((h, i) => box(.08, h, .01, i === 2 ? 0xfa5252 : 0x40c057, -.24 + i * .12, .32 + h / 2, .03, mon));
+    const mic = cyl(.03, .03, .3, 0x343a40, .7, 1.16, .7, props); sph(.07, 0x868e96, .7, 1.33, .7, props); }
+  if (A === 'dev') { for (const s of [-1, 1]) box(.08, .2, .2, 0x212529, s * .29, .3, 0, head); const band = new THREE.Mesh(new THREE.TorusGeometry(.3, .03, 4, 16, Math.PI), flat(0x212529)); band.position.y = .3; head.add(band); box(.3, .2, .05, LOOK.body, 0, 1.75, -.2, ex);   // headphones + hood
+    const lap = new THREE.Group(); lap.position.set(-.2, 1.01, .7); props.add(lap); box(.8, .03, .5, 0xadb5bd, 0, .015, 0, lap); const scr = box(.8, .5, .02, 0x212529, 0, .27, -.25, lap); scr.rotation.x = -.25;
+    for (let i = 0; i < 5; i++) box(.15 + Math.random() * .3, .025, .005, [0x51cf66, 0x74c0fc, 0xffd43b][i % 3], -.2 + Math.random() * .1, .42 - i * .06, -.235, lap).rotation.x = -.25;
+    cyl(.07, .07, .26, 0x40c057, .9, 1.14, .5, props); }
+  if (A === 'fashion') { box(.46, .1, .04, 0x111111, 0, .3, .245, head); const sc2 = box(.6, .14, .5, 0xe64980, 0, 1.68, 0, ex);
+    const bag = new THREE.Group(); bag.position.set(.85, 1.01, .55); props.add(bag); box(.42, .3, .18, 0xf08c00, 0, .15, 0, bag); const hd = new THREE.Mesh(new THREE.TorusGeometry(.12, .02, 4, 12, Math.PI), flat(0x5c3a21)); hd.position.y = .3; bag.add(hd);
+    box(.5, .02, .66, 0xffffff, -.85, 1.02, .55, props); box(.44, .01, .3, 0xe64980, -.85, 1.035, .45, props); }
+  if (A === 'barista') { box(.6, .7, .02, 0x5c3a21, 0, 1.15, .23, ex); const cap = cyl(.27, .27, .12, 0x2b2b2b, 0, .6, 0, head); box(.3, .03, .2, 0x2b2b2b, 0, .55, .25, head);
+    cyl(.09, .07, .13, 0xffffff, .75, 1.08, .6, props); cyl(.08, .08, .01, 0xd9a05b, .75, 1.145, .6, props); cyl(.15, .15, .015, 0xffffff, .75, 1.015, .6, props);
+    const pf = new THREE.Group(); pf.position.set(-.8, 1.06, .55); props.add(pf); cyl(.13, .11, .08, 0xadb5bd, 0, 0, 0, pf); box(.4, .05, .06, 0x212529, .3, 0, 0, pf); }
+  if (A === 'gym') { box(.54, .08, .48, 0xffffff, 0, .45, 0, head);   // headband
+    const db = new THREE.Group(); db.position.set(-.8, 1.12, .55); props.add(db); cyl(.035, .035, .5, 0x868e96, 0, 0, 0, db).rotation.z = Math.PI / 2; for (const s of [-1, 1]) { const w = cyl(.13, .13, .1, 0x212529, s * .22, 0, 0, db); w.rotation.z = Math.PI / 2; }
+    cyl(.09, .09, .3, 0x228be6, .8, 1.16, .55, props); cyl(.06, .09, .06, 0x111111, .8, 1.34, .55, props); }
+  if (A === 'realty') { box(.16, .07, .02, 0xffffff, .2, 1.5, .23, ex);   // name tag
+    const apt = new THREE.Group(); apt.position.set(-.85, 1.01, .5); props.add(apt); [0, 1, 2].forEach(i => { const h = .3 + i * .12; box(.18, h, .2, [0xfff4e6, 0xd0ebff, 0xffe3e3][i], -.2 + i * .2, h / 2, 0, apt); });
+    const keyG = new THREE.Group(); keyG.position.set(.8, 1.03, .6); props.add(keyG); const ring = new THREE.Mesh(new THREE.TorusGeometry(.07, .015, 4, 12), flat(0xfab005)); ring.rotation.x = Math.PI / 2; keyG.add(ring); box(.2, .02, .04, 0xfab005, .14, 0, 0, keyG); }
+  ex.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  exParts = { head, arms, mouth, brows };
+  drawSign(E);
+  document.documentElement.style.setProperty('--dc', E.color);
 }
-// our row
-for (let i = -3; i <= 3; i++) { box(.66, .5, .6, seatMat, i * .78 - .39, .3, 0); box(.66, .9, .14, seatMat, i * .78 - .39, .75, .3); }
-
-// the cinephile: beret, black turtleneck, round glasses, goatee
-const snob = new THREE.Group(); snob.position.set(-.78, .1, 0); snob.rotation.y = Math.PI; scene.add(snob);   // faces the screen
-const skin = flat(0xf1c7a0), black = flat(0x1c1c22);
-box(.62, .78, .38, black, 0, .95, 0, snob);
-box(.3, .14, .3, black, 0, 1.38, 0, snob);   // turtleneck collar
-const armL = new THREE.Group(); armL.position.set(.38, 1.25, 0); box(.16, .62, .18, black, 0, -.3, 0, armL); snob.add(armL);
-const hand = new THREE.Mesh(new THREE.DodecahedronGeometry(.1, 0), skin); hand.position.set(0, -.64, 0); armL.add(hand);
-const head = new THREE.Group(); head.position.y = 1.45; snob.add(head);
-box(.44, .48, .42, skin, 0, .25, 0, head);
-const beret = new THREE.Mesh(new THREE.CylinderGeometry(.3, .27, .12, 10), flat(0x8b1e2d)); beret.position.set(-.04, .53, 0); beret.rotation.z = .18; head.add(beret);
-box(.04, .06, .04, flat(0x8b1e2d), -.04, .62, 0, head);
-const lensMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x99bbff, emissiveIntensity: 0, roughness: .2 });
-for (const s of [-1, 1]) {
-  const r = new THREE.Mesh(new THREE.TorusGeometry(.075, .015, 4, 12), flat(0x111111)); r.position.set(s * .1, .3, .23); head.add(r);
-  const l = new THREE.Mesh(new THREE.CircleGeometry(.065, 12), lensMat); l.position.set(s * .1, .3, .225); head.add(l);
-}
-const brows = [-1, 1].map(s => box(.12, .025, .02, flat(0x3a2a20), s * .1, .41, .225, head));
-box(.1, .1, .04, flat(0x3a2a20), 0, .04, .22, head);  // goatee
-const mouth = box(.12, .03, .02, flat(0x5a2a2a), 0, .13, .225, head);
-// cup of fancy coffee
-const cup = new THREE.Mesh(new THREE.CylinderGeometry(.06, .05, .16, 8), flat(0xffffff)); cup.position.set(0, -.74, .06); armL.add(cup);
-// my popcorn (lives) in the foreground
-const pop = new THREE.Group(); pop.position.set(.75, .62, 1.2); scene.add(pop);
-{
-  const bucket = new THREE.Mesh(new THREE.CylinderGeometry(.2, .15, .36, 8, 1, true), new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide, flatShading: true }));
-  pop.add(bucket);
-  for (let i = 0; i < 4; i++) { const st = box(.03, .37, .01, flat(0xe03131), 0, 0, 0, pop); const a = i / 4 * Math.PI * 2; st.position.set(Math.cos(a) * .18, 0, Math.sin(a) * .18); st.rotation.y = -a; }
-}
-const kernels = [];
-for (let i = 0; i < 26; i++) { const k = new THREE.Mesh(new THREE.DodecahedronGeometry(.045, 0), flat(0xfff3bf)); k.position.set((Math.random() - .5) * .3, .2 + Math.random() * .1, (Math.random() - .5) * .3); pop.add(k); kernels.push(k); }
-const flying = [];
-function spillPopcorn() {
-  for (let i = 0; i < 10; i++) {
-    const k = new THREE.Mesh(new THREE.DodecahedronGeometry(.045, 0), flat(0xfff3bf));
-    k.position.copy(pop.position).add(new THREE.Vector3(0, .25, 0)); scene.add(k);
-    flying.push({ m: k, v: new THREE.Vector3((Math.random() - .5) * 2, 1.5 + Math.random() * 1.5, (Math.random() - .3) * 1.5), t: 0 });
-  }
-  pop.rotation.z = -.5;
-}
-
-const camBase = () => camera.aspect < 1 ? new THREE.Vector3(.7, 1.75, 3.1) : new THREE.Vector3(1.2, 1.75, 2.9);
 function placeCamera() {
-  camera.aspect = innerWidth / innerHeight;
-  const portrait = camera.aspect < 1;
-  camera.fov = portrait ? 66 : 50; camera.updateProjectionMatrix();
-  camera.position.copy(camBase());
-  camera.lookAt(portrait ? -.62 : -.75, portrait ? 1.25 : 1.3, -2.5);
+  camera.aspect = innerWidth / innerHeight; const portrait = camera.aspect < 1;
+  camera.fov = portrait ? 64 : 46; camera.updateProjectionMatrix();
+  if (portrait) { camera.position.set(0, 2.05, 4.6); camera.lookAt(0, 1.75, -.6); }
+  else { camera.position.set(1.35, 2.05, 3.9); camera.lookAt(1.25, 1.75, -.6); }   // expert sits in the left half
 }
-placeCamera();
-addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
-faceLight.position.set(-.3, 2, 1.2);
+placeCamera(); addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
 
 // ---------- state ----------
 const LIVES = 3;
-let state = 'ready', score = 0, lives = LIVES, combo = 0, maxCombo = 0, order = [], qi = 0, q = null, tLeft = 0, tMax = 1, overAt = 0, typed = 0, react = null;
+let state = 'ready', score = 0, lives = LIVES, combo = 0, maxCombo = 0, expertOrder = [], ei = 0, asked = 0, E = null, used = new Set(), q = null, tLeft = 0, tMax = 1, overAt = 0, typed = 0, react = null, met = 0;
 let best = 0; try { best = +localStorage.getItem('cine-best') || 0; } catch {}
-const $score = $('score'), $lives = $('lives'), $combo = $('combo'), $txt = $('txt'), $choices = $('choices'), $tfill = $('tfill'), $tbar = $('tbar'), $say = $('say'), $center = $('center'), $qn = $('qn');
+const $score = $('score'), $lives = $('lives'), $combo = $('combo'), $txt = $('txt'), $choices = $('choices'), $tfill = $('tfill'), $tbar = $('tbar'), $say = $('say'), $center = $('center');
 const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
-const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🎬', title: '씨네필 통역기', how: [
-  ['🎩', '옆자리 영화 고인물이 <b>어려운 말</b>로 속삭여요'],
-  ['💡', '무슨 뜻인지 <b>쉬운 말 보기</b>를 빨리 고르기 (1~4 키)'],
-  ['⏱️', '갈수록 말이 빨라져요. 시간 초과도 오답'],
-  ['🍿', '틀리면 팝콘이 쏟아져요. 3번이면 퇴장'],
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🎓', title: '전문가 통역기', how: [
+  ['🍷', '씨네필·소믈리에·개발자·중개사… <b>전문가가 계속 바뀌어요</b>'],
+  ['💡', '<b>뜻 맞히기</b> · <b>전문가식 표현 고르기</b> · <b>진짜 용어 vs 지어낸 말</b>'],
+  ['⏱️', '갈수록 말이 빨라져요. 시간 초과도 오답 (1~4 키)'],
+  ['❤️', '3번 틀리면 끝. 연속으로 맞히면 전문가가 인정해줘요'],
 ] }));
-const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
-const rnd = a => a[(Math.random() * a.length) | 0];
-const fmt = s => s.replace(/\*(.+?)\*/g, '<em>$1</em>');
 function updateHud() {
   $score.innerHTML = `${score}<small>개</small>`;
-  $lives.textContent = '🍿'.repeat(lives) + '▫️'.repeat(LIVES - lives);
+  $lives.textContent = '❤️'.repeat(Math.max(0, lives)) + '🤍'.repeat(Math.max(0, LIVES - lives));
   $combo.style.display = combo >= 3 ? '' : 'none'; $combo.textContent = `🔥 ${combo}연속`;
 }
-function reset() {
-  score = 0; lives = LIVES; combo = 0; maxCombo = 0; order = shuffle(QS.map((_, i) => i)); qi = 0; q = null; react = null;
-  kernels.forEach(k => k.visible = true); pop.rotation.z = 0; beret.visible = true;
-  $txt.innerHTML = ''; $choices.innerHTML = ''; updateHud();
+function nextExpert() {
+  if (!expertOrder.length || ei >= expertOrder.length) { const prev = E; expertOrder = shuffle([...EXPERTS]); if (prev && expertOrder[0] === prev) expertOrder.push(expertOrder.shift()); ei = 0; }
+  E = expertOrder[ei++]; asked = 0; met++;
+  buildExpert(E); ex.position.y = 2.5;
+  $('ie').textContent = E.emoji; $('in').textContent = `${E.name} 등장!`; $('is').textContent = E.where;
+  const el = $('intro'); el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  $('whoName').innerHTML = `${E.emoji} <b>${E.name}</b> · ${E.where}`;
+  Arcade.sfx.whoosh(true);
+}
+function makeQuestion() {
+  const items = E.items.filter(it => !used.has(it[0])), pool = items.length ? items : E.items;
+  const kind = asked === 0 ? 'mean' : rnd(['mean', 'mean', 'blank', 'blank', 'real']);
+  if (kind === 'real') {
+    const isReal = Math.random() < .5, t = isReal ? rnd([...E.real, ...E.items.map(it => term(it[0]))]) : rnd(E.fake);
+    return { kind, label: '진짜 vs 가짜', say: `“*${t}*”…\n이거 진짜 ${E.name}들이 쓰는 말일까요?`, opts: [{ t: '⭕ 진짜 있는 말', ok: isReal }, { t: '❌ 지어낸 말', ok: !isReal }], ox: true };
+  }
+  const it = rnd(pool); used.add(it[0]);
+  if (kind === 'blank') {
+    const others = shuffle(E.items.filter(x => x !== it)).slice(0, score >= 8 ? 3 : 2).map(x => term(x[0]));
+    return { kind, label: '전문가식으로 말하면?', say: `상황: ${it[1]}\n→ 이걸 ${E.name}식으로 말하면?`, opts: shuffle([{ t: term(it[0]), ok: true }, ...others.map(t => ({ t }))]) };
+  }
+  const opts = [{ t: it[1], ok: true }, { t: it[2] }, { t: it[3] }];
+  return { kind, label: '무슨 뜻?', say: it[0], opts: shuffle(opts) };
 }
 function nextQ() {
   if (state !== 'playing') return;
-  if (qi >= order.length) { order = shuffle(order); qi = 0; }
-  const [say, ans, w1, w2] = QS[order[qi++]];
-  const opts = [{ t: ans, ok: true }, { t: w1 }, { t: w2 }];
-  if (score >= 6) opts.push({ t: rnd(GENERIC) });
-  q = { say, opts: shuffle(opts), answered: false };
+  if (!E || asked >= 3) { nextExpert(); setTimeout(() => { if (state === 'playing') showQ(); }, 900); return; }
+  showQ();
+}
+function showQ() {
+  q = makeQuestion(); q.answered = false; asked++;
   typed = 0; react = null;
-  tMax = Math.max(4.2, 9 - score * .22); tLeft = tMax;
-  $say.classList.remove('react'); $qn.textContent = `#${score + 1}`;
-  $choices.classList.remove('lock');
-  $choices.innerHTML = q.opts.map((o, i) => `<button class="ch" data-i="${i}"><span class="k">${i + 1}</span><span>${o.t}</span></button>`).join('');
-  Arcade.sfx.tap();
+  tMax = Math.max(4.2, 9 - score * .2) + (q.kind === 'blank' ? .8 : 0); tLeft = tMax;
+  $say.classList.remove('react'); $('kind').textContent = q.label;
+  $choices.classList.remove('lock'); $choices.classList.toggle('ox', !!q.ox);
+  $choices.innerHTML = q.opts.map((o, i) => `<button class="ch" data-i="${i}">${q.ox ? '' : `<span class="k">${i + 1}</span>`}<span>${o.t}</span></button>`).join('');
+  q.voice = Arcade.babble(q.say.replace(/[*“”]/g, ''), { pitch: { cine: .9, wine: 1.05, econ: .8, dev: 1, fashion: 1.25, barista: 1.15, gym: .75, realty: 1.1 }[E.id], rate: 17 });
 }
 function answer(i) {
   if (state !== 'playing' || !q || q.answered) return;
-  q.answered = true; $choices.classList.add('lock');
-  const btns = [...$choices.children];
-  const okIdx = q.opts.findIndex(o => o.ok);
+  q.answered = true; q.voice?.stop(); $choices.classList.add('lock');
+  const btns = [...$choices.children], okIdx = q.opts.findIndex(o => o.ok);
   btns.forEach((b, j) => b.classList.add(j === okIdx ? 'ok' : j === i ? 'no' : 'dim'));
   const right = i === okIdx;
   if (right) {
-    const fast = tLeft / tMax > .6;
-    score++; combo++; maxCombo = Math.max(maxCombo, combo);
-    react = { kind: 'ok', t: 0 };
-    say(fast && combo >= 3 ? `${rnd(OK_LINES)} (빠른데?)` : rnd(OK_LINES));
+    score++; combo++; maxCombo = Math.max(maxCombo, combo); react = { kind: 'ok', t: 0 };
+    say(tLeft / tMax > .6 && combo >= 3 ? `${rnd(E.ok)} (빠른데요?)` : rnd(E.ok));
     Arcade.sfx.perfect(Math.min(combo, 12)); Arcade.vibrate(20);
-    if (combo > 0 && combo % 5 === 0) { Arcade.toast(`🎩 씨네필 인정! ${combo}연속`, '#7048e8'); Arcade.confetti({ y: innerHeight * .3, count: 60, emoji: ['🎬', '🍿', '⭐'] }); Arcade.sfx.coin(); }
+    if (combo > 0 && combo % 5 === 0) { Arcade.toast(`${E.emoji} ${E.name} 인정! ${combo}연속`, E.color); Arcade.confetti({ y: innerHeight * .3, count: 60, emoji: [E.emoji, '⭐', '🎓'] }); Arcade.sfx.coin(); }
     $score.animate([{ transform: 'scale(1.25)' }, { transform: 'scale(1)' }], { duration: 180 });
   } else {
-    lives--; combo = 0;
-    react = { kind: 'no', t: 0 };
-    say(i < 0 ? rnd(TIMEOUT_LINES) : rnd(NO_LINES));
+    lives--; combo = 0; react = { kind: 'no', t: 0 };
+    say(i < 0 ? rnd(TIMEOUT_LINES) : rnd(E.no));
     Arcade.sfx.miss(); Arcade.shake(.12); Arcade.vibrate([40, 30, 60]);
-    spillPopcorn();
-    kernels.filter(k => k.visible).slice(0, 9).forEach(k => k.visible = false);
   }
   updateHud();
   setTimeout(() => { if (lives <= 0) finish(); else nextQ(); }, right ? 1000 : 1700);
 }
 function say(line) { $say.classList.add('react'); $txt.textContent = `“${line}”`; }
 function finish() {
-  state = 'over'; overAt = performance.now();
-  const isBest = score > best;
-  if (isBest) { best = score; try { localStorage.setItem('cine-best', best); } catch {} }
+  state = 'over'; overAt = performance.now(); q?.voice?.stop();
+  const isBest = score > best; if (isBest) { best = score; try { localStorage.setItem('cine-best', best); } catch {} }
   isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
-  const rank = score < 3 ? '🍿 팝콘 무비 러버' : score < 8 ? '🎟️ 주말 관객' : score < 15 ? '📼 왓챠 고인물' : score < 25 ? '🎤 GV 단골' : '🏆 칸 심사위원';
-  const msg = score >= 15 ? '씨네필: "…너 혹시 평론가야?"' : score >= 8 ? '씨네필이 명함을 건넵니다' : '씨네필: "다음엔 팝콘 소리 좀 줄여줘"';
-  showScreen(Arcade.resultScreen({ emoji: '🎬', label: '번역 성공', score, unit: '개', msg, rows: [['등급', rank], ['최대 연속', `${maxCombo}개`]], isBest: isBest && score > 0, best }));
+  const rank = score < 3 ? '🙋 일반인' : score < 8 ? '📚 귀동냥 고수' : score < 15 ? '🎙️ 만능 통역사' : score < 25 ? '🧠 걸어다니는 백과사전' : '🏆 전문가들의 전문가';
+  showScreen(Arcade.resultScreen({ emoji: '🎓', label: '통역 성공', score, unit: '개', msg: `${met}명의 전문가를 만났어요`, rows: [['등급', rank], ['최대 연속', `${maxCombo}개`]], isBest: isBest && score > 0, best }));
   Arcade.gameOver(score);
 }
+function reset() { score = 0; lives = LIVES; combo = 0; maxCombo = 0; E = null; ei = 0; expertOrder = []; used.clear(); q = null; react = null; met = 0; $txt.innerHTML = ''; $choices.innerHTML = ''; updateHud(); }
 function start() {
-  state = 'count'; $center.style.display = 'none'; $txt.innerHTML = '…(상영 시작)'; $choices.innerHTML = '';
-  Arcade.countdown({ final: '상영!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { state = 'playing'; nextQ(); } });
+  reset(); state = 'count'; $center.style.display = 'none'; $txt.innerHTML = '…'; $choices.innerHTML = '';
+  Arcade.countdown({ final: '통역 시작!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { state = 'playing'; nextQ(); } });
 }
 function tapStart() {
   if (state === 'ready') start();
-  else if (state === 'over' && performance.now() - overAt > 900 && !Arcade.inRun()) { reset(); start(); }
+  else if (state === 'over' && performance.now() - overAt > 900 && !Arcade.inRun()) start();
 }
-
-// ---------- input ----------
 $choices.addEventListener('click', e => { const b = e.target.closest('.ch'); if (b) answer(+b.dataset.i); });
 addEventListener('pointerdown', e => { if (!e.target.closest('.ch, .arcade-btn')) tapStart(); });
 addEventListener('keydown', e => {
@@ -287,60 +348,38 @@ addEventListener('keydown', e => {
 });
 
 // ---------- loop ----------
-let last = performance.now(), blip = 0;
-reset(); showIntro();
-window.__cine = { get state() { return state; }, get q() { return q; }, answer, get score() { return score; }, get lives() { return lives; } };
-
+let last = performance.now();
+buildExpert(EXPERTS[0]); $('whoName').innerHTML = '🎓 <b>전문가 통역기</b>'; showIntro(); updateHud();
+window.__cine = { get state() { return state; }, get q() { return q; }, answer, get score() { return score; }, get lives() { return lives; }, get E() { return E; } };
 function frame(now) {
   const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
-  drawFilm(t);
-  // typing out the jargon + muttering blips
+  ex.position.y += (0 - ex.position.y) * Math.min(1, dt * 7);
   if (state === 'playing' && q && !q.answered) {
-    const plain = q.say.replace(/\*/g, '');
-    const speed = 20 + score * 1.5;
+    const plain = q.say.replace(/\*/g, ''), speed = 22 + score * 1.4;
     if (typed < plain.length) {
       typed = Math.min(plain.length, typed + dt * speed);
       let n = Math.floor(typed), out = '', count = 0, inEm = false;
-      for (const ch of q.say) { if (ch === '*') { out += inEm ? '</em>' : '<em>'; inEm = !inEm; continue; } if (count++ >= n) break; out += ch; }
+      for (const ch of q.say) { if (ch === '*') { out += inEm ? '</em>' : '<em>'; inEm = !inEm; continue; } if (count++ >= n) break; out += ch === '\n' ? '<br>' : ch; }
       if (inEm) out += '</em>';
       $txt.innerHTML = out;
-      blip -= dt; if (blip <= 0) { blip = .09; Arcade.sfx.tap(); }
     }
-    tLeft -= dt;
-    if (tLeft <= 0) { tLeft = 0; answer(-1); }
+    tLeft -= dt; if (tLeft <= 0) { tLeft = 0; answer(-1); }
   }
   $tfill.style.transform = `scaleX(${q && state === 'playing' ? tLeft / tMax : 0})`;
   $tbar.classList.toggle('low', tLeft / tMax < .3);
-
-  // snob animation: turns to whisper at you, nods or rolls eyes
-  const talking = state === 'playing' && q && !q.answered;
-  const turn = talking || react;
-  snob.rotation.y += ((turn ? Math.PI - .75 : Math.PI) - snob.rotation.y) * Math.min(1, dt * 5);
-  head.rotation.y += ((turn ? -1.1 : 0) - head.rotation.y) * Math.min(1, dt * 6);
-  let pitch = talking ? Math.sin(t * 9) * .04 : 0, roll = 0;
-  if (react) {
-    react.t += dt;
-    if (react.kind === 'ok') { pitch = Math.sin(react.t * 14) * .18 * Math.max(0, 1 - react.t); mouth.scale.set(1.5, 1.5, 1); }
-    else { roll = Math.sin(react.t * 12) * .15 * Math.max(0, 1 - react.t * .7); pitch = -.25; mouth.scale.set(.7, 1, 1); }
-    brows.forEach((b, i) => b.rotation.z = react.kind === 'no' ? (i ? -.35 : .35) : 0);
-  } else { mouth.scale.set(1, talking ? 1 + Math.abs(Math.sin(t * 22)) * 2 : 1, 1); brows.forEach((b, i) => b.rotation.z = talking ? (i ? .2 : -.2) : 0); }
-  head.rotation.x = pitch; head.rotation.z = roll;
-  armL.rotation.x = talking ? -.6 + Math.sin(t * 3) * .25 : -.35;   // gesturing with the coffee
-  lensMat.emissiveIntensity = .25 + Math.sin(t * 1.3) * .15 + (react?.kind === 'ok' ? Math.max(0, 1 - react.t * 2) * 2 : 0);
-  // spilled popcorn
-  for (let i = flying.length - 1; i >= 0; i--) {
-    const f = flying[i]; f.t += dt; f.v.y -= 9 * dt; f.m.position.addScaledVector(f.v, dt); f.m.rotation.x += dt * 8;
-    if (f.t > 1.6) { scene.remove(f.m); flying.splice(i, 1); }
+  if (exParts) {
+    const { head, arms, mouth, brows } = exParts, talking = state === 'playing' && q && !q.answered && typed < q.say.length;
+    let pitch = Math.sin(t * 1.3) * .03, roll = 0;
+    if (react) { react.t += dt; if (react.kind === 'ok') { pitch = Math.sin(react.t * 14) * .18 * Math.max(0, 1 - react.t); mouth.scale.set(1.6, 1.6, 1); } else { roll = Math.sin(react.t * 12) * .15 * Math.max(0, 1 - react.t * .7); pitch = -.2; mouth.scale.set(.7, 1, 1); } brows.forEach((b, i) => b.rotation.z = react.kind === 'no' ? (i ? -.35 : .35) : 0); }
+    else { mouth.scale.set(1, talking ? 1 + Math.abs(Math.sin(t * 22)) * 2 : 1, 1); brows.forEach((b, i) => b.rotation.z = talking ? (i ? .15 : -.15) : 0); }
+    head.rotation.x = pitch; head.rotation.z = roll;
+    arms[0].rotation.x = talking ? -.7 + Math.sin(t * 4) * .35 : -.2; arms[1].rotation.x = talking ? -.4 + Math.cos(t * 3.5) * .3 : -.2;
   }
-  pop.rotation.z *= Math.exp(-dt * 3);
-
-  camera.position.x += Math.sin(t * .4) * .0004;
   Arcade.applyShake(camera, dt);
   renderer.render(scene, camera);
-  placeCameraSoft();
+  placeCamera();
   requestAnimationFrame(frame);
 }
-function placeCameraSoft() { camera.position.lerp(camBase(), .3); }
 requestAnimationFrame(frame);
 </script>
 </body>

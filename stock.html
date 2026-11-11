@@ -148,6 +148,9 @@ function newChart() {
   for (let i = 0; i < 160; i++) nextPrice();
   startIdx = prices.length - 1;
   buyIdx = sellIdx = -1; acc = 0; roundT = 0;
+  // reset the view to the new chart (the previous round's zoomed-out range made the price window NaN → empty chart)
+  const kn = candleOf(startIdx); k1 = kn + 4; k0 = k1 - 34;
+  lo = Math.min(...prices) * .95; hi = Math.max(...prices) * 1.05;
 }
 function startRound() {
   round++; newChart(); hideScreen();
@@ -313,8 +316,10 @@ function frame(now) {
   const kk = Math.min(1, dt * 4); k0 += (t0 - k0) * kk; k1 += (t1 - k1) * kk;
   let vlo = Infinity, vhi = -Infinity;
   for (let i = Math.max(0, Math.floor(k0) * TPC); i <= n; i++) { vlo = Math.min(vlo, prices[i]); vhi = Math.max(vhi, prices[i]); }
+  if (!isFinite(vlo) || !isFinite(vhi)) { vlo = prices[n] * .95; vhi = prices[n] * 1.05; }
   const pad = (vhi - vlo) * .12 || 1;
   lo += (vlo - pad - lo) * Math.min(1, dt * 5); hi += (vhi + pad - hi) * Math.min(1, dt * 5);
+  if (!isFinite(lo) || !isFinite(hi)) { lo = vlo - pad; hi = vhi + pad; }
 
   // candles
   for (let k = 0; k <= kn; k++) {

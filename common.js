@@ -140,6 +140,8 @@
     }
   });
 
+  // ---------- favicon on every page ----------
+  try { if (!document.querySelector('link[rel="icon"]')) { const l = document.createElement('link'); l.rel = 'icon'; l.type = 'image/png'; l.href = 'thumbs/favicon.png'; document.head.appendChild(l); } } catch {}
   // ---------- juicy SFX kit (all synthesized: envelopes + filtered noise + compressor + small room) ----------
   let actx, out, room, windNode;
   function A() {

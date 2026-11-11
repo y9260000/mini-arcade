@@ -4,10 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>미니 아케이드</title>
+<link rel="icon" type="image/png" href="thumbs/favicon.png">
+<link rel="apple-touch-icon" href="thumbs/favicon.png">
 <script src="common.js?v=17"></script>
 <style>
   *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;background:linear-gradient(170deg,#ff8fb1 0%,#ffb88c 45%,#ffe3a3 100%);color:var(--ink);display:flex;justify-content:center}
+  /* 얼마집 brand: blue #2D6FF0, charcoal, white */
+  :root{--accent:#2d6ff0;--accent-dark:#1f54c4;--ink:#1e2532;--ink-soft:#5c6678;--tint:#eaf1fe}
+  body{margin:0;min-height:100vh;background:linear-gradient(180deg,#2d6ff0 0,#4d86f4 260px,#eaf1fe 520px,#f5f8ff 100%);color:var(--ink);display:flex;justify-content:center}
   main{width:100%;max-width:1100px;padding:max(36px,5vh) max(16px,env(safe-area-inset-left)) 120px}
   .logo{text-align:center;margin-bottom:22px}
   .logo .t-title{margin:6px 0 4px}
@@ -15,52 +19,65 @@
   #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:14px}
   @media(min-width:640px){#list{grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:16px}}
   .card{position:relative;display:flex;flex-direction:column;background:#fff;border-radius:22px;overflow:hidden;min-width:0;
-    text-decoration:none;color:inherit;box-shadow:0 6px 0 rgba(43,36,56,.08),0 10px 24px rgba(43,36,56,.12);transition:transform .12s}
+    text-decoration:none;color:inherit;box-shadow:0 2px 0 rgba(30,37,50,.05),0 10px 24px rgba(45,111,240,.12);transition:transform .25s cubic-bezier(.2,.8,.3,1),box-shadow .25s;
+    transform:perspective(700px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));will-change:transform}
   .card:active{transform:scale(.97)}
-  @media(hover:hover){.card:hover{transform:translateY(-4px) rotate(-.4deg)}}
-  .tile{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;font-size:clamp(46px,12vw,64px);
-    background-image:radial-gradient(circle at 30% 25%,rgba(255,255,255,.35),transparent 60%)}
-  .tile span{filter:drop-shadow(0 6px 8px rgba(0,0,0,.2));transition:transform .2s}
-  @media(hover:hover){.card:hover .tile span{transform:scale(1.12) rotate(-6deg)}}
+  @media(hover:hover){.card:hover{box-shadow:0 2px 0 rgba(30,37,50,.05),0 18px 34px rgba(45,111,240,.25)}}
+  .tile{aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;overflow:hidden;
+    background:radial-gradient(circle at 50% 38%,#ffffff 0,#f2f6ff 35%,#dce8fd 100%)}
+  .tile img{width:100%;height:100%;object-fit:contain;transition:transform .35s cubic-bezier(.2,.8,.3,1)}
+  @media(hover:hover){.card:hover .tile img{animation:bob 1.6s ease-in-out infinite}}
+  @keyframes bob{0%,100%{transform:translateY(-3%) scale(1.07) rotate(-1.5deg)}50%{transform:translateY(-7%) scale(1.09) rotate(1.5deg)}}
   .body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:4px;flex:1}
   .card h2{font-family:"Jua",sans-serif;font-weight:400;font-size:clamp(17px,4.6vw,21px);margin:0;line-height:1.2}
   .card p{margin:0;font-size:12.5px;line-height:1.4;color:var(--ink-soft);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  .card .best{align-self:flex-start;margin-top:auto;background:#fff3bf;color:#8a6200;border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:700}
-  .card .num{position:absolute;left:10px;top:9px;font:700 11px "Noto Sans KR",sans-serif;color:#fff;background:rgba(43,36,56,.55);border-radius:999px;padding:2px 8px}
+  .card .best{align-self:flex-start;margin-top:auto;background:var(--tint);color:var(--accent);border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:700}
+  .card .num{position:absolute;left:10px;top:9px;font:700 11px "Noto Sans KR",sans-serif;color:var(--accent);background:rgba(255,255,255,.9);border-radius:999px;padding:2px 8px}
   .card .new.hot{background:#f03e3e;box-shadow:0 2px 0 #a61e1e}
-  .card.is-hot{grid-column:span 2;box-shadow:0 0 0 3px #ff8787,0 6px 0 rgba(43,36,56,.08),0 10px 24px rgba(43,36,56,.12)}
+  .card.is-hot{grid-column:span 2;box-shadow:0 0 0 3px var(--accent),0 6px 0 rgba(43,36,56,.08),0 10px 24px rgba(43,36,56,.12)}
   .card.is-hot .tile{aspect-ratio:16/7}
   .card .new{position:absolute;right:10px;top:9px;font:12px "Jua",sans-serif;color:#fff;background:var(--accent);border-radius:999px;padding:3px 9px;box-shadow:0 2px 0 var(--accent-dark)}
   .run{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(488px,calc(100% - 32px));
-    border:0;border-radius:20px;padding:18px;font-family:"Jua",sans-serif;font-size:24px;background:var(--ink);color:#fff;cursor:pointer;
-    box-shadow:0 6px 0 #120e18,0 14px 30px rgba(0,0,0,.25)}
-  .run:active{transform:translateX(-50%) translateY(4px);box-shadow:0 2px 0 #120e18}
+    border:0;border-radius:20px;padding:18px;font-family:"Jua",sans-serif;font-size:24px;background:var(--accent);color:#fff;cursor:pointer;
+    box-shadow:0 6px 0 var(--accent-dark),0 14px 30px rgba(45,111,240,.35)}
+  .run:active{transform:translateX(-50%) translateY(4px);box-shadow:0 2px 0 var(--accent-dark)}
   .result{margin-bottom:20px}
   .result .r-sheet{margin:0 auto;max-width:480px}
 </style>
 </head>
 <body data-hub>
 <main>
-  <div class="logo"><div class="t-emoji">🕹️</div><div class="t-title">미니 아케이드</div><p id="sub">3D 미니게임 모음 · 하나씩 or 연속으로!</p></div>
+  <div class="logo"><img src="thumbs/favicon.png" alt="" width="96" height="96" style="filter:drop-shadow(0 8px 14px rgba(0,0,0,.2))"><div class="t-title">미니 아케이드</div><p id="sub">3D 미니게임 모음 · 하나씩 or 연속으로!</p></div>
   <div class="result" id="result"></div>
   <div id="list"></div>
 </main>
-<button class="run" id="run">▶ 연속 플레이 (전부 한 판씩)</button>
+<button class="run" id="run">🎲 랜덤 플레이</button>
 <script>
   const { GAMES } = Arcade;
   const TILE = { softserve: '#ffe3ec', skydive: '#d0ebff', stock: '#1b2240', moktak: '#f3d9c4', door: '#ffe8cc', elevator: '#dbe4ff', halo: '#fff3bf', cine: '#2b2438', cat: '#ffe8cc', soccer: '#d3f9d8', inventory: '#30251c', dialect: '#e5dbff', popcorn: '#3b2716', shop: '#fff0f6', sake: '#3b2416', radio: '#0b1030', tower: '#d0ebff', inspect: '#fff4e6', bus: '#d0ebff', court: '#3b2416', fight: '#2b1d3a', checkout: '#fff5f5' };
   const best = k => { try { return +localStorage.getItem(k) || 0; } catch { return 0; } };
   const NEW = new Set(GAMES.slice(-4).map(g => g.id)), HOT = ['soccer'];
   const ORDER = [...GAMES.filter(g => HOT.includes(g.id)), ...GAMES.filter(g => !HOT.includes(g.id))];
-  document.getElementById('sub').textContent = `3D 미니게임 ${GAMES.length}종 · 하나씩 or 연속으로!`;
+  document.getElementById('sub').textContent = `3D 미니게임 ${GAMES.length}종 · 골라서 or 랜덤으로!`;
   document.getElementById('list').innerHTML = ORDER.map((g, i) => `
     <a class="card ${HOT.includes(g.id) ? 'is-hot' : ''}" href="${g.file}">
-      <div class="tile" style="background-color:${TILE[g.id] || '#f1f3f5'}"><span>${g.emoji}</span></div>
+      <div class="tile"><img src="thumbs/${g.id}.png" alt="${g.name}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${g.emoji}',style:'font-size:56px'}))"></div>
       <span class="num">#${GAMES.indexOf(g) + 1}</span>${HOT.includes(g.id) ? '<span class="new hot">🔥 HOT</span>' : NEW.has(g.id) ? '<span class="new">NEW</span>' : ''}
       <div class="body"><h2>${g.name}</h2><p>${g.desc}</p>
       ${best(g.bestKey) ? `<span class="best">🏆 ${best(g.bestKey)}${g.unit}</span>` : ''}</div>
     </a>`).join('');
-  document.getElementById('run').onclick = () => { location.href = `${GAMES[0].file}?run=0&s=`; };
+  document.getElementById('run').onclick = () => {
+    let last = ''; try { last = sessionStorage.getItem('last-random') || ''; } catch {}
+    const pool = GAMES.filter(g => g.id !== last), g = pool[(Math.random() * pool.length) | 0];
+    try { sessionStorage.setItem('last-random', g.id); } catch {}
+    location.href = g.file;
+  };
+  // gentle 3D tilt toward the cursor
+  if (matchMedia('(hover:hover)').matches) document.querySelectorAll('.card').forEach(c => {
+    c.addEventListener('pointermove', e => { const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+      c.style.setProperty('--ry', (x * 9).toFixed(2) + 'deg'); c.style.setProperty('--rx', (-y * 7).toFixed(2) + 'deg'); });
+    c.addEventListener('pointerleave', () => { c.style.setProperty('--ry', '0deg'); c.style.setProperty('--rx', '0deg'); });
+  });
 
   const done = new URLSearchParams(location.search).get('done');
   if (done !== null) {

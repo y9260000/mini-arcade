@@ -26,7 +26,7 @@
     font:700 clamp(17px,4.5vw,22px)/1.7 "Nanum Gothic Coding",monospace;color:#1c1c24;transition:transform .35s cubic-bezier(.3,1.4,.5,1);cursor:text}
   #prev{color:#868e96;font-size:.8em;line-height:1.5;min-height:1.5em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px dashed #e9ecef;margin-bottom:4px}
   #line{min-height:1.7em;word-break:keep-all}
-  #line .c{color:#adb5bd} #line .c.ok{color:#1c1c24} #line .c.bad{color:#fff;background:#e03131;border-radius:3px} #line .c.cur{color:#1c1c24;box-shadow:inset 0 -3px 0 #fab005}
+  #line .c{color:#adb5bd} #line .c.ok{color:#1c1c24} #line .c.bad{color:#fff;background:#e03131;border-radius:3px} #line .c.cur{color:#1c1c24;background:#fff3bf;border-radius:3px;box-shadow:inset 0 -3px 0 #fab005}
   #line .caret{display:inline-block;width:2px;height:1.1em;background:#1c1c24;vertical-align:-3px;animation:cb .8s steps(2) infinite;margin:0 -1px}
   @keyframes cb{50%{opacity:0}}
   #typed{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;font-size:16px;caret-color:transparent;color:transparent;background:transparent}
@@ -205,7 +205,8 @@ function render() {
       else if (i === v.length - 1) cls += ' cur';   // the syllable still being composed
       else { cls += ' bad'; allOk = false; }
     }
-    out += (i === v.length ? '<span class="caret"></span>' : '') + `<span class="${cls}">${t === ' ' ? '&nbsp;' : t}</span>`;
+    const shown = cls.endsWith('cur') ? c : t;   // while composing, show what was actually typed (ㄱ → 가 → 각), not the finished syllable
+    out += (i === v.length ? '<span class="caret"></span>' : '') + `<span class="${cls}">${shown === ' ' ? '&nbsp;' : shown}</span>`;
   }
   if (v.length >= target.length) out += '<span class="caret"></span>';
   if (v.length > target.length) out += `<span class="c bad">${v.slice(target.length).replace(/ /g, '&nbsp;')}</span>`;
@@ -255,8 +256,10 @@ $typed.addEventListener('input', e => {
   const v = norm($typed.value);
   const del = e.inputType && e.inputType.startsWith('delete');
   if (del) SND.space(); else if (v.endsWith(' ')) SND.space(); else SND.key();
-  if (!del) strokes.push(performance.now());
+  if (!del) { strokes.push(performance.now()); zoom = Math.min(1, zoom + .045); }
   typingT = .25;
+  Arcade.vibrate(del ? 4 : 6);   // faint haptic tick per keystroke
+  $paper.animate([{ transform: `translate(${(Math.random() - .5) * 2.4}px, 1.4px)` }, { transform: 'none' }], { duration: 70 });
   pressDeco();
   const ok = render();
   if (!ok && !del && v.length > lastLen) lineErrors++;
@@ -290,9 +293,10 @@ function tapStart() {
 addEventListener('pointerdown', e => { if (e.target.closest?.('.arcade-btn, #paper')) return; if (state === 'ready' || state === 'over') tapStart(); else if (state === 'playing') setTimeout(() => $typed.focus(), 0); });
 addEventListener('keydown', e => { if ((state === 'ready' || state === 'over') && (e.code === 'Space' || e.code === 'Enter')) { e.preventDefault(); tapStart(); } });
 
+let zoom = 0, zoomS = 0, baseZ = 9;
 function placeCamera() {
   camera.aspect = innerWidth / innerHeight; camera.fov = camera.aspect < 1 ? 66 : 42; camera.updateProjectionMatrix();
-  camera.position.set(0, 2.8, camera.aspect < 1 ? 11 : 9);
+  baseZ = camera.aspect < 1 ? 11 : 9; camera.position.set(0, 2.8, baseZ);
 }
 placeCamera();
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
@@ -345,7 +349,9 @@ function frame(now) {
   }
   for (let i = sweat.length - 1; i >= 0; i--) { const d = sweat[i]; d.t += dt; d.v.y -= 9 * dt; d.m.position.addScaledVector(d.v, dt); if (d.t > .8) { scene.remove(d.m); d.m.geometry.dispose(); d.m.material.dispose(); sweat.splice(i, 1); } }
   gavelT = Math.max(0, gavelT - dt); gavel.rotation.x = -Math.abs(Math.sin(gavelT * 18)) * .9 * (gavelT > 0 ? 1 : 0);
-  camera.position.x = Math.sin(t * .2) * .2;
+  if (typingT <= 0 || state !== 'playing') zoom = Math.max(0, zoom - dt * (state === 'playing' ? .12 : .6));   // drifts back out when you stop
+  zoomS += (zoom - zoomS) * Math.min(1, dt * 3);
+  camera.position.set(Math.sin(t * .2) * .2 * (1 - zoomS), 2.8 - zoomS * .45, baseZ - zoomS * (baseZ * .38));
   Arcade.applyShake(camera, dt); camera.lookAt(0, 1.85, -1);   // judge sits just below the speech bubble
   renderer.render(scene, camera);
   requestAnimationFrame(frame);

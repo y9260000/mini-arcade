@@ -133,7 +133,7 @@ const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '😇', title: '�
 ] }));
 function updateHud() {
   $score.innerHTML = `${angels}<small>명</small>`;
-  $lives.textContent = '😇'.repeat(lives) + '💔'.repeat(LIVES - lives);
+  $lives.textContent = '😇'.repeat(Math.max(0, lives)) + '💔'.repeat(Math.min(LIVES, LIVES - lives));
   $('bpm').textContent = `♩ ${bpm}`;
   $combo.style.display = combo >= 3 ? '' : 'none'; $combo.textContent = `🔥 ${combo}연속`;
 }

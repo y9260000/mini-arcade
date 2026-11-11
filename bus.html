@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>급정거 버티기</title>
+<script src="common.js?v=17"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#cfe8ff;
+    user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  #warn{position:fixed;left:50%;top:max(118px,calc(env(safe-area-inset-top) + 108px));transform:translateX(-50%);z-index:3;pointer-events:none;display:none;
+    font-family:"Jua",sans-serif;font-size:20px;color:#fff;background:#e03131;border-radius:999px;padding:7px 18px;box-shadow:0 6px 16px rgba(0,0,0,.25);white-space:nowrap}
+  #warn.soon{animation:wb .15s linear infinite}
+  @keyframes wb{25%{margin-left:-3px}75%{margin-left:3px}}
+  #meter{position:fixed;left:50%;bottom:max(84px,calc(env(safe-area-inset-bottom) + 78px));transform:translateX(-50%);width:min(320px,76vw);height:16px;z-index:3;pointer-events:none;
+    border-radius:999px;background:linear-gradient(90deg,#ff6b6b 0 14%,#ffd43b 14% 30%,#8ce99a 30% 70%,#ffd43b 70% 86%,#ff6b6b 86%);box-shadow:0 0 0 3px #fff,0 6px 14px rgba(0,0,0,.2)}
+  #needle{position:absolute;top:-6px;left:50%;width:6px;height:28px;margin-left:-3px;border-radius:3px;background:#2b2438;box-shadow:0 0 0 2px #fff}
+  #pads{position:fixed;left:0;right:0;bottom:0;top:0;z-index:2;pointer-events:none;display:flex}
+  #pads div{flex:1;display:flex;align-items:flex-end;justify-content:center;padding-bottom:max(120px,16vh);font-family:"Jua",sans-serif;font-size:42px;color:rgba(43,36,56,.25);transition:background .08s}
+  #pads div.on{background:rgba(255,255,255,.18);color:rgba(43,36,56,.55)}
+  .toast{top:30%}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>정거장</small></div>
+  <div class="hud-row"><span class="pill dark" id="route">🚌 7016번</span><span class="pill" id="speed">0km/h</span></div>
+</div>
+<div id="warn" class="hud-ctl"></div>
+<div id="meter" class="hud-ctl"><div id="needle"></div></div>
+<div id="pads" class="hud-ctl"><div id="padL">◀</div><div id="padR">▶</div></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const $ = id => document.getElementById(id);
+const rnd = a => a[(Math.random() * a.length) | 0];
+const rr = (a, b) => a + Math.random() * (b - a);
+
+// ---------- three: bus interior seen from the side (bus drives to the right) ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xcfe8ff);
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, .1, 200);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb8b0a0, 1.4));
+const sun = new THREE.DirectionalLight(0xfff4e0, 1.3); sun.position.set(3, 8, 6); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 6, bottom: -3, near: 1, far: 30 }); scene.add(sun);
+const flat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .8, flatShading: true, ...extra });
+const box = (w, h, d, mat, x = 0, y = 0, z = 0, parent = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), typeof mat === 'number' ? flat(mat) : mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
+
+const straps = [];
+const bus = new THREE.Group(); scene.add(bus);   // everything inside the bus (shakes together)
+{
+  box(16, .2, 3, 0x6b7280, 0, -.1, 0, bus);                                  // floor
+  box(16, .05, 2.2, 0x9aa1ab, 0, .02, -.3, bus);                              // aisle mat
+  box(16, .25, 3, 0xf8f9fa, 0, 2.75, 0, bus);                                 // ceiling
+  // far wall with real window openings so the street (and incoming hazards) show through
+  box(16, 1.3, .12, 0x4dabf7, 0, .65, -1.5, bus); box(16, .35, .12, 0x4dabf7, 0, 2.575, -1.5, bus);
+  for (let i = -4; i <= 3; i++) box(.3, 1.1, .12, 0x4dabf7, (i + .5) * 2.2, 1.85, -1.5, bus);
+  // windows on the far wall show the street scrolling by
+  for (let i = -3; i <= 3; i++) { box(1.9, 1.05, .05, new THREE.MeshStandardMaterial({ color: 0xbfe3ff, transparent: true, opacity: .25, roughness: .05 }), i * 2.2, 1.85, -1.43, bus); box(2.1, .08, .08, 0xf1f3f5, i * 2.2, 2.4, -1.42, bus); box(2.1, .08, .08, 0xf1f3f5, i * 2.2, 1.3, -1.42, bus); }
+  // grab rail + hanging straps, vertical poles, seats along the far side
+  box(16, .05, .05, 0xced4da, 0, 2.5, -.2, bus);
+  for (let i = -6; i <= 6; i++) { const s = new THREE.Group(); s.position.set(i * 1.1, 2.5, -.2); box(.02, .3, .02, 0xadb5bd, 0, -.15, 0, s); const r = new THREE.Mesh(new THREE.TorusGeometry(.08, .015, 4, 12), flat(0xfab005)); r.position.y = -.38; s.add(r); bus.add(s); straps.push(s); }
+  for (const x of [-5, -2.2, 2.2, 5]) box(.06, 2.7, .06, 0xfab005, x, 1.35, .3, bus);
+  for (let i = -3; i <= 3; i++) { if (i === 0) continue; box(.9, .45, .8, 0x2b8a3e, i * 2.2, .45, -1, bus); box(.9, .8, .15, 0x2b8a3e, i * 2.2, .9, -1.35, bus); }
+  // driver area at the right end + bell signs
+  box(.4, 2.6, 3, 0x343a40, 7.8, 1.3, 0, bus);
+  const ad = box(1.6, .5, .03, 0xffd43b, -3.3, 2.1, -1.42, bus);
+}
+// the street outside (scrolls left as the bus drives right)
+const street = new THREE.Group(); scene.add(street);
+const STREET_LEN = 60;
+{
+  const COLS = [0xffc9c9, 0xffe8cc, 0xd0ebff, 0xd3f9d8, 0xe5dbff, 0xfff3bf, 0xdee2e6];
+  for (let x = -STREET_LEN / 2; x < STREET_LEN / 2; x += rr(2.2, 3.5)) { const h = rr(3, 9); box(rr(1.8, 3), h, 2, rnd(COLS), x, h / 2 - .5, -6, street); }
+  for (let x = -STREET_LEN / 2; x < STREET_LEN / 2; x += 4) { const t = new THREE.Mesh(new THREE.IcosahedronGeometry(.6, 0), flat(0x51cf66)); t.position.set(x, 1.4, -3.5); street.add(t); box(.12, 1, .12, 0x8d5a3b, x, .5, -3.5, street); }
+}
+const road = new THREE.Mesh(new THREE.PlaneGeometry(200, 20), flat(0x868e96)); road.rotation.x = -Math.PI / 2; road.position.set(0, -.5, -6); scene.add(road);
+// upcoming hazards drawn outside (traffic light, speed bump sign, curve sign, kid crossing…)
+const hazards = [];
+function hazardMesh(kind) {
+  const g = new THREE.Group();
+  box(.12, 3.2, .12, 0x495057, 0, 1.1, 0, g);
+  if (kind === 'brake') { box(.5, 1.2, .3, 0x212529, 0, 2.6, 0, g); for (const [y, c] of [[3, 0xff3b3b], [2.6, 0x4a4a4a], [2.2, 0x4a4a4a]]) { const l = new THREE.Mesh(new THREE.SphereGeometry(.14, 10, 8), new THREE.MeshBasicMaterial({ color: c })); l.position.set(0, y, .17); g.add(l); } }
+  else { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); x.fillStyle = kind === 'go' ? '#2f9e44' : '#ffd43b'; x.beginPath(); x.moveTo(64, 6); x.lineTo(122, 64); x.lineTo(64, 122); x.lineTo(6, 64); x.fill(); x.font = '64px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText({ bump: '⛰️', curve: '↩️', go: '🟢', kid: '🚸' }[kind], 64, 68);
+    const sgn = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true })); sgn.position.y = 2.6; g.add(sgn); }
+  g.position.set(14, -.5, -2.6); scene.add(g); return g;
+}
+
+// ---------- passengers ----------
+function makePerson({ top, bottom = 0x2b2f3a, skin = 0xffd2a8, hair = 0x2b2b2b, scale = .62 }) {
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  const legs = [-1, 1].map(s => { const p = new THREE.Group(); p.position.set(0, .85, s * .14); box(.24, .85, .22, flat(bottom), 0, -.42, 0, p); box(.34, .1, .24, flat(0x222222), .05, -.86, 0, p); body.add(p); return p; });
+  box(.4, .78, .62, flat(top), 0, 1.25, 0, body);
+  const arms = [-1, 1].map(s => { const p = new THREE.Group(); p.position.set(0, 1.58, s * .4); box(.18, .62, .16, flat(top), 0, -.3, 0, p); const h = new THREE.Mesh(new THREE.DodecahedronGeometry(.1, 0), flat(skin)); h.position.y = -.66; p.add(h); body.add(p); return p; });
+  const head = new THREE.Group(); head.position.y = 1.66; body.add(head);
+  box(.42, .44, .42, flat(skin), 0, .22, 0, head); box(.44, .14, .46, flat(hair), -.02, .48, 0, head);
+  box(.02, .07, .06, flat(0x222222), .22, .26, .1, head); box(.02, .07, .06, flat(0x222222), .22, .26, -.1, head);
+  const mouth = box(.02, .03, .12, flat(0x7a2a2a), .22, .12, 0, head);
+  root.scale.setScalar(scale); root.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  bus.add(root); return { root, body, legs, arms, head, mouth };
+}
+const me = makePerson({ top: 0x364fc7 });   // faces +x (toward the front of the bus)
+me.root.position.set(0, 0, .2);
+const phone = box(.03, .2, .12, 0x212529, .12, -.7, 0, me.arms[1]); box(.005, .17, .1, new THREE.MeshBasicMaterial({ color: 0x74c0fc }), .14, -.7, 0, me.arms[1]);
+const others = [
+  Object.assign(makePerson({ top: 0xe64980, hair: 0x6b4f3a }), { x: -2.6, z: .1, ph: 1 }),
+  Object.assign(makePerson({ top: 0x868e96, hair: 0xdee2e6 }), { x: 3, z: -.1, ph: 2.5 }),
+  Object.assign(makePerson({ top: 0x2f9e44, hair: 0x111111, scale: .55 }), { x: -4.8, z: .25, ph: 4 }),
+];
+for (const o of others) o.root.position.set(o.x, 0, o.z);
+
+// ---------- balance physics ----------
+// lean θ: + = toward the front (right). Bus acceleration pushes the opposite way (brake → +θ).
+const FALL = .95;
+let theta = 0, omega = 0, input = 0, aBus = 0, events = [], nextEventT = 3, speed = 0, targetSpeed = 40, dist = 0, stops = 0, nextStop = 300, overAt = 0, state = 'ready', fallT = 0, survived = 0;
+let best = 0; try { best = +localStorage.getItem('bus-best') || 0; } catch {}
+const $score = $('score'), $center = $('center'), $warn = $('warn'), $needle = $('needle');
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+const showIntro = () => showScreen(Arcade.titleScreen({ emoji: '🚌', title: '급정거 버티기', how: [
+  ['👆', '화면 <b>왼쪽/오른쪽</b>을 눌러 반대쪽으로 버텨요 (← → 키)'],
+  ['🚦', '창밖 <b>신호등·표지판</b>이 오면 곧 급정거·급출발·방지턱!'],
+  ['📏', '아래 <b>균형 게이지</b>의 바늘을 초록 칸에 유지'],
+  ['🤕', '빨간 칸 끝까지 기울면 꽈당! 정거장을 최대한 많이'],
+] }));
+const KINDS = {
+  brake: { warn: '🚦 빨간불! 급정거 온다 →', col: '#e03131', fire() { push(+1, 1.25, .55); targetSpeed = 0; setTimeout(() => { targetSpeed = rr(35, 55); }, 1600); Arcade.sfx.crash(); line('아 씨…! (끼이익)'); } },
+  go: { warn: '🟢 초록불! 급출발 ←', col: '#2f9e44', fire() { push(-1, 1.0, .6); targetSpeed = rr(45, 65); Arcade.sfx.whoosh(true); line('부아앙~'); } },
+  bump: { warn: '⛰️ 과속방지턱!', col: '#f59f00', fire() { omega += rr(-1.8, 1.8); bounce = .35; Arcade.sfx.thud(); line('덜컹!'); } },
+  curve: { warn: '↩️ 급커브! 좌우로 흔들려요', col: '#7048e8', fire() { curveT = 1.8; Arcade.sfx.whoosh(); line('으어어…'); } },
+  kid: { warn: '🚸 어린이 보호구역… 급정거 두 번!', col: '#e8590c', fire() { push(+1, .9, .4); setTimeout(() => state === 'playing' && push(+1, 1.0, .4), 700); targetSpeed = 15; setTimeout(() => { targetSpeed = rr(30, 45); }, 2000); Arcade.sfx.thud(); line('어이쿠!'); } },
+};
+let bounce = 0, curveT = 0, lineT = 0;
+function push(dir, strength, dur) { events.push({ dir, a: strength * (1 + Math.min(.8, survived / 90)), t: dur, dur }); Arcade.shake(.25 * strength); Arcade.vibrate(Math.round(60 * strength)); }
+function line(text) { lineT = 1.2; driverLine = text; }
+let driverLine = '';
+function scheduleHazard() {
+  const lvl = Math.min(1, survived / 80);
+  const pool = ['brake', 'brake', 'go', 'bump', 'bump', ...(survived > 15 ? ['curve'] : []), ...(survived > 30 ? ['kid'] : [])];
+  const kind = rnd(pool);
+  hazards.push({ kind, m: hazardMesh(kind), fired: false });
+  nextEventT = rr(3.6, 6) * (1 - lvl * .4);
+}
+function updateHud() {
+  $score.innerHTML = `${stops}<small>정거장</small>`;
+  $('speed').textContent = `${Math.round(speed)}km/h`;
+}
+function reset() {
+  theta = 0; omega = 0; input = 0; events = []; speed = 0; targetSpeed = 40; dist = 0; stops = 0; nextStop = 300; survived = 0; nextEventT = 3; bounce = 0; curveT = 0; fallT = 0;
+  for (const h of hazards) scene.remove(h.m); hazards.length = 0;
+  me.root.rotation.set(0, 0, 0); me.root.position.set(0, 0, .2); $warn.style.display = 'none';
+  updateHud();
+}
+function start() {
+  state = 'count'; $center.style.display = 'none';
+  Arcade.countdown({ final: '출발!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { state = 'playing'; push(-1, .35, .5); } });
+}
+function fall() {
+  state = 'fall'; fallT = 0; overAt = performance.now();
+  Arcade.sfx.crash(); Arcade.shake(.5); Arcade.vibrate([100, 50, 200]);
+  Arcade.toast(rnd(['🤕 꽈당!! 다들 쳐다본다…', '😵 넘어졌다… 폰은 무사', '🫣 옆 사람한테 안겨버림']), '#e03131');
+  setTimeout(finish, 1600);
+}
+function finish() {
+  state = 'over';
+  const isBest = stops > best;
+  if (isBest) { best = stops; try { localStorage.setItem('bus-best', best); } catch {} }
+  isBest && stops > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  const msg = stops >= 10 ? '서핑 국가대표급 균형감각' : stops >= 5 ? '출근길 고인물 인정' : stops >= 2 ? '그래도 몇 정거장은 버텼다' : '손잡이를 잡으세요…';
+  showScreen(Arcade.resultScreen({ emoji: '🚌', label: '버틴 정거장', score: stops, unit: '정거장', msg, rows: [['버틴 시간', `${Math.round(survived)}초`]], isBest: isBest && stops > 0, best }));
+  Arcade.gameOver(stops);
+}
+function tapStart() {
+  if (state === 'ready') start();
+  else if (state === 'over' && performance.now() - overAt > 2000 && !Arcade.inRun()) { reset(); start(); }
+}
+
+// ---------- input: hold left / right ----------
+const held = new Map();   // pointerId → -1 | +1
+const keys = { l: false, r: false };
+function recalc() {
+  let v = 0; for (const d of held.values()) v += d; if (keys.l) v -= 1; if (keys.r) v += 1;
+  input = Math.max(-1, Math.min(1, v));
+  $('padL').classList.toggle('on', input < 0); $('padR').classList.toggle('on', input > 0);
+}
+addEventListener('pointerdown', e => { if (e.target.closest?.('.arcade-btn')) return; if (state !== 'playing') { tapStart(); return; } held.set(e.pointerId, e.clientX < innerWidth / 2 ? -1 : 1); recalc(); });
+addEventListener('pointermove', e => { if (held.has(e.pointerId)) { held.set(e.pointerId, e.clientX < innerWidth / 2 ? -1 : 1); recalc(); } });
+const up = e => { held.delete(e.pointerId); recalc(); };
+addEventListener('pointerup', up); addEventListener('pointercancel', up);
+addEventListener('keydown', e => {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') { keys.l = true; recalc(); }
+  else if (e.code === 'ArrowRight' || e.code === 'KeyD') { keys.r = true; recalc(); }
+  else if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); tapStart(); }
+});
+addEventListener('keyup', e => { if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.l = false; if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.r = false; recalc(); });
+
+function placeCamera() {
+  camera.aspect = innerWidth / innerHeight; camera.fov = camera.aspect < 1 ? 70 : 42; camera.updateProjectionMatrix();
+}
+placeCamera();
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
+
+// ---------- loop ----------
+let last = performance.now();
+reset(); showIntro();
+window.__bus = { get state() { return state; }, get theta() { return theta; }, setInput(v) { input = v; }, get stops() { return stops; }, get survived() { return survived; }, get hazards() { return hazards; } };
+
+function frame(now) {
+  const dt = Math.min(.04, (now - last) / 1000); last = now; const t = now / 1000;
+  if (state === 'playing') {
+    survived += dt;
+    // bus speed + distance → stops
+    speed += (targetSpeed - speed) * Math.min(1, dt * .8);
+    dist += speed / 3.6 * dt;
+    if (dist >= nextStop) {
+      stops++; nextStop += 300 + stops * 20; updateHud();
+      Arcade.sfx.ding(); Arcade.toast(`🚏 ${stops}번째 정거장 통과!`, '#2b8a3e'); Arcade.confetti({ y: innerHeight * .35, count: 30, emoji: ['🚌', '🚏'] });
+    }
+    updateHud();
+    // hazards approach from the right; the event fires when it reaches the bus front
+    nextEventT -= dt; if (nextEventT <= 0) scheduleHazard();
+    let soon = null;
+    for (let i = hazards.length - 1; i >= 0; i--) {
+      const h = hazards[i]; h.m.position.x -= Math.max(4, speed / 3.6) * dt * .9;
+      if (!h.fired && h.m.position.x < 3) { h.fired = true; KINDS[h.kind].fire(); }   // fires once the sign is in plain view
+      if (!h.fired && (!soon || h.m.position.x < soon.m.position.x)) soon = h;
+      if (h.m.position.x < -16) { scene.remove(h.m); hazards.splice(i, 1); }
+    }
+    if (soon) { const k = KINDS[soon.kind]; $warn.style.display = 'block'; $warn.style.background = k.col; $warn.textContent = k.warn; $warn.classList.toggle('soon', soon.m.position.x < 6.5); }
+    else $warn.style.display = 'none';
+    // forces on the body
+    aBus = 0; for (let i = events.length - 1; i >= 0; i--) { const ev = events[i]; ev.t -= dt; aBus += ev.dir * ev.a * Math.sin(Math.PI * Math.max(0, ev.t) / ev.dur); if (ev.t <= 0) events.splice(i, 1); }
+    if (curveT > 0) { curveT -= dt; aBus += Math.sin(curveT * 5.5) * .9; }
+    const lvl = Math.min(1, survived / 80);
+    const noise = (Math.sin(t * 3.1) * .5 + Math.sin(t * 7.3) * .3) * (.25 + lvl * .35) * Math.min(1, speed / 30);
+    const alpha = (1.2 + lvl * .8) * Math.sin(theta) + aBus * 6.5 + noise - input * 7 - omega * 1.8;   // slightly unstable upright + bus push + your counter-lean
+    omega += alpha * dt; theta += omega * dt;
+    if (Math.abs(theta) > FALL) fall();
+  } else if (state === 'fall') {
+    fallT += dt;
+    theta += Math.sign(theta || 1) * dt * 3; theta = Math.max(-1.55, Math.min(1.55, theta));
+  }
+  bounce = Math.max(0, bounce - dt);
+  // body pose: pivot at the feet, flailing arms when off balance
+  me.root.rotation.z = -theta;   // +theta leans toward +x (front)
+  const panic = Math.min(1, Math.abs(theta) / FALL);
+  me.arms[0].rotation.x = panic * 1.8 * Math.sin(t * 18); me.arms[0].rotation.z = -theta * 1.5 - .2;
+  me.arms[1].rotation.z = -.9 + panic * Math.sin(t * 15) * .8;   // phone hand
+  me.legs.forEach((l, i) => l.rotation.x = (i ? 1 : -1) * (.12 + panic * .25));
+  me.mouth.scale.set(1, 1 + panic * 3, 1);
+  me.head.rotation.z = theta * .5;
+  if (state === 'fall') me.root.position.y = -Math.min(.25, fallT * .5);
+  for (const o of others) { o.root.rotation.z = -(theta * .5 + Math.sin(t * 2 + o.ph) * .04); if (state === 'fall') o.head.rotation.y = Math.atan2(me.root.position.z - o.z, me.root.position.x - o.x); }
+  for (const s of straps) s.rotation.z = -theta * .9 + Math.sin(t * 3) * .05;
+  // needle
+  $needle.style.left = `${50 + Math.max(-1, Math.min(1, theta / FALL)) * 50}%`;
+  // scenery scrolls, bus bobs
+  street.position.x -= speed / 3.6 * dt * .9; if (street.position.x < -STREET_LEN / 2) street.position.x += STREET_LEN / 2;
+  bus.position.y = Math.sin(t * 14) * .01 * Math.min(1, speed / 30) + Math.sin(bounce * 20) * bounce * .15;
+  bus.rotation.z = -aBus * .015;
+  // camera: side view through the open near wall, following the player a bit
+  const portrait = innerWidth < innerHeight;
+  camera.position.set(0, 1.6, portrait ? 7.5 : 6.2); Arcade.applyShake(camera, dt); camera.lookAt(0, 1.2, -.5);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

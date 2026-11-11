@@ -39,6 +39,8 @@
       desc: '흔들리는 크레인에서 아파트 한 층씩 쿵! 금리 인상만 조심하면 시세는 우상향' },
     { id: 'inspect', file: 'inspect.html', name: '임장 매의 눈', emoji: '🔍', unit: '만원', bestKey: 'inspect-best',
       desc: '곰팡이·누수·바퀴벌레… 매물의 하자를 찾아 집값 깎기' },
+    { id: 'bus', file: 'bus.html', name: '급정거 버티기', emoji: '🚌', unit: '정거장', bestKey: 'bus-best',
+      desc: '급정거·급출발·방지턱! 좌우로 버티며 안 넘어지고 최대한 많은 정거장' },
   ];
 
   const q = new URLSearchParams(location.search);

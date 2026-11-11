@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>사투리 통역사</title>
-<script src="common.js?v=16"></script>
+<script src="common.js?v=18"></script>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#cfe6ff;
     user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -71,6 +71,7 @@
 
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+let voice = null; const FACE_PITCH = { '👴': .7, '🧔': .82, '👨': .9, '👨‍🌾': .85, '👵': 1.0, '👩': 1.22, '👩‍🦱': 1.28 };
 const $ = id => document.getElementById(id);
 
 // ---------- content ----------
@@ -290,7 +291,9 @@ function nextQ() {
   else if (pts === 2) $('q').firstElementChild.textContent = '🎤 리포터: 긴 문장! (+2점)';
   if (pts === 1) $('q').firstElementChild.textContent = '🎤 리포터: 표준어로 통역하면?';
   scene.background.setHex(R.sky); groundMat.color.setHex(R.ground); buildProps(R.prop); setResident(rg, wi);
-  tMax = Math.max(6, 13 - score * .35) + (q.correct.length - 2) * 1.2; tLeft = tMax; talkT = 1.2; react = null;
+  tMax = Math.max(6, 13 - score * .35) + (q.correct.length - 2) * 1.2; tLeft = tMax; react = null;
+  voice?.stop(); const face = R.who[wi][0];
+  voice = Arcade.babble(line, { pitch: FACE_PITCH[face] ?? 1, rate: 15 }); talkT = Math.max(1.2, voice.dur);
   renderTiles(); Arcade.sfx.tap(); placeCamera();
 }
 let justAdded = -1;
@@ -304,6 +307,7 @@ $bank.addEventListener('click', e => { const b = e.target.closest('[data-b]'); i
 $ans.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (!b || !q || q.done) return; q.picked.splice(+b.dataset.a, 1); Arcade.sfx.tap(); Arcade.vibrate(6); renderTiles(); });
 $check.addEventListener('click', () => { if (q && !q.done && q.picked.length && state === 'playing') judge(false); });
 function judge(timeout) {
+  voice?.stop();
   q.done = true;
   const said = q.picked.map(k => q.tiles[k].t).join(' ');
   const ok = !timeout && said === q.correct.join(' ');

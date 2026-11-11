@@ -186,6 +186,30 @@
     s.connect(f).connect(g); send(g, wet); s.start(t, Math.random()); s.stop(t + dur + .05);
   }
   const semi = n => Math.pow(2, n / 12);
+  // ---------- babble voice: cute gibberish "talking" per syllable (vowel-shaped formant blips) ----------
+  const VOWEL_F = [800, 650, 760, 640, 520, 500, 540, 480, 430, 600, 560, 520, 420, 350, 420, 440, 380, 330, 360, 300, 290];
+  function babble(text, { pitch = 1, rate = 15, vol = .22 } = {}) {
+    if (!A()) return { stop() {}, dur: 0 };
+    const nodes = []; let t = actx.currentTime + .03; const step = 1 / rate;
+    for (const ch of String(text)) {
+      const code = ch.charCodeAt(0);
+      if (/\s/.test(ch)) { t += step * .7; continue; }
+      if (/[.,!?…~]/.test(ch)) { t += step * 2.6; continue; }
+      let vi = 0, cho = 11;
+      if (code >= 0xAC00 && code <= 0xD7A3) { const k = code - 0xAC00; cho = (k / 588) | 0; vi = ((k % 588) / 28) | 0; }
+      else vi = code % 21;
+      const f = 210 * pitch * semi((vi % 5) - 1 + (Math.random() * 3 - 1)), dur = step * .82;
+      const o = actx.createOscillator(), bp = actx.createBiquadFilter(), g = actx.createGain();
+      o.type = 'square'; o.frequency.setValueAtTime(f * 1.06, t); o.frequency.exponentialRampToValueAtTime(f, t + dur);
+      bp.type = 'bandpass'; bp.frequency.value = VOWEL_F[vi] * 1.6 * Math.sqrt(pitch); bp.Q.value = 2.2;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .008); g.gain.setValueAtTime(vol, t + dur * .6); g.gain.exponentialRampToValueAtTime(.0008, t + dur);
+      o.connect(bp).connect(g); send(g, .15); o.start(t); o.stop(t + dur + .02); nodes.push(o);
+      if (cho !== 11) noise(.02, vol * .35, { f0: 3500, q: 1.5, when: t - actx.currentTime, wet: 0 });   // tiny consonant tick
+      t += step;
+    }
+    const dur = t - actx.currentTime;
+    return { dur, stop() { for (const o of nodes) try { o.stop(); } catch {} } };
+  }
   const sfx = {
     tap() { tone('sine', 1300, 900, .06, .25, { wet: .3 }); },
     tick() { tone('sine', 880, 860, .12, .35); noise(.02, .2, { f0: 4000, type: 'highpass' }); },
@@ -273,7 +297,7 @@
 
   let toastEl, shakeAmt = 0;
   window.Arcade = {
-    GAMES, run, sfx, confetti,
+    GAMES, run, sfx, babble, confetti,
     inRun: () => !!run,
     toast(text, color) {
       if (!toastEl) { toastEl = document.createElement('div'); toastEl.className = 'toast'; document.body.appendChild(toastEl); }

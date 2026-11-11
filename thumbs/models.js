@@ -200,6 +200,17 @@ export const M = {
     const cart = grp(.65, -.75, .55); box(.5, .3, .3, 0xffd43b, 0, 0, 0, 0, 0, 0, cart); cyl(.06, .06, .05, 0x212529, -.15, -.2, .15, Math.PI / 2, 0, 0, cart); cyl(.06, .06, .05, 0x212529, .15, -.2, .15, Math.PI / 2, 0, 0, cart);
     return t => { const k = (t * .8) % 2; ad.scale.setScalar(k < 1 ? Math.min(1, k * 4) : Math.max(0, 1 - (k - 1) * 4)); ad2.scale.setScalar(k > .5 && k < 1.5 ? Math.min(1, (k - .5) * 4) : Math.max(0, 1 - Math.abs(k - 1.5) * 4) * (k >= 1.5 ? 1 : 0)); cart.position.x = .65 + Math.sin(t * 3) * .08; cart.rotation.z = Math.sin(t * 6) * .08; };
   },
+  nag() {   // 명절 잔소리: grandma with a speech bubble, nephew sweating, 송편 plate
+    const g = person(-.55, -1.1, 0, { body: 0xae3ec9, hair: 0xdee2e6, s: 1.05 }); g.rotation.y = .5;
+    sph(.16, 0xdee2e6, -.12, 1.42, -.1, g, 8, 6);   // hair bun
+    const k = person(.75, -1.1, .2, { body: 0x4dabf7, hair: 0x2b2b2b, s: .8 }); k.rotation.y = -.6;
+    const sw = sph(.07, 0x74c0fc, .2, 1.1, .2, k, 8, 6); sw.scale.y = 1.5;
+    const b = grp(.05, .7, .2); box(.9, .5, .12, 0xffffff, 0, 0, 0, 0, 0, 0, b); cone(.12, .26, 0xffffff, -.3, -.32, 0, 0, 0, .5, b, 4);
+    box(.12, .3, .02, 0xe03131, -.18, 0, .07, 0, 0, 0, b); box(.12, .12, .02, 0xe03131, -.18, -.2, .07, 0, 0, 0, b); box(.12, .3, .02, 0xe03131, .1, 0, .07, 0, 0, 0, b); box(.12, .12, .02, 0xe03131, .1, -.2, .07, 0, 0, 0, b);
+    const env = box(.3, .2, .03, 0xe03131, .6, -.75, .7, 0, 0, .2); box(.1, .06, .035, 0xffd43b, .6, -.72, .71, 0, 0, .2);
+    cyl(.28, .28, .05, 0xffffff, -.1, -1.05, .7, 0, 0, 0, G, 16); [0xffffff, 0xb2f2bb, 0xffc9de].forEach((c, i) => { const s2 = sph(.07, c, -.2 + i * .1, -1, .7, G, 8, 6); s2.scale.set(1.4, .8, .9); });
+    return t => { b.scale.setScalar(1 + Math.abs(Math.sin(t * 5)) * .08); g.rotation.z = Math.sin(t * 6) * .05; k.position.y = -1.1 - Math.abs(Math.sin(t * 2)) * .05; sw.position.y = 1.1 - (t * .6 % .5); };
+  },
   dice() {   // random-play die: rounded white cube with pips
     const d = grp(); d.rotation.set(.55, .75, .1);
     const g = new THREE.BoxGeometry(1.6, 1.6, 1.6, 10, 10, 10), p = g.attributes.position, v = new THREE.Vector3(), cl = new THREE.Vector3(), A = .56, RR = .24;

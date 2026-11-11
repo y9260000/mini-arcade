@@ -47,6 +47,8 @@
       desc: '랜덤 커맨드를 방향키로 입력해 필살기 발사! 갈수록 길고 촉박해져요' },
     { id: 'checkout', file: 'checkout.html', name: '광고 뚫고 결제', emoji: '🛍️', unit: '개', bestKey: 'checkout-best',
       desc: '광고·쿠키·앱설치·로봇인증… 방해요소를 다 닫고 품절 전에 구매하기' },
+    { id: 'nag', file: 'nag.html', name: '명절 잔소리 대작전', emoji: '🧧', unit: '번', bestKey: 'nag-best',
+      desc: '내가 잔소리하는 쪽! 친척 프로필을 보고 딱 맞는 잔소리를 시간 안에 날리기' },
   ];
 
   const q = new URLSearchParams(location.search);

@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>명절 잔소리 대작전</title>
+<script src="common.js?v=19"></script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#f3e3c3;
+    user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  canvas{display:block}
+  .hud-score{font-size:56px}
+  #card{position:fixed;left:50%;top:max(112px,calc(env(safe-area-inset-top) + 104px));transform:translateX(-50%);width:min(440px,calc(100% - 32px));box-sizing:border-box;z-index:3;
+    background:#fff;color:var(--ink);border-radius:20px;padding:12px 16px 12px;box-shadow:0 12px 30px rgba(80,40,0,.3);border:3px solid #e8590c}
+  #card .top{display:flex;align-items:center;gap:12px}
+  #card .av{width:52px;height:52px;border-radius:16px;background:#fff4e6;display:flex;align-items:center;justify-content:center;font-size:34px;flex:none}
+  #card .nm{font:22px "Jua",sans-serif} #card .rel{font:700 13px "Noto Sans KR",sans-serif;color:#868e96}
+  #card .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  #card .tags span{font:700 13px "Noto Sans KR",sans-serif;background:#f1f3f5;border-radius:999px;padding:4px 10px}
+  #card .tags span.hot{background:#fff4e6;color:#d9480f}
+  #card.blur .tags span:not(.hot){filter:blur(3px)}
+  #tbar{height:6px;border-radius:3px;background:#f1f3f5;margin-top:10px;overflow:hidden}
+  #tbar i{display:block;height:100%;background:#e8590c;transform-origin:left}
+  #tbar.low i{background:#fa5252}
+  #choices{position:fixed;left:50%;bottom:max(60px,calc(env(safe-area-inset-bottom) + 54px));transform:translateX(-50%);width:min(440px,calc(100% - 32px));display:grid;grid-template-columns:1fr 1fr;gap:10px;z-index:3}
+  .ch{border:0;cursor:pointer;background:#fff;color:var(--ink);border-radius:18px 18px 18px 4px;padding:14px 12px;font:clamp(15px,4.2vw,18px)/1.3 "Jua",sans-serif;box-shadow:0 5px 0 rgba(120,60,0,.35);word-break:keep-all;text-align:left}
+  .ch:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(120,60,0,.35)}
+  .ch.ok{background:#51cf66;color:#fff} .ch.no{background:#ff6b6b;color:#fff} .ch.dim{opacity:.4}
+  #choices.lock .ch{pointer-events:none}
+  @media (min-aspect-ratio: 6/5) {   /* wide: relative on the left, profile + answers on the right */
+    #card{left:auto;right:max(24px,4vw);transform:none;width:min(440px,44vw);top:max(110px,15vh)}
+    #choices{left:auto;right:max(24px,4vw);transform:none;width:min(440px,44vw)}
+    #reply{left:30%}
+  }
+  #reply{position:fixed;left:50%;top:44%;transform:translate(-50%,-50%);z-index:4;pointer-events:none;background:#fff;border-radius:18px;padding:10px 16px;font:20px "Jua",sans-serif;color:var(--ink);box-shadow:0 10px 26px rgba(0,0,0,.3);opacity:0;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
+  #reply.show{animation:rp 1.4s ease-out}
+  @keyframes rp{0%{opacity:0;transform:translate(-50%,-30%) scale(.8)}12%{opacity:1;transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0}}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div id="score" class="hud-score">0<small>번</small></div>
+  <div class="hud-row"><span class="pill" id="lives"></span><span class="pill dark" id="combo" style="display:none"></span></div>
+</div>
+<div id="card" class="hud-ctl"><div class="top"><div class="av" id="av">🧑</div><div><div class="nm" id="nm"></div><div class="rel" id="rel"></div></div></div><div class="tags" id="tags"></div><div id="tbar"><i id="tfill"></i></div></div>
+<div id="choices" class="hud-ctl"></div>
+<div id="reply"></div>
+<div class="screen" id="center"></div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const $ = id => document.getElementById(id);
+const rnd = a => a[(Math.random() * a.length) | 0];
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+// ---------- relatives: random profile = age group + job + love life + one quirk ----------
+const SURN = ['김', '이', '박', '최', '정', '강', '윤', '장', '한', '오'], GIVEN = ['민준', '서연', '지훈', '하은', '도윤', '지우', '현우', '수아', '준호', '예린', '태양', '보람', '승민', '다은'];
+const JOBS = {
+  kid: [['중학생', 'mid']], teen: [['고3 수험생', 'g12']], uni: [['대학생', 'uni'], ['휴학생', 'uni']],
+  adult: [['취준생', 'seek'], ['공시생', 'gov'], ['대기업 사원', 'corp'], ['스타트업 개발자', 'start'], ['프리랜서 디자이너', 'free'], ['백수 (자칭 휴식기)', 'seek']],
+};
+const LOVE = [['애인 없음', 'single'], ['연애 중 (3년째)', 'dating'], ['기혼 · 아이 없음', 'married'], ['기혼 · 아이 둘', 'kids']];
+const QUIRK = [['요즘 살이 좀 찜', 'fat'], ['게임 하루 6시간', 'game'], ['코인 몰빵 중', 'coin'], ['전세살이 중', 'jeonse'], ['유튜버 도전 중', 'tube'], ['최근 이직함', 'move'], ['머리 탈색함', 'hair']];
+// nag → which trait it applies to, and the comeback when it doesn't
+const NAGS = [
+  { t: '취업은 했니?', ok: p => p.job === 'seek' },
+  { t: '공무원 시험은 언제 보니?', ok: p => p.job === 'gov' },
+  { t: '연봉은 얼마나 받니?', ok: p => p.job === 'corp' },
+  { t: '그 회사 망하는 거 아니니?', ok: p => p.job === 'start' },
+  { t: '프리랜서면 불안하지 않니?', ok: p => p.job === 'free' },
+  { t: '수능 얼마 안 남았지?', ok: p => p.job === 'g12' },
+  { t: '학점은 잘 나오니?', ok: p => p.job === 'uni' },
+  { t: '반에서 몇 등 하니?', ok: p => p.job === 'mid' },
+  { t: '만나는 사람은 있니?', ok: p => p.love === 'single' && p.age >= 24 },
+  { t: '결혼은 언제 하니?', ok: p => p.love === 'dating' && p.age >= 24 },
+  { t: '애는 언제 낳니?', ok: p => p.love === 'married' },
+  { t: '둘째… 아니 셋째는?', ok: p => p.love === 'kids' },
+  { t: '살 좀 빼야겠다', ok: p => p.q === 'fat' },
+  { t: '게임 좀 그만해라', ok: p => p.q === 'game' },
+  { t: '코인은 위험하다더라', ok: p => p.q === 'coin' },
+  { t: '집은 언제 사니?', ok: p => p.q === 'jeonse' },
+  { t: '유튜브로 돈은 버니?', ok: p => p.q === 'tube' },
+  { t: '회사는 왜 또 옮겼니?', ok: p => p.q === 'move' },
+  { t: '머리가 그게 뭐니?', ok: p => p.q === 'hair' },
+];
+function makeProfile(level) {
+  const grp = rnd(level < 3 ? ['adult', 'adult', 'uni', 'teen'] : ['adult', 'adult', 'adult', 'uni', 'teen', 'kid']);
+  const age = { kid: 14 + (Math.random() * 2 | 0), teen: 18, uni: 21 + (Math.random() * 3 | 0), adult: 26 + (Math.random() * 12 | 0) }[grp];
+  const [jobT, job] = rnd(JOBS[grp]);
+  const [loveT, love] = grp === 'adult' ? rnd(LOVE) : rnd([LOVE[0], LOVE[1]]);
+  const quirks = QUIRK.filter(q => !(grp === 'kid' && ['coin', 'jeonse', 'move'].includes(q[1])) && !(grp !== 'adult' && q[1] === 'move'));
+  const [qT, q] = rnd(quirks);
+  const female = Math.random() < .5;   // relation words match the person's gender
+  const rel = grp === 'kid' ? rnd(['조카', female ? '손녀' : '손자']) : grp === 'teen' ? rnd(['조카', '사촌 동생']) : grp === 'uni' ? rnd(['조카', female ? '작은집 딸' : '큰집 아들'])
+    : rnd(female ? ['작은딸', '며느리', '사촌 언니', '조카', '막내 고모'] : ['큰아들', '사위', '사촌 형', '조카', '막내 삼촌']);
+  const av = grp === 'kid' ? (female ? '👧' : '👦') : grp === 'adult' && age > 33 ? (female ? '👩' : '👨') : (female ? '👩‍🦰' : '🧑');
+  return { name: rnd(SURN) + rnd(GIVEN), rel, age, grp, job, jobT, love, loveT, q, qT, av, female };
+}
+const COMEBACK = {
+  seek: '저 취업했는데요…?', gov: '공시 안 하는데요?', corp: '저 연봉 얘기 안 해요', start: '저 스타트업 아닌데요?', free: '저 프리랜서 아닌데요', g12: '저 수험생 아니에요', uni: '저 대학생 아닌데요', mid: '저 중학생 아니에요',
+  single: '저 애인 있어요(?)', dating: '연애 안 하는데요…', married: '저 결혼 안 했어요!', kids: '아이 없는데요…', fat: '저 살 안 쪘거든요?', game: '게임 안 하는데요', coin: '코인 안 해요', jeonse: '저 자가인데요?', tube: '유튜브 안 해요', move: '이직 안 했는데요?', hair: '원래 머리예요',
+};
+
+// ---------- three: 명절 living room, relative sits across the low table ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xf3e3c3);
+const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, .05, 100);
+scene.add(new THREE.HemisphereLight(0xfff4e0, 0x8a6a40, 1.3));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(3, 6, 4); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); scene.add(sun);
+const flat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: .8, flatShading: true, ...o });
+const box = (w, h, d, c, x = 0, y = 0, z = 0, p = scene) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), typeof c === 'number' ? flat(c) : c); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; p.add(m); return m; };
+const cyl = (r, h, c, x, y, z, p = scene) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 12), typeof c === 'number' ? flat(c) : c); m.position.set(x, y, z); m.castShadow = true; p.add(m); return m; };
+// room: 장판 floor, wall, 병풍 folding screen, window
+box(14, .1, 10, 0xe9c46a, 0, -.05, 0); box(14, 5, .2, 0xfaf3e0, 0, 2.5, -3);
+for (let i = 0; i < 6; i++) { const panel = box(.7, 1.9, .05, i % 2 ? 0xf8e7c8 : 0xf3dcb4, -1.75 + i * .7, 1.05, -2.8); panel.rotation.y = i % 2 ? .12 : -.12;
+  for (let k = 0; k < 3; k++) box(.08 + Math.random() * .2, .06, .01, 0x5c940d, -1.75 + i * .7 + (Math.random() - .5) * .3, .5 + k * .5 + Math.random() * .2, -2.76); }
+box(1.6, 1.1, .05, 0xd0ebff, 2.9, 2.6, -2.88); box(1.7, .06, .08, 0x8a5a2b, 2.9, 2.04, -2.86);
+// low table with 명절 food
+box(2.6, .1, 1.3, 0x8a5a2b, 0, .55, .3); for (const x of [-1.15, 1.15]) for (const z of [-.2, .8]) box(.1, .5, .1, 0x5c3a21, x, .27, z);
+const plate = (x, z, food) => { cyl(.26, .04, 0xffffff, x, .62, z); food(x, z); };
+plate(-.8, .2, (x, z) => { for (let i = 0; i < 4; i++) { const j = cyl(.08, .03, 0xf4c95d, x + (i % 2 - .5) * .17, .66 + (i > 1 ? .02 : 0), z + (i > 1 ? .07 : -.07)); j.scale.z = .7; } });   // 전
+plate(0, .5, (x, z) => { const cols = [0xffffff, 0xb2f2bb, 0xffc9de]; for (let i = 0; i < 6; i++) { const s = new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 6), flat(cols[i % 3])); s.scale.set(1.4, .8, .9); s.position.set(x + (Math.random() - .5) * .25, .68, z + (Math.random() - .5) * .25); scene.add(s); } });   // 송편
+plate(.8, .2, (x, z) => { for (let i = 0; i < 3; i++) { const a = new THREE.Mesh(new THREE.SphereGeometry(.07, 8, 6), flat(i ? 0xff6b6b : 0xffd43b)); a.position.set(x + (i - 1) * .12, .7, z); scene.add(a); } });   // 과일
+cyl(.04, .14, 0xadb5bd, -.3, .67, .75); cyl(.04, .14, 0xadb5bd, .3, .67, .75);   // cups
+// the relative (rebuilt per profile)
+const seat = new THREE.Group(); seat.position.set(0, 0, -1); scene.add(seat);
+let rel = null;
+function buildRelative(p) {
+  while (seat.children.length) seat.remove(seat.children[0]);
+  const s = p.grp === 'kid' ? .78 : p.grp === 'teen' ? .9 : 1, g = new THREE.Group(); g.scale.setScalar(s); seat.add(g);
+  const top = rnd([0x4dabf7, 0xff8787, 0x69db7c, 0xffd43b, 0xb197fc, 0x495057, 0xf08c00]), skin = flat(0xffd2a8), hairC = p.q === 'hair' ? 0xfff3bf : rnd([0x2b2b2b, 0x3b2a1a, 0x5c3a21]);
+  box(.9, .2, .6, 0x343a40, 0, .3, .15, g);   // crossed legs on the floor cushion
+  box(.9, .08, .9, 0xc92a2a, 0, .06, 0, g);   // 방석
+  const torso = box(p.q === 'fat' ? .78 : .62, .72, p.q === 'fat' ? .5 : .38, top, 0, .78, 0, g);
+  const arms = [-1, 1].map(sx => { const a = new THREE.Group(); a.position.set(sx * (p.q === 'fat' ? .46 : .38), 1.08, 0); box(.16, .55, .18, top, 0, -.25, 0, a); const h = new THREE.Mesh(new THREE.DodecahedronGeometry(.09, 0), skin); h.position.y = -.55; a.add(h); g.add(a); return a; });
+  const head = new THREE.Group(); head.position.y = 1.16; g.add(head);
+  box(.46, .48, .44, skin, 0, .24, 0, head);
+  box(.48, .15, .42, hairC, 0, .52, -.035, head);
+  if (p.female) box(.48, .4, .12, hairC, 0, .3, -.2, head);
+  const eyes = [-1, 1].map(sx => box(.06, .07, .02, 0x222222, sx * .1, .28, .225, head));
+  const mouth = box(.12, .03, .02, 0x7a2a2a, 0, .13, .225, head);
+  if (p.q === 'game') { box(.5, .1, .1, 0x212529, 0, .4, 0, head); for (const sx of [-1, 1]) box(.06, .16, .16, 0x212529, sx * .26, .3, 0, head); }   // headset
+  if (p.q === 'tube') { const cam = box(.18, .12, .12, 0x212529, .45, 1.2, .3, g); }
+  if (p.job === 'corp') box(.08, .4, .02, 0x1864ab, 0, .82, .2, g);   // tie
+  // sweat drop + gloom cloud for a successful nag
+  const sweat = new THREE.Mesh(new THREE.SphereGeometry(.06, 8, 6), new THREE.MeshStandardMaterial({ color: 0x74c0fc, transparent: true, opacity: .9 })); sweat.scale.y = 1.4; sweat.position.set(.26, .4, .1); sweat.visible = false; head.add(sweat);
+  const cloud = new THREE.Group(); cloud.position.y = 1.0; cloud.visible = false; head.add(cloud);
+  for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.SphereGeometry(.13, 8, 6), flat(0x495057)); c.position.set((i - 1.5) * .14, Math.sin(i) * .04, 0); cloud.add(c); }
+  rel = { g, head, arms, eyes, mouth, sweat, cloud, torso, react: null, t: 0 };
+  seat.position.y = 2.5;
+}
+function placeCamera() {
+  camera.aspect = innerWidth / innerHeight; const portrait = camera.aspect < 1;
+  camera.fov = portrait ? 66 : 46; camera.updateProjectionMatrix();
+  if (portrait) { camera.position.set(0, 1.8, 3.6); camera.lookAt(0, 1.45, -1); }
+  else { camera.position.set(1.15, 1.7, 3.1); camera.lookAt(1.05, 1.3, -1); }   // relative sits in the left half
+}
+placeCamera(); addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); placeCamera(); });
+
+// ---------- game ----------
+const LIVES = 3;
+let state = 'ready', score = 0, lives = LIVES, combo = 0, maxCombo = 0, prof = null, q = null, tLeft = 0, tMax = 1, overAt = 0, met = 0;
+let best = 0; try { best = +localStorage.getItem('nag-best') || 0; } catch {}
+const $score = $('score'), $lives = $('lives'), $combo = $('combo'), $choices = $('choices'), $card = $('card'), $center = $('center');
+const showScreen = html => { $center.innerHTML = html; $center.style.display = ''; };
+showScreen(Arcade.titleScreen({ emoji: '🧧', title: '명절 잔소리 대작전', how: [
+  ['👵', '당신은 명절의 <b>잔소리 대마왕</b>! 친척들이 하나씩 인사하러 와요'],
+  ['📇', '<b>프로필</b>을 보고 딱 맞는 잔소리를 시간 안에 골라요 (1~4 키)'],
+  ['🙅', '안 맞는 잔소리는 역공당해요. "저 결혼했는데요?" 3번이면 쫓겨남'],
+  ['🔥', '연속으로 맞히면 잔소리 콤보! 갈수록 빨라지고 프로필도 흐려져요'],
+] }));
+function updateHud() {
+  $score.innerHTML = `${score}<small>번</small>`;
+  $lives.textContent = '🧧'.repeat(Math.max(0, lives)) + '▫️'.repeat(Math.max(0, LIVES - lives));
+  $combo.style.display = combo >= 3 ? '' : 'none'; $combo.textContent = `🔥 잔소리 ${combo}콤보`;
+}
+function nextRelative() {
+  if (state !== 'playing') return;
+  prof = makeProfile(score); met++;
+  buildRelative(prof);
+  $('av').textContent = prof.av; $('nm').textContent = prof.name; $('rel').textContent = `${prof.rel} · ${prof.age}세`;
+  const tagHTML = [[prof.jobT, false], [prof.loveT, false], [prof.qT, true]];
+  $('tags').innerHTML = shuffle(tagHTML).map(([t, hot]) => `<span class="${hot ? 'hot' : ''}">${t}</span>`).join('');
+  $card.classList.toggle('blur', score >= 12 && Math.random() < .35);   // later on, some cards are blurry: rely on the highlighted quirk or squint
+  // one fitting nag + non-fitting distractors
+  const fits = NAGS.filter(n => n.ok(prof)), misses = shuffle(NAGS.filter(n => !n.ok(prof)));
+  const right = rnd(fits), nOpt = score >= 6 ? 4 : 3;
+  q = { opts: shuffle([{ ...right, good: true }, ...misses.slice(0, nOpt - 1)]), done: false };
+  tMax = Math.max(2.6, 6.5 - score * .18); tLeft = tMax;
+  $choices.classList.remove('lock');
+  $choices.innerHTML = q.opts.map((o, i) => `<button class="ch" data-i="${i}">${o.t}</button>`).join('') + (nOpt === 3 ? '<span></span>' : '');
+  Arcade.sfx.pop(); Arcade.babble?.(`${prof.name} 왔어요`, { pitch: prof.grp === 'kid' ? 1.4 : 1, rate: 14 });
+}
+function reply(text) { const r = $('reply'); r.textContent = text; r.classList.remove('show'); void r.offsetWidth; r.classList.add('show'); }
+function answer(i) {
+  if (state !== 'playing' || !q || q.done) return;
+  q.done = true; $choices.classList.add('lock');
+  const btns = [...$choices.querySelectorAll('.ch')], ok = i >= 0 && q.opts[i].good, gi = q.opts.findIndex(o => o.good);
+  btns.forEach((b, j) => b.classList.add(j === gi ? 'ok' : j === i ? 'no' : 'dim'));
+  if (ok) {
+    score++; combo++; maxCombo = Math.max(maxCombo, combo); rel.react = 'hit'; rel.t = 0;
+    reply(rnd(['네… 알겠어요…', '(한숨) 네네…', '아 그건 좀…', '하하… 네…', '…(동공지진)']));
+    Arcade.sfx.perfect(Math.min(combo, 12)); Arcade.vibrate(25); Arcade.shake(.1);
+    if (combo % 5 === 0) { Arcade.toast(`👵 잔소리 ${combo}콤보! 친척들이 떨고 있어요`, '#e8590c'); Arcade.confetti({ y: innerHeight * .3, count: 60, emoji: ['🧧', '💢', '🍡'] }); }
+  } else {
+    lives--; combo = 0; rel.react = 'back'; rel.t = 0;
+    const wrong = i >= 0 ? q.opts[i] : null;
+    // comeback names the trait you got wrong
+    let cb = '…(못 들은 척)';
+    if (wrong) { const k = Object.keys(COMEBACK).find(key => wrong.ok({ ...prof, job: key, love: key, q: key, age: 30 })); cb = COMEBACK[k] || '그거 저 아닌데요?'; }
+    reply(i < 0 ? '(벌써 다른 방으로 도망감)' : `${cb} 😤`);
+    Arcade.sfx.miss(); Arcade.shake(.2); Arcade.vibrate([40, 30, 60]);
+  }
+  updateHud();
+  setTimeout(() => { if (lives <= 0) finish(); else nextRelative(); }, ok ? 1100 : 1600);
+}
+function finish() {
+  state = 'over'; overAt = performance.now();
+  const isBest = score > best; if (isBest) { best = score; try { localStorage.setItem('nag-best', best); } catch {} }
+  isBest && score > 0 ? Arcade.sfx.fanfare() : Arcade.sfx.fail();
+  const rank = score < 4 ? '🙂 다정한 어른' : score < 10 ? '🧓 평범한 친척' : score < 18 ? '👵 잔소리 고수' : score < 28 ? '💢 명절 공포의 대상' : '👑 전설의 잔소리 대마왕';
+  showScreen(Arcade.resultScreen({ emoji: '🧧', label: '잔소리 성공', score, unit: '번', msg: `${met}명의 친척을 만났어요`, rows: [['등급', rank], ['최대 콤보', `${maxCombo}번`]], isBest: isBest && score > 0, best }));
+  Arcade.gameOver(score);
+}
+function start() {
+  score = 0; lives = LIVES; combo = 0; maxCombo = 0; met = 0; updateHud();
+  state = 'count'; $center.style.display = 'none'; $choices.innerHTML = '';
+  Arcade.countdown({ final: '세배 받자!', onTick: n => n ? Arcade.sfx.tick() : Arcade.sfx.go(), onDone: () => { state = 'playing'; nextRelative(); } });
+}
+$choices.addEventListener('click', e => { const b = e.target.closest('.ch'); if (b) answer(+b.dataset.i); });
+addEventListener('pointerdown', e => { if (e.target.closest?.('.ch, .arcade-btn')) return; if (state === 'ready') start(); else if (state === 'over' && performance.now() - overAt > 900 && !Arcade.inRun()) start(); });
+addEventListener('keydown', e => {
+  const n = +e.key; if (n >= 1 && n <= 4 && q && n <= q.opts.length) return answer(n - 1);
+  if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); if (state === 'ready') start(); else if (state === 'over' && performance.now() - overAt > 900 && !Arcade.inRun()) start(); }
+});
+updateHud();
+buildRelative(makeProfile(0)); seat.position.y = 0;
+window.__nag = { get state() { return state; }, get q() { return q; }, get prof() { return prof; }, answer, get score() { return score; }, get lives() { return lives; } };
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
+  seat.position.y += (0 - seat.position.y) * Math.min(1, dt * 8);
+  if (state === 'playing' && q && !q.done) { tLeft -= dt; if (tLeft <= 0) { tLeft = 0; answer(-1); } }
+  $('tfill').style.transform = `scaleX(${state === 'playing' && q ? tLeft / tMax : 0})`; $('tbar').classList.toggle('low', tLeft / tMax < .3);
+  if (rel) {
+    const { g, head, arms, eyes, mouth, sweat, cloud } = rel;
+    g.rotation.set(0, 0, 0); g.position.set(0, 0, 0); head.rotation.set(Math.sin(t * 1.6) * .03, 0, 0);
+    arms.forEach((a, i) => a.rotation.set(0, 0, i ? -.15 : .15)); mouth.scale.set(1, 1, 1); eyes.forEach(e => e.scale.set(1, 1, 1));
+    sweat.visible = cloud.visible = false;
+    if (rel.react) {
+      rel.t += dt; const k = rel.t;
+      if (rel.react === 'hit') {   // shrinks, head down, sweat + gloomy cloud
+        g.scale.setScalar((prof?.grp === 'kid' ? .78 : prof?.grp === 'teen' ? .9 : 1) * (1 - Math.min(.12, k * .3)));
+        head.rotation.x = Math.min(.45, k * 1.5); sweat.visible = true; sweat.position.y = .4 - (k % .6) * .5; cloud.visible = true; cloud.rotation.y = t;
+        eyes.forEach(e => e.scale.set(1, .3, 1)); mouth.scale.set(.6, 1, 1);
+      } else {   // fires back: leans in, waves arms, eyes wide
+        g.position.z = Math.min(.25, k * 1.2); g.rotation.z = Math.sin(k * 18) * .05 * Math.max(0, 1 - k);
+        arms.forEach((a, i) => { a.rotation.x = -2.2 + Math.sin(k * 16 + i * 3) * .4; });
+        eyes.forEach(e => e.scale.set(1.3, 1.5, 1)); mouth.scale.set(1.5, 3, 1);
+      }
+    }
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

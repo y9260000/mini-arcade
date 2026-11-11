@@ -89,7 +89,7 @@ function hazardMesh(kind) {
   const g = new THREE.Group();
   box(.12, 3.2, .12, 0x495057, 0, 1.1, 0, g);
   if (kind === 'brake') { box(.5, 1.2, .3, 0x212529, 0, 2.6, 0, g); for (const [y, c] of [[3, 0xff3b3b], [2.6, 0x4a4a4a], [2.2, 0x4a4a4a]]) { const l = new THREE.Mesh(new THREE.SphereGeometry(.14, 10, 8), new THREE.MeshBasicMaterial({ color: c })); l.position.set(0, y, .17); g.add(l); } }
-  else { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); x.fillStyle = kind === 'go' ? '#2f9e44' : '#ffd43b'; x.beginPath(); x.moveTo(64, 6); x.lineTo(122, 64); x.lineTo(64, 122); x.lineTo(6, 64); x.fill(); x.font = '64px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText({ bump: '⛰️', curve: '↩️', go: '🟢', kid: '🚸' }[kind], 64, 68);
+  else { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); x.fillStyle = kind === 'go' ? '#2f9e44' : '#ffd43b'; x.beginPath(); x.moveTo(64, 6); x.lineTo(122, 64); x.lineTo(64, 122); x.lineTo(6, 64); x.fill(); x.font = '64px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText({ bump: '⛰️', curve: '↩️', go: '🟢', kid: '🚸', back: '🔙' }[kind], 64, 68);
     const sgn = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true })); sgn.position.y = 2.6; g.add(sgn); }
   g.position.set(14, -.5, -2.6); scene.add(g); return g;
 }
@@ -135,24 +135,31 @@ const KINDS = {
   go: { warn: '🟢 초록불! 급출발 ←', col: '#2f9e44', fire() { push(-1, 1.0, .6); targetSpeed = rr(45, 65); Arcade.sfx.whoosh(true); line('부아앙~'); } },
   bump: { warn: '⛰️ 과속방지턱!', col: '#f59f00', fire() { omega += rr(-1.8, 1.8); bounce = .35; Arcade.sfx.thud(); line('덜컹!'); } },
   curve: { warn: '↩️ 급커브! 좌우로 흔들려요', col: '#7048e8', fire() { curveT = 1.8; Arcade.sfx.whoosh(); line('으어어…'); } },
+  back: { warn: '🔙 앗 정류장 지나쳤다! 후진 온다', col: '#495057', fire() {
+    push(+1, 1.0, .45); targetSpeed = 0; Arcade.sfx.crash(); line('어 잠깐만…!');
+    setTimeout(() => { if (state !== 'playing') return; reversing = true; targetSpeed = -22; push(+1, .9, .6); line('삐- 삐- 삐-'); }, 650);   // backing up throws you forward
+    setTimeout(() => { if (state !== 'playing') return; push(-1, 1.05, .5); targetSpeed = 0; Arcade.sfx.thud(); line('끼익!'); }, 2700);       // stopping from reverse throws you back
+    setTimeout(() => { reversing = false; if (state === 'playing') targetSpeed = rr(35, 50); }, 3400);
+  } },
   kid: { warn: '🚸 어린이 보호구역… 급정거 두 번!', col: '#e8590c', fire() { push(+1, .9, .4); setTimeout(() => state === 'playing' && push(+1, 1.0, .4), 700); targetSpeed = 15; setTimeout(() => { targetSpeed = rr(30, 45); }, 2000); Arcade.sfx.thud(); line('어이쿠!'); } },
 };
-let bounce = 0, curveT = 0, lineT = 0;
+let bounce = 0, curveT = 0, lineT = 0, reversing = false, beepT = 0;
 function push(dir, strength, dur) { events.push({ dir, a: strength * (1 + Math.min(.8, survived / 90)), t: dur, dur }); Arcade.shake(.25 * strength); Arcade.vibrate(Math.round(60 * strength)); }
 function line(text) { lineT = 1.2; driverLine = text; }
 let driverLine = '';
 function scheduleHazard() {
   const lvl = Math.min(1, survived / 80);
-  const pool = ['brake', 'brake', 'go', 'bump', 'bump', ...(survived > 15 ? ['curve'] : []), ...(survived > 30 ? ['kid'] : [])];
+  const pool = ['brake', 'brake', 'go', 'bump', 'bump', ...(survived > 15 ? ['curve'] : []), ...(survived > 30 ? ['kid'] : []), ...(survived > 20 ? ['back'] : [])];
   const kind = rnd(pool);
   hazards.push({ kind, m: hazardMesh(kind), fired: false });
   nextEventT = rr(3.6, 6) * (1 - lvl * .4);
 }
 function updateHud() {
   $score.innerHTML = `${stops}<small>정거장</small>`;
-  $('speed').textContent = `${Math.round(speed)}km/h`;
+  $('speed').textContent = speed < -1 ? `🔙 후진 ${Math.round(-speed)}km/h` : `${Math.round(speed)}km/h`; $('speed').style.background = speed < -1 ? '#ffe066' : '';
 }
 function reset() {
+  reversing = false;
   theta = 0; omega = 0; input = 0; events = []; speed = 0; targetSpeed = 40; dist = 0; stops = 0; nextStop = 300; survived = 0; nextEventT = 3; bounce = 0; curveT = 0; fallT = 0;
   for (const h of hazards) scene.remove(h.m); hazards.length = 0;
   me.root.rotation.set(0, 0, 0); me.root.position.set(0, 0, .2); $warn.style.display = 'none';
@@ -210,7 +217,7 @@ addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); pl
 // ---------- loop ----------
 let last = performance.now();
 reset(); showIntro();
-window.__bus = { get state() { return state; }, get theta() { return theta; }, setInput(v) { input = v; }, get stops() { return stops; }, get survived() { return survived; }, get hazards() { return hazards; } };
+window.__bus = { fire(k) { KINDS[k].fire(); }, get speed() { return speed; }, get state() { return state; }, get theta() { return theta; }, setInput(v) { input = v; }, get stops() { return stops; }, get survived() { return survived; }, get hazards() { return hazards; } };
 
 function frame(now) {
   const dt = Math.min(.04, (now - last) / 1000); last = now; const t = now / 1000;
@@ -218,7 +225,8 @@ function frame(now) {
     survived += dt;
     // bus speed + distance → stops
     speed += (targetSpeed - speed) * Math.min(1, dt * .8);
-    dist += speed / 3.6 * dt;
+    dist += Math.max(0, speed) / 3.6 * dt;
+    if (reversing) { beepT -= dt; if (beepT <= 0) { beepT = .45; Arcade.sfx.tick(); } }
     if (dist >= nextStop) {
       stops++; nextStop += 300 + stops * 20; updateHud();
       Arcade.sfx.ding(); Arcade.toast(`🚏 ${stops}번째 정거장 통과!`, '#2b8a3e'); Arcade.confetti({ y: innerHeight * .35, count: 30, emoji: ['🚌', '🚏'] });
@@ -262,7 +270,7 @@ function frame(now) {
   // needle
   $needle.style.left = `${50 + Math.max(-1, Math.min(1, theta / FALL)) * 50}%`;
   // scenery scrolls, bus bobs
-  street.position.x -= speed / 3.6 * dt * .9; if (street.position.x < -STREET_LEN / 2) street.position.x += STREET_LEN / 2;
+  street.position.x -= speed / 3.6 * dt * .9; if (street.position.x < -STREET_LEN / 2) street.position.x += STREET_LEN / 2; if (street.position.x > 0) street.position.x -= STREET_LEN / 2;
   bus.position.y = Math.sin(t * 14) * .01 * Math.min(1, speed / 30) + Math.sin(bounce * 20) * bounce * .15;
   bus.rotation.z = -aBus * .015;
   // camera: side view through the open near wall, following the player a bit

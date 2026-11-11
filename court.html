@@ -264,7 +264,9 @@ function updateHud() {
   $('strikes').textContent = '🖋️'.repeat(STRIKES - strikes) + '❌'.repeat(strikes);
   $('case').textContent = `사건 ${caseNo + 1} · ${curCase.name}`;
 }
-const norm = s => s.replace(/\s+/g, ' ');
+// NFC: some mobile keyboards send decomposed jamo (ᄒ+ᅡ instead of 하) — compare composed syllables only
+const norm = s => s.normalize('NFC').replace(/\s+/g, ' ');
+let composing = false;
 function render() {
   const v = norm($typed.value);
   let out = '', allOk = true;
@@ -274,7 +276,7 @@ function render() {
     let cls = 'c';
     if (c !== undefined) {
       if (c === t) cls += ' ok';
-      else if (i === v.length - 1) cls += ' cur';   // the syllable still being composed
+      else if (i === v.length - 1 || (composing && i === v.length - 2)) cls += ' cur';   // still being composed (the IME may move a final consonant into the next syllable)
       else { cls += ' bad'; allOk = false; }
     }
     const shown = cls.endsWith('cur') ? c : t;   // while composing, show what was actually typed (ㄱ → 가 → 각), not the finished syllable
@@ -294,7 +296,7 @@ function nextLine() {
     state = 'pause'; setTimeout(() => { state = 'playing'; nextLine(); }, 1300); return;
   }
   const [who, text] = C.lines[lineNo++];
-  speaker = who; target = text; $typed.value = ''; lineErrors = 0; lineStart = performance.now();
+  speaker = who; target = text.normalize('NFC'); $typed.value = ''; lineErrors = 0; lineStart = performance.now();
   timeMax = baseTime + target.replace(/ /g, '').length * secPerChar; timeLeft = timeMax;
   $('who').textContent = who; document.getElementById('say').style.setProperty('--tail', CAST[who].tail);
   $txt.textContent = text;
@@ -335,11 +337,13 @@ $typed.addEventListener('input', e => {
   $paper.animate([{ transform: `translate(${(Math.random() - .5) * 2.4}px, 1.4px)` }, { transform: 'none' }], { duration: 70 });
   pressDeco();
   const ok = render();
-  if (!ok && !del && v.length > lastLen) lineErrors++;
+  if (!ok && !del && !composing && v.length > lastLen) lineErrors++;
   lastLen = v.length;
   if (v.trim() === target) lineDone();
 });
 $typed.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
+$typed.addEventListener('compositionstart', () => { composing = true; });
+$typed.addEventListener('compositionend', () => { composing = false; if (state !== 'playing') return; render(); if (norm($typed.value).trim() === target) lineDone(); });
 function pressDeco() { const k = $('deco').children[(Math.random() * 10) | 0]; k.classList.add('down'); setTimeout(() => k.classList.remove('down'), 70); }
 $paper.addEventListener('pointerdown', () => { if (state === 'playing') setTimeout(() => $typed.focus(), 0); });
 function finish() {

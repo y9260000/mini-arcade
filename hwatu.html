@@ -180,6 +180,7 @@ function pick(c) {
       const pts = 100 + (combo - 1) * 50; score += pts; slap(1.2); slap(1, .09); Arcade.sfx.coin(); Arcade.shake(.18);
       matchedCount++; if (matchedCount === shuffleAt) setTimeout(shuffleRest, 450);
       say(combo >= 2 ? `${combo}연속! 착착! +${pts}` : `짝! +${pts}`);
+      if (combo >= 2) Arcade.confetti({ y: innerHeight * .45, count: Math.min(160, 30 + combo * 25), power: 1 + Math.min(.6, combo * .1), emoji: combo >= 4 ? ['🎴', '🌸', '🍁', '🌕', '✨'] : ['🎴', '✨'] });   // streak confetti grows with the combo
       if (pairsLeft === 0) stageClear();
       updateHud();
     }, 380);

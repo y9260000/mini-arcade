@@ -92,6 +92,29 @@ addEventListener('pointerdown', AC, { capture: true }); addEventListener('keydow
 function burst(when, dur, f, q, vol, type = 'bandpass') { const s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain(); s.buffer = nbuf; fl.type = type; fl.frequency.value = f; fl.Q.value = q;
   g.gain.setValueAtTime(vol, when); g.gain.exponentialRampToValueAtTime(.0005, when + dur); s.connect(fl).connect(g).connect(master); s.start(when, Math.random() * .3); s.stop(when + dur + .02); }
 function thump(when, f, dur, vol) { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(f, when); o.frequency.exponentialRampToValueAtTime(f * .5, when + dur); g.gain.setValueAtTime(vol, when); g.gain.exponentialRampToValueAtTime(.0005, when + dur); o.connect(g).connect(master); o.start(when); o.stop(when + dur + .02); }
+// ---------- 🎶 party track: a little 124 BPM disco loop (Am–F–C–G) synthesized on the fly ----------
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+function tone(when, f, dur, vol, type = 'square', cutoff = 2400) {
+  const o = ac.createOscillator(), fl = ac.createBiquadFilter(), g = ac.createGain(); o.type = type; o.frequency.value = f; fl.type = 'lowpass'; fl.frequency.value = cutoff;
+  g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(vol, when + .008); g.gain.exponentialRampToValueAtTime(.0005, when + dur);
+  o.connect(fl).connect(g).connect(master); o.start(when); o.stop(when + dur + .03);
+}
+const CHORDS = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]];
+let partyOn = false, partyStep = 0, partyNext = 0;
+function partyTick() {
+  const step = 60 / 124 / 4;
+  if (!partyOn) { partyOn = true; partyNext = ac.currentTime + .05; partyStep = 0; }
+  while (partyNext < ac.currentTime + .14) {
+    const st = partyStep % 16, ch = CHORDS[Math.floor(partyStep / 16) % 4], w = partyNext;
+    if (st % 4 === 0) thump(w, 95, .16, .55);                                   // four-on-the-floor kick
+    if (st === 4 || st === 12) burst(w, .14, 1600, .7, .22);                     // clap
+    if (st % 4 === 2) burst(w, .07, 8000, 1, .09, 'highpass');                   // open hat on the off-beat
+    if (st % 2 === 0) tone(w, mtof(ch[0] - 12 + (st % 4 === 2 ? 12 : 0)), step * 1.7, .17, 'sawtooth', 700);   // octave bass
+    tone(w, mtof(ch[[0, 1, 2, 1][st % 4]] + 12 + (st >= 8 ? 12 : 0)), step * .9, .045, 'square', 3200);       // sparkly arp
+    if (st === 2 || st === 10) ch.forEach(n => tone(w, mtof(n + 12), step * 1.6, .035, 'sawtooth', 2000));     // chord stabs
+    partyNext += step; partyStep++;
+  }
+}
 const SND = {
   key(delay = 0) { if (!AC()) return; const t = ac.currentTime + delay, p = .85 + Math.random() * .3;   // the strike: crisp click + type-bar slap + platen thunk
     burst(t, .018, 3800 * p, 2.5, .55, 'highpass'); burst(t + .004, .05, 1800 * p, 6, .35); thump(t + .006, 160 * p, .07, .45); burst(t + .03, .03, 900 * p, 3, .12); },
@@ -386,7 +409,7 @@ function frame(now) {
   // mirror ball drops in and the room fills with coloured light; a little disco beat underneath
   disco.position.y += ((stage >= 3 ? 2.9 : 9) - disco.position.y) * Math.min(1, dt * 2.5); ball.rotation.y += dt * 1.5;
   spots.forEach((l, i) => { l.intensity = stage >= 3 ? 8 : 0; l.position.set(Math.cos(t * 2 + i * 2.1) * 4, 3, Math.sin(t * 2 + i * 2.1) * 3); });
-  if (stage >= 3 && ac) { beatT -= dt; if (beatT <= 0) { beatT = .43; thump(ac.currentTime, 90, .18, .5); burst(ac.currentTime + .215, .04, 7000, 1, .06, 'highpass'); } }
+  if (stage >= 3 && ac) partyTick(); else partyOn = false;   // party mode: our own upbeat disco track
   // the stenographer hammers away and sweats under pressure
   typingT = Math.max(0, typingT - dt);
   steno.arms.forEach((a, i) => a.rotation.x = typingT > 0 ? -1.1 + Math.sin(t * 40 + i * 2) * .25 : -.9);

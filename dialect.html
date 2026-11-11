@@ -203,7 +203,7 @@ function makePerson({ top = 0x37415a, bottom = 0x2b2f3a, skin = 0xffd2a8, hair =
   const arms = [-1, 1].map(s => { const p = new THREE.Group(); p.position.set(s * .4, 1.58, 0); box(.16, .62, .18, flat(top), 0, -.3, 0, p); const h = new THREE.Mesh(new THREE.DodecahedronGeometry(.1, 0), flat(skin)); h.position.y = -.66; p.add(h); root.add(p); return p; });
   const head = new THREE.Group(); head.position.y = 1.66; root.add(head);
   box(.42, .44, .4, flat(skin), 0, .22, 0, head);
-  box(.46, .16, .44, flat(gray ? 0xdee2e6 : hair), 0, .48, -.02, head); box(.46, .26, .1, flat(gray ? 0xdee2e6 : hair), 0, .34, -.18, head);
+  box(.46, .16, .44, flat(gray ? 0xdee2e6 : hair), 0, .48, -.035, head); box(.46, .26, .1, flat(gray ? 0xdee2e6 : hair), 0, .34, -.18, head);
   for (const s of [-1, 1]) box(.06, .07, .02, flat(0x222222), s * .1, .26, .205, head);
   const mouth = box(.12, .03, .02, flat(0x7a2a2a), 0, .12, .205, head);
   if (hat === 'cap') { box(.48, .14, .48, flat(0xe03131), 0, .55, 0, head); box(.4, .03, .25, flat(0xe03131), 0, .49, .3, head); }

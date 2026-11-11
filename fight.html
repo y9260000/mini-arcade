@@ -143,7 +143,7 @@ function makeFighter(lk, flip) {
   } else {
     box(.46, .5, .46, skin, 0, .25, 0, head);
     box(.02, .08, .07, dark, .24, .3, .1, head); box(.02, .08, .07, dark, .24, .3, -.1, head);
-    if (L0.hair != null && !L0.helmet) box(.5, .16, .5, flat(L0.hair), -.02, .52, 0, head);
+    if (L0.hair != null && !L0.helmet) box(.5, .16, .5, flat(L0.hair), -.035, .52, 0, head);
     if (L0.band) box(.52, .08, .52, flat(L0.band), 0, .42, 0, head);
     if (L0.stache) { box(.04, .06, .26, flat(L0.stache), .25, .16, 0, head); box(.03, .04, .12, flat(L0.stache), .25, .39, .1, head); box(.03, .04, .12, flat(L0.stache), .25, .39, -.1, head); }
     if (L0.helmet) { const h = new THREE.Mesh(new THREE.SphereGeometry(.33, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), flat(L0.helmet)); h.position.y = .4; head.add(h); box(.04, .14, .4, new THREE.MeshStandardMaterial({ color: 0x74c0fc, transparent: true, opacity: .6 }), .3, .3, 0, head); }

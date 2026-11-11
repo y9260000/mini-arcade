@@ -121,7 +121,7 @@ function makePerson({ robe = 0x212529, hair = 0x2b2b2b, skin = 0xffd2a8, tie = 0
   for (const s of [-1, 1]) box(.06, .07, .02, flat(0x222222), s * .1, .28, .215, head);
   const mouth = box(.12, .04, .02, flat(0x7a2a2a), 0, .13, .215, head);
   if (wig) { box(.54, .3, .48, flat(0xf1f3f5), 0, .48, -.02, head); for (const s of [-1, 1]) box(.12, .4, .3, flat(0xf1f3f5), s * .28, .2, -.05, head); }
-  else box(.48, .16, .46, flat(hair), 0, .5, -.02, head);
+  else box(.48, .16, .46, flat(hair), 0, .5, -.035, head);   // front face sits just behind the face plane (no z-fighting)
   root.traverse(o => { if (o.isMesh) o.castShadow = true; });
   scene.add(root); return { root, head, arms, mouth };
 }

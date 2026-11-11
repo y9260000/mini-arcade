@@ -329,7 +329,13 @@
       this.vibrate(Math.min(200, amount * 120));
     },
     vibrate(ms) {
-      try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(Array.isArray(ms) ? ms : Math.max(1, Math.round(ms))); } catch {}
+      try {
+        if (navigator.vibrate) { if (!navigator.userActivation || navigator.userActivation.hasBeenActive) navigator.vibrate(Array.isArray(ms) ? ms : Math.max(1, Math.round(ms))); return; }
+        // iOS Safari has no Vibration API: toggling a native switch fires a light system haptic (iOS 18+)
+        if (!this._hap) { const l = document.createElement('label'), i = document.createElement('input'); i.type = 'checkbox'; i.setAttribute('switch', ''); l.appendChild(i); l.style.cssText = 'position:fixed;left:-99px;top:0;opacity:0;pointer-events:none'; document.body.appendChild(l); this._hap = l; }
+        const pulses = Array.isArray(ms) ? ms.filter((_, k) => k % 2 === 0).length : 1;
+        for (let k = 0; k < Math.min(3, pulses); k++) setTimeout(() => this._hap.click(), k * 70);
+      } catch {}
     },
     applyShake(camera, dt) {
       if (shakeAmt < .002) return;
